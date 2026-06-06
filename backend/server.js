@@ -1035,6 +1035,24 @@ app.get('/api/events', (req, res) => {
   });
 });
 
+function activeTripIdsFromEvents(events) {
+  const open = new Map();
+  const sorted = (events || []).slice().sort((a, b) => {
+    const ta = a.timestamp || '';
+    const tb = b.timestamp || '';
+    if (ta !== tb) return ta.localeCompare(tb);
+    return String(a.created_at || '').localeCompare(String(b.created_at || ''));
+  });
+  sorted.forEach((ev) => {
+    const trip = ev.trip != null ? String(ev.trip).trim() : '';
+    if (!trip) return;
+    const type = String(ev.type || '').trim();
+    if (TRIP_START_TYPES.has(type)) open.set(trip, true);
+    if (TRIP_END_TYPES.has(type)) open.delete(trip);
+  });
+  return open;
+}
+
 function buildVehiclePositionsFromEvents(events) {
   const vehicles = readVehicles();
   const capById = {};
@@ -1042,6 +1060,7 @@ function buildVehiclePositionsFromEvents(events) {
     const id = v.vehicle_id || v.id;
     if (id) capById[id] = Math.max(1, parseInt(v.capacity, 10) || REPORT_DEFAULT_CAPACITY);
   });
+  const activeTrips = activeTripIdsFromEvents(events);
   const tripStart = {};
   const byTrip = {};
   (events || []).forEach((ev) => {
@@ -1053,6 +1072,7 @@ function buildVehiclePositionsFromEvents(events) {
       tripStart[trip] = {
         vehicle_id: p.vehicle_id || ev.vehicle_id || trip,
         vehicle_name: p.vehicle_name || ev.vehicle_name || null,
+        city: p.city || null,
       };
     }
     if (type !== 'track' && type !== 'auto_track') return;
@@ -1062,7 +1082,9 @@ function buildVehiclePositionsFromEvents(events) {
       byTrip[trip] = ev;
     }
   });
-  return Object.keys(byTrip).map((trip) => {
+  return Object.keys(byTrip)
+    .filter((trip) => activeTrips.has(trip) && tripStart[trip])
+    .map((trip) => {
     const ev = byTrip[trip];
     const meta = tripStart[trip] || {};
     const vehicleId = meta.vehicle_id || trip;
@@ -1081,12 +1103,14 @@ function buildVehiclePositionsFromEvents(events) {
       vehicle: vehicleId,
       vehicle_name: meta.vehicle_name || vehicleId,
       trip,
+      city: meta.city || null,
       passengers,
       free,
       capacity: cap,
       lat: ev.lat,
       lng: ev.lng,
       last_gps: ev.timestamp || null,
+      live: true,
     };
   });
 }
@@ -1105,7 +1129,11 @@ app.get('/api/vehicle-positions', (req, res) => {
   const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 1500, 1), 500);
   const rows = selectRecentEvents.all(limit);
   const events = rows.map(rowToClient);
-  const positions = buildVehiclePositionsFromEvents(events);
+  let positions = buildVehiclePositionsFromEvents(events);
+  const city = req.query.city != null ? String(req.query.city).trim() : '';
+  if (city) {
+    positions = filterRowsByCity(positions, city);
+  }
   res.json({ ok: true, count: positions.length, vehicles: positions });
 });
 
