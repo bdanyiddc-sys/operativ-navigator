@@ -11,40 +11,94 @@ const DATABASE_PATH =
   process.env.DATABASE_PATH || path.join(__dirname, 'data', 'events.db');
 const routesDir = path.resolve(__dirname, 'routes');
 const vehiclesPath = path.join(__dirname, 'data', 'vehicles.json');
+const driversPath = path.join(__dirname, 'data', 'drivers.json');
 const ROUTES_SAMPLE_GEOJSON = 'Tata_utvonal2.geojson';
+const MASTER_DEFAULT_CAPACITY = 56;
 const DEFAULT_VEHICLES = [
-  { vehicle_id: 'KV-001', vehicle_name: 'Vonat 1', capacity: 56 },
-  { vehicle_id: 'KV-002', vehicle_name: 'Vonat 2', capacity: 56 },
+  { id: 'KV01', name: 'Kisvonat 1', capacity: 56, local: 'Tata' },
+  { id: 'KV02', name: 'Kisvonat 2', capacity: 56, local: 'Tata' },
+  { id: 'KV03', name: 'Kisvonat 3', capacity: 56, local: 'Tata' },
+  { id: 'KV04', name: 'Kisvonat 4', capacity: 56, local: 'Székesfehérvár' },
+  { id: 'KV05', name: 'Kisvonat 5', capacity: 56, local: 'Eger' },
+  { id: 'KV06', name: 'Kisvonat 6', capacity: 56, local: 'Győr' },
 ];
+const DEFAULT_DRIVERS = [
+  { id: 'DRV01', name: 'Teszt Elek', pin: '1234' },
+  { id: 'DRV02', name: 'Minta Béla', pin: '1234' },
+  { id: 'DRV03', name: 'Próba János', pin: '1234' },
+];
+
+function normalizeMasterVehicle(v) {
+  const vehicleId = String(v.vehicle_id || v.id || '').trim();
+  if (!vehicleId) return null;
+  const vehicleName = String(v.vehicle_name || v.name || '').trim();
+  const local = v.local != null ? String(v.local).trim() : '';
+  return {
+    vehicle_id: vehicleId,
+    vehicle_name: vehicleName,
+    capacity: Math.max(1, parseInt(v.capacity, 10) || MASTER_DEFAULT_CAPACITY),
+    local,
+  };
+}
+
+function normalizeMasterDriver(d) {
+  const driverId = String(d.driver_id || d.id || '').trim();
+  if (!driverId) return null;
+  const driverName = String(d.driver_name || d.name || '').trim();
+  return {
+    driver_id: driverId,
+    driver_name: driverName,
+  };
+}
 
 function readVehicles() {
   try {
     if (!fs.existsSync(vehiclesPath)) {
       ensureDataDir(vehiclesPath);
       fs.writeFileSync(vehiclesPath, JSON.stringify(DEFAULT_VEHICLES, null, 2), 'utf8');
-      return DEFAULT_VEHICLES.slice();
+      return DEFAULT_VEHICLES.map(normalizeMasterVehicle).filter(Boolean);
     }
     const raw = JSON.parse(fs.readFileSync(vehiclesPath, 'utf8'));
-    if (!Array.isArray(raw)) return DEFAULT_VEHICLES.slice();
-    return raw.map((v) => ({
-      vehicle_id: String(v.vehicle_id || v.id || '').trim(),
-      vehicle_name: String(v.vehicle_name || v.name || '').trim(),
-      capacity: Math.max(1, parseInt(v.capacity, 10) || REPORT_DEFAULT_CAPACITY),
-    })).filter((v) => v.vehicle_id);
+    if (!Array.isArray(raw)) {
+      return DEFAULT_VEHICLES.map(normalizeMasterVehicle).filter(Boolean);
+    }
+    return raw.map(normalizeMasterVehicle).filter(Boolean);
   } catch (err) {
     console.error('[vehicles] read failed:', err);
-    return DEFAULT_VEHICLES.slice();
+    return DEFAULT_VEHICLES.map(normalizeMasterVehicle).filter(Boolean);
+  }
+}
+
+function readDrivers() {
+  try {
+    if (!fs.existsSync(driversPath)) {
+      ensureDataDir(driversPath);
+      fs.writeFileSync(driversPath, JSON.stringify(DEFAULT_DRIVERS, null, 2), 'utf8');
+      return DEFAULT_DRIVERS.map(normalizeMasterDriver).filter(Boolean);
+    }
+    const raw = JSON.parse(fs.readFileSync(driversPath, 'utf8'));
+    if (!Array.isArray(raw)) {
+      return DEFAULT_DRIVERS.map(normalizeMasterDriver).filter(Boolean);
+    }
+    return raw.map(normalizeMasterDriver).filter(Boolean);
+  } catch (err) {
+    console.error('[drivers] read failed:', err);
+    return DEFAULT_DRIVERS.map(normalizeMasterDriver).filter(Boolean);
   }
 }
 
 function writeVehicles(list) {
   ensureDataDir(vehiclesPath);
-  const normalized = (Array.isArray(list) ? list : []).map((v) => ({
-    vehicle_id: String(v.vehicle_id || '').trim(),
-    vehicle_name: String(v.vehicle_name || '').trim(),
-    capacity: Math.max(1, parseInt(v.capacity, 10) || REPORT_DEFAULT_CAPACITY),
-  })).filter((v) => v.vehicle_id);
-  fs.writeFileSync(vehiclesPath, JSON.stringify(normalized, null, 2), 'utf8');
+  const normalized = (Array.isArray(list) ? list : [])
+    .map(normalizeMasterVehicle)
+    .filter(Boolean);
+  const fileRows = normalized.map((v) => ({
+    id: v.vehicle_id,
+    name: v.vehicle_name || undefined,
+    capacity: v.capacity,
+    local: v.local || undefined,
+  }));
+  fs.writeFileSync(vehiclesPath, JSON.stringify(fileRows, null, 2), 'utf8');
   return normalized;
 }
 
@@ -1040,6 +1094,11 @@ function buildVehiclePositionsFromEvents(events) {
 app.get('/api/vehicles', (_req, res) => {
   const vehicles = readVehicles();
   res.json({ ok: true, count: vehicles.length, vehicles });
+});
+
+app.get('/api/drivers', (_req, res) => {
+  const drivers = readDrivers();
+  res.json({ ok: true, count: drivers.length, drivers });
 });
 
 app.get('/api/vehicle-positions', (req, res) => {
