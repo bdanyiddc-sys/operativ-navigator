@@ -224,7 +224,7 @@
             .catch(function () { return mockStops(cityId); });
     }
 
-    function normalizeVehicleFromApi(v, cityId, mockList) {
+    function normalizeVehicleFromApi(v, cityId) {
         var cap = PUBLIC_DEFAULT_CAPACITY;
         var passengers = Math.max(0, parseInt(v.passengers, 10) || 0);
         if (v.free != null) {
@@ -238,36 +238,25 @@
         var vid = String(v.vehicle || v.id || v.vehicle_id || '').trim();
         var lat = v.lat != null ? Number(v.lat) : null;
         var lng = v.lng != null ? Number(v.lng) : null;
-        var live = lat != null && lng != null && !isNaN(lat) && !isNaN(lng);
-        if (!live && mockList && mockList.length) {
-            var mockMatch = mockList.find(function (m) {
-                return m.id === vid || m.id === v.vehicle_id;
-            }) || mockList[0];
-            if (mockMatch) {
-                lat = mockMatch.lat;
-                lng = mockMatch.lng;
-                if (!vid) vid = mockMatch.id;
-            }
-        }
+        var live = v.live === true || (lat != null && lng != null && !isNaN(lat) && !isNaN(lng));
         return {
             id: vid || 'KV',
             city: v.city || cityId,
             cityId: cityId,
-            lat: lat,
-            lng: lng,
+            lat: live ? lat : null,
+            lng: live ? lng : null,
             capacity: cap,
             passengers: passengers,
             freeSeats: freeSeats,
-            status: live ? 'Közlekedik' : (lat != null ? 'Utolsó ismert pozíció' : 'Nem közlekedik'),
+            status: live ? 'Közlekedik' : 'Nem közlekedik',
             nextStop: v.nextStop || '—',
             nextDeparture: v.nextDeparture || '—',
-            active: lat != null && lng != null,
+            active: live,
             live: live
         };
     }
 
     function loadVehicles(cityId) {
-        var mockList = mockVehicles(cityId);
         return fetch(API_BASE + '/api/vehicle-positions?city=' + encodeURIComponent(cityId || ''), {
             headers: { Accept: 'application/json' },
             cache: 'no-store'
@@ -278,13 +267,12 @@
             })
             .then(function (data) {
                 var list = data.vehicles || data;
-                if (!Array.isArray(list) || !list.length) return mockList;
-                var mapped = list.map(function (v) {
-                    return normalizeVehicleFromApi(v, cityId, mockList);
-                }).filter(function (v) { return v.active; });
-                return mapped.length ? mapped : mockList;
+                if (!Array.isArray(list) || !list.length) return [];
+                return list.map(function (v) {
+                    return normalizeVehicleFromApi(v, cityId);
+                }).filter(function (v) { return v.live && v.lat != null && v.lng != null; });
             })
-            .catch(function () { return mockList; });
+            .catch(function () { return []; });
     }
 
     function loadSchedules(cityId) {

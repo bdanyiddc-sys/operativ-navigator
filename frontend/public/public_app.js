@@ -379,7 +379,7 @@
     function renderVehicles() {
         vehicleLayer.clearLayers();
         state.vehicles.forEach(function (v) {
-            if (v.lat == null || v.lng == null) return;
+            if (!v.live || v.lat == null || v.lng == null) return;
             var icon = L.divIcon({
                 className: 'train-marker-root',
                 html: trainMarkerHtml(v),
@@ -748,7 +748,7 @@
         state.cityId = city.id;
         state.cityLabel = city.label;
         state.stops = (DATA.MOCK_STOPS[city.id] || []).slice();
-        state.vehicles = (DATA.MOCK_VEHICLES[city.id] || []).slice();
+        state.vehicles = [];
         state.schedule = (DATA.MOCK_SCHEDULES[city.id] || []).slice();
         state.activeVehicle = state.vehicles.find(function (v) { return v.active; }) || state.vehicles[0] || null;
         state.selectedStopId = null;
