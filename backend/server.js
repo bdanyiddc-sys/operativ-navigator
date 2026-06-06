@@ -453,6 +453,26 @@ function normalizeCityKey(raw) {
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
 
+/** Public city ids (tata, szfv, …) → normalized label aliases for filter matching */
+const PUBLIC_CITY_ALIASES = {
+  tata: ['tata'],
+  eger: ['eger'],
+  gyor: ['gyor'],
+  papa: ['papa'],
+  szfv: ['szfv', 'szekesfehervar'],
+  vac: ['vac'],
+};
+
+function allowedCityKeys(cityRaw) {
+  const key = normalizeCityKey(cityRaw);
+  if (!key) return null;
+  for (const aliases of Object.values(PUBLIC_CITY_ALIASES)) {
+    const normalized = aliases.map((a) => normalizeCityKey(a));
+    if (normalized.includes(key)) return new Set(normalized);
+  }
+  return new Set([key]);
+}
+
 function normalizeDbTimestamp(ts) {
   if (ts == null || ts === '') return null;
   const s = String(ts).trim();
@@ -755,11 +775,12 @@ function normalizeDriverNoteInput(body) {
 }
 
 function filterRowsByCity(rows, cityRaw) {
-  const key = normalizeCityKey(cityRaw);
-  if (!key) return rows;
+  const allowed = allowedCityKeys(cityRaw);
+  if (!allowed) return rows;
   return rows.filter((row) => {
     const rowKey = normalizeCityKey(row.city);
-    return !rowKey || rowKey === key;
+    if (!rowKey) return true;
+    return allowed.has(rowKey);
   });
 }
 
@@ -1053,66 +1074,105 @@ function activeTripIdsFromEvents(events) {
   return open;
 }
 
-function buildVehiclePositionsFromEvents(events) {
-  const vehicles = readVehicles();
-  const capById = {};
-  vehicles.forEach((v) => {
-    const id = v.vehicle_id || v.id;
-    if (id) capById[id] = Math.max(1, parseInt(v.capacity, 10) || REPORT_DEFAULT_CAPACITY);
-  });
-  const activeTrips = activeTripIdsFromEvents(events);
+function extractTripStartMeta(ev) {
+  const p = ev.payload || ev;
+  return {
+    vehicle_id: p.vehicle_id || ev.vehicle_id || null,
+    vehicle_name: p.vehicle_name || ev.vehicle_name || null,
+    city: p.city || null,
+  };
+}
+
+function buildTripStartMap(events) {
   const tripStart = {};
-  const byTrip = {};
   (events || []).forEach((ev) => {
     const trip = ev.trip != null ? String(ev.trip).trim() : '';
     if (!trip) return;
     const type = String(ev.type || '').trim();
-    if (type === 'trip_start' || type === 'jarat_inditas') {
-      const p = ev.payload || ev;
-      tripStart[trip] = {
-        vehicle_id: p.vehicle_id || ev.vehicle_id || trip,
-        vehicle_name: p.vehicle_name || ev.vehicle_name || null,
-        city: p.city || null,
-      };
+    if (!TRIP_START_TYPES.has(type)) return;
+    tripStart[trip] = extractTripStartMeta(ev);
+  });
+  return tripStart;
+}
+
+function ingestLatestTrack(byTrip, ev) {
+  const trip = ev.trip != null ? String(ev.trip).trim() : '';
+  if (!trip) return;
+  const type = String(ev.type || '').trim();
+  if (type !== 'track' && type !== 'auto_track') return;
+  if (ev.lat == null || ev.lng == null) return;
+  const ts = ev.timestamp || '';
+  if (!byTrip[trip] || ts > (byTrip[trip].timestamp || '')) {
+    byTrip[trip] = ev;
+  }
+}
+
+function passengersForTrip(trip, events) {
+  let passengers = 0;
+  (events || []).forEach((e) => {
+    if (String(e.trip || '').trim() !== trip) return;
+    const t = String(e.type || '').trim();
+    const p = e.payload || e;
+    if (t === 'passenger' || t === 'utas') {
+      if (p.passengers_current != null) passengers = p.passengers_current;
+      else if (e.passengers_current != null) passengers = e.passengers_current;
     }
-    if (type !== 'track' && type !== 'auto_track') return;
-    if (ev.lat == null || ev.lng == null) return;
-    const ts = ev.timestamp || '';
-    if (!byTrip[trip] || ts > (byTrip[trip].timestamp || '')) {
-      byTrip[trip] = ev;
+    if (TRIP_END_TYPES.has(t) && p.passengers_final != null) {
+      passengers = p.passengers_final;
     }
   });
-  return Object.keys(byTrip)
-    .filter((trip) => activeTrips.has(trip) && tripStart[trip])
-    .map((trip) => {
-    const ev = byTrip[trip];
-    const meta = tripStart[trip] || {};
-    const vehicleId = meta.vehicle_id || trip;
-    const cap = capById[vehicleId] || REPORT_DEFAULT_CAPACITY;
-    let passengers = 0;
-    (events || []).forEach((e) => {
-      if (e.trip !== trip) return;
-      const t = String(e.type || '');
-      if (t === 'passenger' || t === 'utas') {
-        const p = e.payload || e;
-        if (p.passengers_current != null) passengers = p.passengers_current;
-      }
+  return passengers;
+}
+
+function buildVehiclePositionsFromEvents(recentEvents) {
+  const vehicles = readVehicles();
+  const capById = {};
+  const cityByVehicle = {};
+  vehicles.forEach((v) => {
+    const id = v.vehicle_id || v.id;
+    if (!id) return;
+    capById[id] = Math.max(1, parseInt(v.capacity, 10) || REPORT_DEFAULT_CAPACITY);
+    if (v.local) cityByVehicle[id] = v.local;
+  });
+
+  const allEvents = selectEventsChronological.all().map(rowToClient);
+  const activeTrips = activeTripIdsFromEvents(allEvents);
+  const tripStart = buildTripStartMap(allEvents);
+
+  const byTrip = {};
+  (recentEvents || []).forEach((ev) => ingestLatestTrack(byTrip, ev));
+  activeTrips.forEach((_, trip) => {
+    if (byTrip[trip]) return;
+    allEvents.forEach((ev) => {
+      if (String(ev.trip || '').trim() !== trip) return;
+      ingestLatestTrack(byTrip, ev);
     });
-    const free = Math.max(0, cap - passengers);
-    return {
-      vehicle: vehicleId,
-      vehicle_name: meta.vehicle_name || vehicleId,
-      trip,
-      city: meta.city || null,
-      passengers,
-      free,
-      capacity: cap,
-      lat: ev.lat,
-      lng: ev.lng,
-      last_gps: ev.timestamp || null,
-      live: true,
-    };
   });
+
+  return Array.from(activeTrips.keys())
+    .filter((trip) => byTrip[trip])
+    .map((trip) => {
+      const ev = byTrip[trip];
+      const meta = tripStart[trip] || {};
+      const vehicleId = meta.vehicle_id || trip;
+      const cap = capById[vehicleId] || REPORT_DEFAULT_CAPACITY;
+      const passengers = passengersForTrip(trip, allEvents);
+      const free = Math.max(0, cap - passengers);
+      const city = meta.city || cityByVehicle[vehicleId] || null;
+      return {
+        vehicle: vehicleId,
+        vehicle_name: meta.vehicle_name || vehicleId,
+        trip,
+        city,
+        passengers,
+        free,
+        capacity: cap,
+        lat: ev.lat,
+        lng: ev.lng,
+        last_gps: ev.timestamp || null,
+        live: true,
+      };
+    });
 }
 
 app.get('/api/vehicles', (_req, res) => {
