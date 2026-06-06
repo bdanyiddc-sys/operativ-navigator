@@ -46,22 +46,16 @@
         }
         #kvn-engine {
             position: fixed;
-            top: env(safe-area-inset-top, 0px);
-            bottom: env(safe-area-inset-bottom, 0px);
-            left: env(safe-area-inset-left, 0px);
-            right: env(safe-area-inset-right, 0px);
-            width: auto;
-            height: auto;
+            inset: 0;
+            width: 100%;
+            height: 100%;
             border: 0;
             z-index: 1;
             background: #0a0f1a;
         }
         #kvn-chrome {
             position: fixed;
-            top: env(safe-area-inset-top, 0px);
-            bottom: env(safe-area-inset-bottom, 0px);
-            left: env(safe-area-inset-left, 0px);
-            right: env(safe-area-inset-right, 0px);
+            inset: 0;
             z-index: 89;
             pointer-events: none;
         }
@@ -252,9 +246,9 @@
             position: fixed;
             z-index: 80;
             left: 50%;
-            bottom: calc(var(--fab-from-bottom) + 4px);
+            bottom: calc(var(--fab-from-bottom) + var(--fab-size) + 16px);
             transform: translateX(-50%);
-            max-width: calc(100% - 120px);
+            max-width: calc(100vw - var(--fab-size) * 2 - 48px);
             padding: 6px 12px;
             border-radius: 99px;
             background: rgba(26, 35, 126, 0.72);
@@ -788,7 +782,7 @@
             position: fixed;
             z-index: 120;
             left: 50%;
-            bottom: calc(var(--fab-from-bottom) + var(--fab-size) + 52px);
+            bottom: calc(var(--fab-from-bottom) + var(--fab-size) * 3 + var(--fab-stack-gap) * 2 + 20px);
             transform: translateX(-50%) translateY(120%);
             max-width: 280px;
             padding: 8px 12px;
