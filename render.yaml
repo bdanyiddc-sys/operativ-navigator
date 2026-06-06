@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: operativ-navigator-api
+    runtime: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22.14.0"
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_PATH
+        value: /var/data/events.db
+    disk:
+      name: sqlite-data
+      mountPath: /var/data
+      sizeGB: 1
