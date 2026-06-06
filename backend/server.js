@@ -463,6 +463,15 @@ const PUBLIC_CITY_ALIASES = {
   vac: ['vac'],
 };
 
+const PUBLIC_CITY_CENTERS = {
+  tata: { lat: 47.649, lng: 18.318 },
+  eger: { lat: 47.902, lng: 20.377 },
+  gyor: { lat: 47.687, lng: 17.635 },
+  papa: { lat: 47.330, lng: 17.467 },
+  szfv: { lat: 47.192, lng: 18.411 },
+  vac: { lat: 47.775, lng: 19.134 },
+};
+
 function allowedCityKeys(cityRaw) {
   const key = normalizeCityKey(cityRaw);
   if (!key) return null;
@@ -471,6 +480,47 @@ function allowedCityKeys(cityRaw) {
     if (normalized.includes(key)) return new Set(normalized);
   }
   return new Set([key]);
+}
+
+function publicCityIdFromLabel(raw) {
+  const key = normalizeCityKey(raw);
+  if (!key) return null;
+  for (const [id, aliases] of Object.entries(PUBLIC_CITY_ALIASES)) {
+    if (normalizeCityKey(id) === key) return id;
+    if (aliases.some((a) => normalizeCityKey(a) === key)) return id;
+  }
+  return null;
+}
+
+function nearestPublicCityId(lat, lng) {
+  if (lat == null || lng == null || Number.isNaN(lat) || Number.isNaN(lng)) return null;
+  let best = null;
+  let bestD = Infinity;
+  for (const [id, c] of Object.entries(PUBLIC_CITY_CENTERS)) {
+    const d = ((lat - c.lat) ** 2) + ((lng - c.lng) ** 2);
+    if (d < bestD) {
+      bestD = d;
+      best = id;
+    }
+  }
+  return best;
+}
+
+function primaryPublicCityId(row) {
+  const local = row.vehicle_local || row.vehicleLocal || null;
+  if (local) {
+    const fromLocal = publicCityIdFromLabel(local);
+    if (fromLocal) return fromLocal;
+  }
+  if (row.lat != null && row.lng != null) {
+    const fromGps = nearestPublicCityId(Number(row.lat), Number(row.lng));
+    if (fromGps) return fromGps;
+  }
+  if (row.city) {
+    const fromTrip = publicCityIdFromLabel(row.city);
+    if (fromTrip) return fromTrip;
+  }
+  return null;
 }
 
 function normalizeDbTimestamp(ts) {
@@ -778,9 +828,14 @@ function filterRowsByCity(rows, cityRaw) {
   const allowed = allowedCityKeys(cityRaw);
   if (!allowed) return rows;
   return rows.filter((row) => {
-    const rowKey = normalizeCityKey(row.city);
-    if (!rowKey) return true;
-    return allowed.has(rowKey);
+    const primary = primaryPublicCityId(row);
+    if (!primary) return true;
+    const primaryAllowed = allowedCityKeys(primary);
+    if (!primaryAllowed) return allowed.has(normalizeCityKey(primary));
+    for (const k of primaryAllowed) {
+      if (allowed.has(k)) return true;
+    }
+    return false;
   });
 }
 
@@ -1158,12 +1213,21 @@ function buildVehiclePositionsFromEvents(recentEvents) {
       const cap = capById[vehicleId] || REPORT_DEFAULT_CAPACITY;
       const passengers = passengersForTrip(trip, allEvents);
       const free = Math.max(0, cap - passengers);
-      const city = meta.city || cityByVehicle[vehicleId] || null;
+      const vehicleLocal = cityByVehicle[vehicleId] || null;
+      const city = vehicleLocal || meta.city || null;
+      const cityId = primaryPublicCityId({
+        vehicle_local: vehicleLocal,
+        city: meta.city,
+        lat: ev.lat,
+        lng: ev.lng,
+      });
       return {
         vehicle: vehicleId,
         vehicle_name: meta.vehicle_name || vehicleId,
         trip,
         city,
+        city_id: cityId,
+        vehicle_local: vehicleLocal,
         passengers,
         free,
         capacity: cap,
