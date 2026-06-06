@@ -3365,18 +3365,8 @@
             var id = eventTrip(ev);
             if (!id || byId[id]) return;
             var meta = findTripStartInEvents(id, events);
-            byId[id] = meta || {
-                trip: id,
-                driver_name: null,
-                vehicle_id: null,
-                vehicle_name: null,
-                city: null,
-                shift: null,
-                started_at: null,
-                start_lat: ev.lat,
-                start_lng: ev.lng,
-                active: false
-            };
+            if (!meta) return;
+            byId[id] = meta;
         });
         return Object.keys(byId).map(function (k) { return byId[k]; });
     }
@@ -3908,7 +3898,7 @@
         if (tripLabelsLayer) tripLabelsLayer.clearLayers();
 
         var split = splitTripsActiveArchived(trips, events);
-        var mapTrips = split.all;
+        var mapTrips = split.active;
         ensureTripLayerPrefs(mapTrips.map(function (t) { return t.trip; }));
 
         var selectedTrip = resolveSelectedTripForMap(mapTrips, events);
