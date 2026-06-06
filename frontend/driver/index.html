@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="Operativ Navigator – sofőr alkalmazás (GPS, műszak, foglalások)" />
     <meta name="theme-color" content="#1a237e" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -1202,18 +1203,10 @@
                     <p class="setup-meta">PIN csak előkészítés – nem kötelező, nem validál.</p>
                 </div>
                 <div class="setup-card">
-                    <label for="field-vehicle-id">Jármű azonosító</label>
-                    <input id="field-vehicle-id" class="field" type="text" list="list-vehicles" placeholder="KV-001 vagy ABC-123" autocomplete="off" />
-                    <label for="field-vehicle-name">Jármű neve</label>
-                    <input id="field-vehicle-name" class="field" type="text" list="list-vehicles-names" placeholder="pl. Kisvonat 1" autocomplete="off" />
-                    <label for="field-driver-id">Sofőr azonosító</label>
-                    <input id="field-driver-id" class="field" type="text" list="list-drivers" placeholder="pl. DRV-001" autocomplete="off" />
-                    <label for="field-driver-name">Sofőr neve</label>
-                    <input id="field-driver-name" class="field" type="text" list="list-drivers-names" placeholder="pl. Kovács János" autocomplete="off" />
-                    <datalist id="list-vehicles"></datalist>
-                    <datalist id="list-vehicles-names"></datalist>
-                    <datalist id="list-drivers"></datalist>
-                    <datalist id="list-drivers-names"></datalist>
+                    <input type="hidden" id="field-vehicle-id" />
+                    <input type="hidden" id="field-vehicle-name" />
+                    <input type="hidden" id="field-driver-id" />
+                    <input type="hidden" id="field-driver-name" />
                     <label for="field-schedule">Menetrend</label>
                     <select id="field-schedule" class="field"></select>
                     <p class="setup-meta">
@@ -1223,7 +1216,7 @@
                     <div class="capacity-panel" id="vehicle-capacity-panel" aria-live="polite">
                         <p class="cap-line">Jármű: <strong id="cap-vehicle-name">—</strong></p>
                         <p class="cap-line">Foglalás: <strong id="cap-booked">0</strong> fő</p>
-                        <p class="cap-line">Szabad hely: <strong id="cap-free">32</strong> fő</p>
+                        <p class="cap-line">Szabad hely: <strong id="cap-free">56</strong> fő</p>
                     </div>
                     <label for="export-shift-select" class="export-shift-lbl">GeoJSON export műszak</label>
                     <select id="export-shift-select" class="field"></select>
@@ -2816,10 +2809,12 @@
     }
 
     function submitDriverVehicleLog() {
-        var vehicleId = (document.getElementById('field-vehicle-id').value || '').trim();
+        syncLoginFromSelects();
+        var vehicleId = getVehicleId();
         if (!vehicleId) {
-            toast('Jármű azonosító kötelező (Műszak mező)');
-            document.getElementById('field-vehicle-id').focus();
+            toast('Válassz járművet a Műszak panelen');
+            var vSel = document.getElementById('field-vehicle-select');
+            if (vSel) vSel.focus();
             return;
         }
         var categoryEl = document.getElementById('field-log-category');
@@ -3751,16 +3746,17 @@
     }
 
     function validateShiftStartFields() {
-        saveVehicleFields();
-        saveDriverFields();
+        syncLoginFromSelects();
+        var vSel = document.getElementById('field-vehicle-select');
+        var dSel = document.getElementById('field-driver-select');
         if (!getVehicleId()) {
-            toast('Jármű azonosító kötelező');
-            document.getElementById('field-vehicle-id').focus();
+            toast('Válassz járművet');
+            if (vSel) vSel.focus();
             return false;
         }
         if (!getDriverId()) {
-            toast('Sofőr azonosító kötelező');
-            document.getElementById('field-driver-id').focus();
+            toast('Válassz sofőrt');
+            if (dSel) dSel.focus();
             return false;
         }
         return true;
@@ -3897,6 +3893,76 @@
         refreshCatalogDatalists();
     }
 
+    function normalizeLocalKey(raw) {
+        if (raw == null) return '';
+        return String(raw).trim().toLowerCase()
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    }
+
+    function cityIdFromLocalName(localName) {
+        if (!localName) return null;
+        var key = normalizeLocalKey(localName);
+        var fromCity = CITIES.find(function (c) {
+            return c.id === key || normalizeLocalKey(c.label) === key;
+        });
+        if (fromCity) return fromCity.id;
+        var aliases = {
+            szekesfehervar: 'szfv',
+            szfv: 'szfv',
+            gyor: 'gyor',
+            eger: 'eger',
+            tata: 'tata',
+            papa: 'papa',
+            vac: 'vac'
+        };
+        return aliases[key] || null;
+    }
+
+    function formatVehicleOptionLabel(v) {
+        var id = v.vehicle_id || '';
+        var parts = [id];
+        if (v.vehicle_name && v.vehicle_name !== id) parts.push(v.vehicle_name);
+        if (v.local) parts.push(v.local);
+        return parts.join(' - ');
+    }
+
+    function formatDriverOptionLabel(d) {
+        var id = d.driver_id || '';
+        if (d.driver_name && d.driver_name !== id) return id + ' - ' + d.driver_name;
+        return id;
+    }
+
+    function syncLoginFromSelects() {
+        var dSel = document.getElementById('field-driver-select');
+        var vSel = document.getElementById('field-vehicle-select');
+        var dIdEl = document.getElementById('field-driver-id');
+        var dNmEl = document.getElementById('field-driver-name');
+        var vIdEl = document.getElementById('field-vehicle-id');
+        var vNmEl = document.getElementById('field-vehicle-name');
+        if (!dIdEl || !vIdEl) return;
+        var dId = dSel && dSel.value ? String(dSel.value).trim() : '';
+        var vId = vSel && vSel.value ? String(vSel.value).trim() : '';
+        var dRec = driversList.find(function (d) { return d.driver_id === dId; }) || null;
+        var vRec = vehiclesList.find(function (v) { return v.vehicle_id === vId; }) || null;
+        dIdEl.value = dId;
+        dNmEl.value = dRec ? (dRec.driver_name || '') : '';
+        vIdEl.value = vId;
+        vNmEl.value = vRec ? (vRec.vehicle_name || '') : '';
+        saveDriverFields();
+        saveVehicleFields();
+        if (vRec && vRec.local) applyVehicleLocalDefault(vRec);
+        updateCapacityDisplay();
+    }
+
+    function applyVehicleLocalDefault(vehicleRec) {
+        vehicleRec = vehicleRec || getVehicleRecord();
+        if (!vehicleRec || !vehicleRec.local) return;
+        if (cityGpsManualLock) return;
+        var cityId = cityIdFromLocalName(vehicleRec.local);
+        if (!cityId || cityId === activeCityId) return;
+        setActiveCity(cityId, { silent: true });
+    }
+
     function refreshShiftLoginSelects() {
         var dSel = document.getElementById('field-driver-select');
         var vSel = document.getElementById('field-vehicle-select');
@@ -3907,10 +3973,10 @@
                 if (!d.driver_id) return;
                 var opt = document.createElement('option');
                 opt.value = d.driver_id;
-                opt.textContent = (d.driver_name || d.driver_id) + ' (' + d.driver_id + ')';
+                opt.textContent = formatDriverOptionLabel(d);
                 dSel.appendChild(opt);
             });
-            if (dPrev) dSel.value = dPrev;
+            if (dPrev && driversList.some(function (d) { return d.driver_id === dPrev; })) dSel.value = dPrev;
             else if (getDriverId()) dSel.value = getDriverId();
         }
         if (vSel) {
@@ -3920,49 +3986,15 @@
                 if (!v.vehicle_id) return;
                 var opt = document.createElement('option');
                 opt.value = v.vehicle_id;
-                opt.textContent = (v.vehicle_name || v.vehicle_id) + ' (' + v.vehicle_id + ')';
+                opt.textContent = formatVehicleOptionLabel(v);
                 vSel.appendChild(opt);
             });
-            if (vPrev) vSel.value = vPrev;
+            if (vPrev && vehiclesList.some(function (v) { return v.vehicle_id === vPrev; })) vSel.value = vPrev;
             else if (getVehicleId()) vSel.value = getVehicleId();
         }
     }
 
     function refreshCatalogDatalists() {
-        var vId = document.getElementById('list-vehicles');
-        var vNm = document.getElementById('list-vehicles-names');
-        var dId = document.getElementById('list-drivers');
-        var dNm = document.getElementById('list-drivers-names');
-        vId.innerHTML = '';
-        vNm.innerHTML = '';
-        dId.innerHTML = '';
-        dNm.innerHTML = '';
-        vehiclesList.forEach(function (v) {
-            if (v.vehicle_id) {
-                var o = document.createElement('option');
-                o.value = v.vehicle_id;
-                o.label = v.vehicle_name || v.vehicle_id;
-                vId.appendChild(o);
-            }
-            if (v.vehicle_name) {
-                var o2 = document.createElement('option');
-                o2.value = v.vehicle_name;
-                vNm.appendChild(o2);
-            }
-        });
-        driversList.forEach(function (d) {
-            if (d.driver_id) {
-                var o = document.createElement('option');
-                o.value = d.driver_id;
-                o.label = d.driver_name || d.driver_id;
-                dId.appendChild(o);
-            }
-            if (d.driver_name) {
-                var o2 = document.createElement('option');
-                o2.value = d.driver_name;
-                dNm.appendChild(o2);
-            }
-        });
         refreshShiftLoginSelects();
     }
 
@@ -3989,7 +4021,7 @@
 
     function getVehicleCapacity() {
         var v = getVehicleRecord();
-        return Math.max(1, parseInt(v && v.capacity != null ? v.capacity : 32, 10) || 32);
+        return Math.max(1, parseInt(v && v.capacity != null ? v.capacity : 56, 10) || 56);
     }
 
     function countDriverBookings() {
@@ -4037,13 +4069,35 @@
             });
     }
 
+    function loadDriversFromApi() {
+        return fetch(API_BASE + '/api/drivers', { headers: { Accept: 'application/json' }, cache: 'no-store' })
+            .then(function (r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            })
+            .then(function (data) {
+                if (data && data.drivers) receiveDriversList(data.drivers);
+            })
+            .catch(function (err) {
+                console.warn('[kvn] drivers load:', err.message || err);
+            });
+    }
+
+    function loadMasterDataFromApi() {
+        return Promise.all([loadVehiclesFromApi(), loadDriversFromApi()]).then(function () {
+            refreshShiftLoginSelects();
+            syncLoginFromSelects();
+        });
+    }
+
     function receiveVehiclesList(list) {
         if (!Array.isArray(list)) return false;
         vehiclesList = list.map(function (v) {
             return {
                 vehicle_id: String(v.vehicle_id || v.id || '').trim(),
                 vehicle_name: String(v.vehicle_name || v.name || '').trim(),
-                capacity: Math.max(1, parseInt(v.capacity, 10) || 32)
+                capacity: Math.max(1, parseInt(v.capacity, 10) || 56),
+                local: v.local != null ? String(v.local).trim() : ''
             };
         }).filter(function (v) { return v.vehicle_id; });
         try {
@@ -4242,7 +4296,7 @@
 
     function validateTripStart(rec) {
         if (!rec.vehicle_id) {
-            toast('Jármű azonosító kötelező');
+            toast('Válassz járművet a Műszak panelen');
             return false;
         }
         if (!rec.shift) {
@@ -4284,7 +4338,7 @@
 
     function validateRecord(rec) {
         if (!rec.vehicle_id) {
-            toast('Jármű azonosító kötelező');
+            toast('Válassz járművet a Műszak panelen');
             return false;
         }
         if (!rec.shift) {
@@ -5598,51 +5652,15 @@
     document.getElementById('field-vehicle-name').value = getVehicleName();
     document.getElementById('field-driver-id').value = getDriverId();
     document.getElementById('field-driver-name').value = getDriverName();
-    function onVehicleIdPicked() {
-        var id = (document.getElementById('field-vehicle-id').value || '').trim();
-        var hit = vehiclesList.find(function (v) { return v.vehicle_id === id; });
-        if (hit && hit.vehicle_name) {
-            document.getElementById('field-vehicle-name').value = hit.vehicle_name;
-        }
-        saveVehicleFields();
-    }
-
-    function onDriverIdPicked() {
-        var id = (document.getElementById('field-driver-id').value || '').trim();
-        var hit = driversList.find(function (d) { return d.driver_id === id; });
-        if (hit && hit.driver_name) {
-            document.getElementById('field-driver-name').value = hit.driver_name;
-        }
-        saveDriverFields();
-    }
-
-    document.getElementById('field-vehicle-id').addEventListener('change', onVehicleIdPicked, { passive: true });
-    document.getElementById('field-vehicle-id').addEventListener('blur', onVehicleIdPicked, { passive: true });
-    document.getElementById('field-vehicle-name').addEventListener('change', saveVehicleFields, { passive: true });
-    document.getElementById('field-vehicle-name').addEventListener('blur', saveVehicleFields, { passive: true });
-    document.getElementById('field-driver-id').addEventListener('change', onDriverIdPicked, { passive: true });
-    document.getElementById('field-driver-id').addEventListener('blur', onDriverIdPicked, { passive: true });
-    document.getElementById('field-driver-name').addEventListener('change', saveDriverFields, { passive: true });
-    document.getElementById('field-driver-name').addEventListener('blur', saveDriverFields, { passive: true });
     document.getElementById('btn-muszak-toggle').addEventListener('click', toggleMuszakShift, { passive: true });
 
     var fieldDriverSelect = document.getElementById('field-driver-select');
     var fieldVehicleSelect = document.getElementById('field-vehicle-select');
     if (fieldDriverSelect) {
-        fieldDriverSelect.addEventListener('change', function () {
-            var id = fieldDriverSelect.value;
-            if (!id) return;
-            document.getElementById('field-driver-id').value = id;
-            onDriverIdPicked();
-        }, { passive: true });
+        fieldDriverSelect.addEventListener('change', syncLoginFromSelects, { passive: true });
     }
     if (fieldVehicleSelect) {
-        fieldVehicleSelect.addEventListener('change', function () {
-            var id = fieldVehicleSelect.value;
-            if (!id) return;
-            document.getElementById('field-vehicle-id').value = id;
-            onVehicleIdPicked();
-        }, { passive: true });
+        fieldVehicleSelect.addEventListener('change', syncLoginFromSelects, { passive: true });
     }
 
     try {
@@ -5656,7 +5674,7 @@
     } catch (eC) {}
 
     loadCatalogs();
-    loadVehiclesFromApi();
+    loadMasterDataFromApi();
     loadPoiCatalog(activeCityId);
     loadEvents();
     loadDestinations();

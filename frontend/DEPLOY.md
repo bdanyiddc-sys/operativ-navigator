@@ -76,7 +76,7 @@ A gyökér (`/`) automatikusan a `/public/`-ra irányít.
    - **Health Check Path:** `/api/health`
 4. A `render.yaml` tartalmazza a SQLite persistent disk konfigurációt (`/var/data/events.db`).
 5. Deploy után másold ki a URL-t, pl.:
-   `https://operativ-navigator-backend.onrender.com`
+   `https://operativ-navigator.onrender.com`
 
 ---
 
@@ -89,7 +89,7 @@ A gyökér (`/`) automatikusan a `/public/`-ra irányít.
 A `frontend/opnav-config.js` éles hoston beállítja:
 
 ```javascript
-window.OPNAV_API_BASE = 'https://operativ-navigator-backend.onrender.com';
+window.OPNAV_API_BASE = 'https://operativ-navigator.onrender.com';
 ```
 
 Localhost-on (`localhost`, `127.0.0.1`) **nem** ír felül – minden frontend továbbra is `http://localhost:3000`-t használ.

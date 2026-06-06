@@ -22,6 +22,7 @@
         userAccuracy: null,
         gpsWatchId: null,
         devGis: false,
+        routeBoardMode: false,
         popupContext: { stopId: '', selectedTime: '', showBoard: false }
     };
 
@@ -209,7 +210,7 @@
 
         L.control.layers({ Voyager: cartoLight, OSM: osm }, null, { position: 'bottomleft', collapsed: true }).addTo(map);
 
-        routeLayers = { black: null, red: null };
+        routeLayers = { black: null, red: null, hit: null };
         vehicleLayer = L.layerGroup().addTo(map);
         stopLayer = L.layerGroup().addTo(map);
         poiLayer = L.layerGroup().addTo(map);
@@ -248,6 +249,20 @@
     function clearRoute() {
         if (routeLayers.black) { map.removeLayer(routeLayers.black); routeLayers.black = null; }
         if (routeLayers.red) { map.removeLayer(routeLayers.red); routeLayers.red = null; }
+        if (routeLayers.hit) { map.removeLayer(routeLayers.hit); routeLayers.hit = null; }
+    }
+
+    function onRouteBoardClick(e) {
+        if (state.devGis && e.target && e.target.feature && e.target.feature.properties) {
+            toast(JSON.stringify(e.target.feature.properties).slice(0, 100));
+        }
+        state.routeBoardMode = false;
+        updateRouteBoardModeUi();
+        openRouteBoardingPopup(e.latlng);
+    }
+
+    function bindRouteLineClicks(layer) {
+        layer.on('click', onRouteBoardClick);
     }
 
     function addGeoJsonRoute(geoData) {
@@ -271,17 +286,54 @@
             onEachFeature: function (feature, layer) {
                 var g = feature.geometry;
                 if (!g || (g.type !== 'LineString' && g.type !== 'MultiLineString')) return;
-                layer.on('click', function (e) {
-                    if (state.devGis && feature.properties) {
-                        toast(JSON.stringify(feature.properties).slice(0, 100));
-                    }
-                    openRouteBoardingPopup(e.latlng);
-                });
+                bindRouteLineClicks(layer);
             }
         }).addTo(map);
 
+        routeLayers.hit = L.geoJSON(geoData, {
+            interactive: true,
+            style: function (feature) {
+                var g = feature.geometry;
+                if (g.type === 'LineString' || g.type === 'MultiLineString') {
+                    return { color: 'transparent', weight: 22, opacity: 0.01 };
+                }
+                return { opacity: 0, fillOpacity: 0 };
+            },
+            onEachFeature: function (feature, layer) {
+                var g = feature.geometry;
+                if (!g || (g.type !== 'LineString' && g.type !== 'MultiLineString')) return;
+                bindRouteLineClicks(layer);
+            }
+        }).addTo(map);
+
+        syncRouteLayerOrder();
+
         var bounds = routeLayers.red.getBounds();
         if (bounds.isValid()) map.fitBounds(bounds, { padding: [mapTopPadding(), 28], maxZoom: 16 });
+    }
+
+    function syncRouteLayerOrder() {
+        if (!map) return;
+        if (routeLayers.black) routeLayers.black.bringToBack();
+        if (routeLayers.red) routeLayers.red.bringToFront();
+        if (routeLayers.hit) routeLayers.hit.bringToFront();
+        if (state.routeBoardMode && routeLayers.hit) {
+            routeLayers.hit.bringToFront();
+        }
+    }
+
+    function updateRouteBoardModeUi() {
+        var btn = $('btn-peek-board');
+        if (btn) btn.classList.toggle('is-route-pick', !!state.routeBoardMode);
+        syncRouteLayerOrder();
+    }
+
+    function setRouteBoardMode(on) {
+        state.routeBoardMode = !!on;
+        updateRouteBoardModeUi();
+        if (state.routeBoardMode) {
+            toast('Koppints az útvonalra vagy egy megállóra');
+        }
     }
 
     function scheduleSeatsLabel(seats, freeCount) {
@@ -502,8 +554,18 @@
             m.bindPopup(L.popup(stopPopupLeafletOptions()).setContent(stopPopupHtml(enriched, ctx)));
             m.on('click', function () {
                 state.selectedStopId = stop.id;
-                state.popupContext = { stopId: stop.id, selectedTime: '', showBoard: false };
+                var ctx = {
+                    stopId: stop.id,
+                    selectedTime: '',
+                    showBoard: !!state.routeBoardMode
+                };
+                state.popupContext = ctx;
                 openPopupStopId = stop.id;
+                if (state.routeBoardMode) {
+                    state.routeBoardMode = false;
+                    updateRouteBoardModeUi();
+                }
+                setStopPopup(stop.id, ctx, true);
                 updateUi();
             });
             m.addTo(stopLayer);
@@ -528,9 +590,11 @@
     }
 
     function openQuickBoard() {
+        setRouteBoardMode(true);
         var stop = getDisplayStop();
-        if (!stop) { toast('Válassz megállót a térképen'); return; }
-        openStopOnMap(stop.id, { selectedTime: '', showBoard: true });
+        if (stop) {
+            map.panTo([stop.lat, stop.lng], { animate: true });
+        }
     }
 
     function getSelectedTimeFromPopup(popupEl) {
@@ -611,6 +675,8 @@
             created_at: new Date().toISOString()
         }).then(function () {
             map.closePopup();
+            state.routeBoardMode = false;
+            updateRouteBoardModeUi();
             toast('Felszállási jelzés elküldve (útvonal menti)');
         }).catch(function () { toast('Küldés sikertelen'); });
     }
@@ -686,8 +752,10 @@
         state.schedule = (DATA.MOCK_SCHEDULES[city.id] || []).slice();
         state.activeVehicle = state.vehicles.find(function (v) { return v.active; }) || state.vehicles[0] || null;
         state.selectedStopId = null;
+        state.routeBoardMode = false;
         state.popupContext = { stopId: '', selectedTime: '', showBoard: false };
         openPopupStopId = null;
+        updateRouteBoardModeUi();
         if (map && city.center) map.setView(city.center, 14, { animate: false });
         findNearestStop();
         renderStops();

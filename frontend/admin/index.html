@@ -234,35 +234,35 @@
             .btn-header-reports { display: none; }
             .btn-header-service { display: none; }
             .admin-mobile-nav {
+                display: grid;
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                grid-template-rows: repeat(2, auto);
+                gap: 8px;
+                padding: 10px 12px;
+                width: 100%;
+                max-width: 100%;
+                box-sizing: border-box;
+                border-bottom: 1px solid var(--line);
+                background: rgba(10, 16, 26, 0.95);
+                overflow: hidden;
                 flex-shrink: 0;
                 position: sticky;
                 top: 0;
                 z-index: 10002;
             }
-            .layout-col-right .panel-events { min-height: 240px; }
-            .btn-header-task { display: none; }
-            .admin-mobile-nav {
-                display: flex;
-                flex-direction: row;
-                flex-wrap: nowrap;
-                gap: 8px;
-                padding: 10px 12px;
-                border-bottom: 1px solid var(--line);
-                background: rgba(10, 16, 26, 0.95);
-                overflow-x: auto;
-                -webkit-overflow-scrolling: touch;
-            }
             .admin-nav-btn {
-                flex: 1 1 0;
-                min-width: 100px;
-                padding: 10px 12px;
+                width: 100%;
+                min-width: 0;
+                padding: 10px 6px;
                 border-radius: 10px;
                 border: 1px solid var(--line);
-                font-size: 12px;
+                font-size: 11px;
                 font-weight: 800;
                 cursor: pointer;
                 white-space: nowrap;
                 text-align: center;
+                overflow: hidden;
+                text-overflow: ellipsis;
             }
             .admin-nav-btn.admin-nav-task {
                 border-color: rgba(34, 197, 94, 0.45);
