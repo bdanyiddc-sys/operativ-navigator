@@ -1,0 +1,4 @@
+[
+  { "vehicle_id": "KV-001", "vehicle_name": "Vonat 1", "capacity": 56 },
+  { "vehicle_id": "KV-002", "vehicle_name": "Vonat 2", "capacity": 56 }
+]

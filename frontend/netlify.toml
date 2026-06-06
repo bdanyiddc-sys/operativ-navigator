@@ -1,0 +1,33 @@
+# Operativ Navigator – egyetlen Netlify projekt, publish = frontend mappa
+[build]
+  publish = "."
+
+[[redirects]]
+  from = "/"
+  to = "/public/"
+  status = 302
+
+[[redirects]]
+  from = "/public"
+  to = "/public/"
+  status = 301
+
+[[redirects]]
+  from = "/driver"
+  to = "/driver/"
+  status = 301
+
+[[redirects]]
+  from = "/admin"
+  to = "/admin/"
+  status = 301
+
+[[headers]]
+  for = "/service-worker.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/manifest.json"
+  [headers.values]
+    Content-Type = "application/manifest+json"

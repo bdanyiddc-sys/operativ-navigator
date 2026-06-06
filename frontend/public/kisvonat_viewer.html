@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="hu" data-assets-base="">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=5">
+    <meta name="theme-color" content="#1a237e">
+    <title>kisvonatok.hu – útvonal (KV-003)</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        * { box-sizing: border-box; }
+        html, body {
+            margin: 0;
+            height: 100%;
+            height: 100dvh;
+            overflow: hidden;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+        }
+        .kv-shell {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            height: 100dvh;
+            overflow: hidden;
+        }
+        .kv-map-wrap {
+            flex: 1;
+            min-height: 0;
+            position: relative;
+        }
+        /* Mobilra fix megjelenítési méret (2× előző KV-003 méret) */
+        .kv-logo-float {
+            position: absolute;
+            left: 50%;
+            top: max(6px, env(safe-area-inset-top));
+            transform: translateX(-50%);
+            z-index: 10000;
+            pointer-events: none;
+            text-align: center;
+            width: 100%;
+            padding: 0 12px;
+        }
+        .kv-logo {
+            display: block;
+            margin: 0 auto;
+            /* Fix megjelenítési méret mobilra (a PNG átlátszó háttere megmarad) */
+            width: 560px;
+            max-width: min(560px, 92vw);
+            height: 112px;
+            object-fit: contain;
+            object-position: center top;
+            filter: drop-shadow(0 1px 2px rgba(255,255,255,0.9)) drop-shadow(0 2px 8px rgba(0,0,0,0.25));
+        }
+        @media (max-width: 360px) {
+            .kv-logo {
+                width: 520px;
+                max-width: min(520px, 94vw);
+                height: 104px;
+            }
+        }
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0,0,0,0);
+            white-space: nowrap;
+            border: 0;
+        }
+        #map {
+            position: absolute;
+            left: 0;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+            height: 100%;
+        }
+        .leaflet-container.kv-cursor,
+        .leaflet-container.kv-cursor .leaflet-overlay-pane svg path {
+            cursor: default !important;
+        }
+        .kv-citybar.leaflet-bar {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding: 8px;
+            background: rgba(255,255,255,0.96);
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.14);
+            max-width: min(44vw, 168px);
+            max-height: min(62dvh, 420px);
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            margin-top: 144px;
+        }
+        .kv-citybar .btn-city {
+            padding: 12px 10px;
+            font-size: 14px;
+            font-weight: 700;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            background: #3949ab;
+            color: #fff;
+            text-align: center;
+            font-family: inherit;
+            line-height: 1.2;
+            min-height: 44px;
+            touch-action: manipulation;
+        }
+        .kv-citybar .btn-city.is-active {
+            background: #c62828;
+            box-shadow: inset 0 0 0 2px rgba(255,255,255,0.35);
+        }
+        .toast {
+            position: fixed;
+            left: 50%;
+            bottom: max(16px, env(safe-area-inset-bottom));
+            transform: translateX(-50%);
+            z-index: 20000;
+            background: rgba(30,41,59,0.92);
+            color: #f1f5f9;
+            padding: 10px 16px;
+            border-radius: 10px;
+            font-size: 13px;
+            max-width: 90vw;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.25s;
+        }
+        .toast.is-on { opacity: 1; }
+
+        .data-modal { position: fixed; inset: 0; z-index: 50000; display: flex; align-items: stretch; justify-content: center; padding: 0; }
+        .data-modal[hidden] { display: none !important; }
+        .data-modal-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); }
+        .data-modal-panel {
+            position: relative;
+            margin: max(10px, env(safe-area-inset-top)) 12px 12px;
+            margin-bottom: max(12px, env(safe-area-inset-bottom));
+            flex: 1;
+            max-width: 720px;
+            width: 100%;
+            max-height: calc(100dvh - 24px);
+            background: #f7f8fb;
+            border-radius: 16px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 16px 48px rgba(0,0,0,0.35);
+            align-self: center;
+        }
+        .data-modal-head {
+            flex: 0 0 auto;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            background: linear-gradient(180deg, #fff 0%, #f0f4fa 100%);
+            border-bottom: 1px solid #dce3ed;
+        }
+        .data-modal-logo {
+            flex-shrink: 0;
+            width: 240px;
+            height: 72px;
+            object-fit: contain;
+            object-position: left center;
+        }
+        .data-modal-title { flex: 1; font-size: 17px; font-weight: 700; color: #1a237e; min-width: 0; }
+        .data-modal-close {
+            width: 44px; height: 44px; flex-shrink: 0;
+            font-size: 26px; line-height: 1; border: none; cursor: pointer;
+            background: rgba(26,42,108,0.08); color: #1a237e; border-radius: 12px;
+        }
+        .data-modal-body {
+            flex: 1;
+            overflow: auto;
+            padding: 14px 16px;
+            -webkit-overflow-scrolling: touch;
+        }
+        .dm-tbl { width: 100%; border-collapse: collapse; font-size: 15px; line-height: 1.45; color: #1e293b; }
+        .dm-tbl th { text-align: left; padding: 8px 8px 8px 0; color: #64748b; font-weight: 600; width: 38%; vertical-align: top; }
+        .dm-tbl td { padding: 8px 0; border-bottom: 1px solid #e2e8f0; word-break: break-word; vertical-align: top; }
+    </style>
+</head>
+<body>
+
+<div class="kv-shell">
+<div class="kv-map-wrap">
+    <h1 class="sr-only">kisvonatok.hu</h1>
+    <div class="kv-logo-float">
+        <img id="kv-logo-main" class="kv-logo" src="kisvonatok3.png" alt="kisvonatok.hu" width="560" height="112" decoding="async" />
+    </div>
+    <div id="map" class="kv-cursor" tabindex="-1" aria-label="Útvonal térképe"></div>
+</div>
+</div>
+<div id="toast" class="toast" role="status"></div>
+
+<div id="data-modal" class="data-modal" hidden>
+    <div class="data-modal-backdrop" id="data-modal-backdrop"></div>
+    <div class="data-modal-panel" role="dialog" aria-modal="true">
+        <div class="data-modal-head">
+            <img id="data-modal-logo" class="data-modal-logo" src="kisvonatok3.png" alt="kisvonatok.hu" decoding="async" />
+            <div class="data-modal-title" id="data-modal-title">Adatok</div>
+            <button type="button" class="data-modal-close" id="data-modal-close" aria-label="Bezárás">×</button>
+        </div>
+        <div class="data-modal-body" id="data-modal-body"></div>
+    </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+    (function () {
+    const dataModal = document.getElementById('data-modal');
+    const dataModalBody = document.getElementById('data-modal-body');
+    const dataModalTitle = document.getElementById('data-modal-title');
+    const dataModalLogo = document.getElementById('data-modal-logo');
+    const kvLogoMain = document.getElementById('kv-logo-main');
+    const toastEl = document.getElementById('toast');
+
+    (function logoFallback() {
+        var tried = false;
+        function onErr() {
+            if (!tried) {
+                tried = true;
+                var u = new URL('./kisvonatok3.png', window.location.href).href;
+                dataModalLogo.src = u;
+                kvLogoMain.src = u;
+            }
+        }
+        dataModalLogo.addEventListener('error', onErr);
+        kvLogoMain.addEventListener('error', onErr);
+    })();
+
+    function closeDataModal() {
+        dataModal.hidden = true;
+    }
+    document.getElementById('data-modal-close').addEventListener('click', closeDataModal);
+    document.getElementById('data-modal-backdrop').addEventListener('click', closeDataModal);
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && !dataModal.hidden) closeDataModal();
+    });
+
+    function showToast(msg) {
+        toastEl.textContent = msg;
+        toastEl.classList.add('is-on');
+        clearTimeout(showToast._t);
+        showToast._t = setTimeout(function () { toastEl.classList.remove('is-on'); }, 2800);
+    }
+
+    function escapeHtml(s) {
+        return String(s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function openPropsModal(title, props) {
+        var keys = Object.keys(props).sort();
+        var rows = keys.map(function (key) {
+            var val = props[key];
+            var disp = val !== null && val !== undefined && String(val).length > 0 ? String(val) : '—';
+            return '<tr><th>' + escapeHtml(key) + '</th><td>' + escapeHtml(disp) + '</td></tr>';
+        }).join('');
+        dataModalBody.innerHTML = '<table class="dm-tbl">' + rows + '</table>';
+        dataModalTitle.textContent = title || 'Tulajdonságok';
+        dataModal.hidden = false;
+    }
+
+    const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap',
+        maxZoom: 22,
+        maxNativeZoom: 19
+    });
+    const esriSatelite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles © Esri',
+        maxZoom: 22,
+        maxNativeZoom: 22
+    });
+    const cartoLight = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        attribution: '© CARTO',
+        maxZoom: 22,
+        maxNativeZoom: 19
+    });
+    const cartoDark = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '© CARTO',
+        maxZoom: 22,
+        maxNativeZoom: 19
+    });
+
+    const baseMaps = {
+        '1 Várostérkép': osm,
+        '2 Légifotó': esriSatelite,
+        '3 Minimalista nézet': cartoLight,
+        '4 Kontrasztos nézet': cartoDark
+    };
+
+    const map = L.map('map', {
+        center: [47.19, 18.41],
+        zoom: 9,
+        zoomSnap: 0.25,
+        maxZoom: 22,
+        layers: [cartoLight]
+    });
+
+    map.whenReady(function () {
+        map.invalidateSize();
+    });
+
+    L.control.layers(baseMaps, null, { position: 'topright', collapsed: true }).addTo(map);
+
+    var CityCtrl = L.Control.extend({
+        onAdd: function () {
+            var w = L.DomUtil.create('div', 'kv-citybar leaflet-bar');
+            var cities = [
+                { id: 'eger', label: 'Eger', file: 'eger3.geojson' },
+                { id: 'gyor', label: 'Győr', file: 'gyor1.geojson' },
+                { id: 'papa', label: 'Pápa', file: 'papa1.geojson' },
+                { id: 'szekesfehervar', label: 'Székesfehérvár', file: 'szfv1.geojson' },
+                { id: 'tata', label: 'Tata', file: 'Tata_utvonal2.geojson' },
+                { id: 'vac', label: 'Vác', file: 'vac1.geojson' }
+            ];
+            cities.forEach(function (c) {
+                var b = L.DomUtil.create('button', 'btn-city', w);
+                b.type = 'button';
+                b.textContent = c.label;
+                b.dataset.city = c.id;
+                L.DomEvent.on(b, 'click', L.DomEvent.stopPropagation);
+                L.DomEvent.on(b, 'mousedown', L.DomEvent.stopPropagation);
+                L.DomEvent.on(b, 'click', function () {
+                    document.querySelectorAll('.kv-citybar .btn-city').forEach(function (el) {
+                        el.classList.remove('is-active');
+                    });
+                    b.classList.add('is-active');
+                    loadCityGeojson(c.file, c.label);
+                });
+            });
+            L.DomEvent.disableClickPropagation(w);
+            L.DomEvent.on(w, 'mousedown', L.DomEvent.stopPropagation);
+            return w;
+        }
+    });
+    map.addControl(new CityCtrl({ position: 'topright' }));
+
+    var loadedLayers = { black: null, red: null };
+
+    function styleOutline() {
+        return {
+            color: '#111111',
+            weight: 9,
+            opacity: 1,
+            lineCap: 'round',
+            lineJoin: 'round'
+        };
+    }
+    function styleRed() {
+        return {
+            color: '#e53935',
+            weight: 5,
+            opacity: 1,
+            lineCap: 'round',
+            lineJoin: 'round'
+        };
+    }
+
+    function clearRoute() {
+        if (loadedLayers.black) {
+            map.removeLayer(loadedLayers.black);
+            loadedLayers.black = null;
+        }
+        if (loadedLayers.red) {
+            map.removeLayer(loadedLayers.red);
+            loadedLayers.red = null;
+        }
+    }
+
+    function addGeoJsonRoute(geoData) {
+        clearRoute();
+        loadedLayers.black = L.geoJSON(geoData, {
+            interactive: false,
+            style: function (feature) {
+                var g = feature.geometry;
+                if (g.type === 'LineString' || g.type === 'MultiLineString') return styleOutline();
+                if (g.type === 'Polygon' || g.type === 'MultiPolygon') {
+                    return { color: '#111', weight: 2, fillColor: '#e53935', fillOpacity: 0.15 };
+                }
+                return { color: '#111', weight: 6 };
+            },
+            pointToLayer: function (feature, latlng) {
+                return L.circleMarker(latlng, {
+                    radius: 7,
+                    color: '#111',
+                    weight: 3,
+                    fillColor: '#e53935',
+                    fillOpacity: 0.95
+                });
+            }
+        }).addTo(map);
+        loadedLayers.red = L.geoJSON(geoData, {
+            style: function (feature) {
+                var g = feature.geometry;
+                if (g.type === 'LineString' || g.type === 'MultiLineString') return styleRed();
+                if (g.type === 'Polygon' || g.type === 'MultiPolygon') {
+                    return { color: '#e53935', weight: 2, fillColor: '#ffcdd2', fillOpacity: 0.25 };
+                }
+                return { color: '#e53935', weight: 4 };
+            },
+            pointToLayer: function (feature, latlng) {
+                return L.circleMarker(latlng, {
+                    radius: 5,
+                    color: '#e53935',
+                    weight: 2,
+                    fillColor: '#ffebee',
+                    fillOpacity: 1
+                });
+            },
+            onEachFeature: function (feature, layer) {
+                if (feature.properties) {
+                    layer.on('click', function (e) {
+                        if (e.originalEvent) L.DomEvent.stopPropagation(e.originalEvent);
+                        openPropsModal('Útvonal – adatok', feature.properties);
+                    });
+                }
+            }
+        }).addTo(map);
+
+        var bounds = loadedLayers.red.getBounds();
+        if (bounds.isValid()) {
+            map.fitBounds(bounds, { padding: [88, 88], maxZoom: 16 });
+        }
+    }
+
+    function loadCityGeojson(filename, cityLabel) {
+        var url = new URL(filename, window.location.href).href;
+        showToast('Betöltés: ' + filename);
+        fetch(url, { cache: 'no-store' })
+            .then(function (r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            })
+            .then(function (geoData) {
+                addGeoJsonRoute(geoData);
+                showToast(cityLabel + ' – útvonal betöltve.');
+            })
+            .catch(function () {
+                showToast('Nem sikerült betölteni: ' + filename);
+            });
+    }
+
+    window.addEventListener('resize', function () { map.invalidateSize(); });
+})();
+</script>
+
+</body>
+</html>

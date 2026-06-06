@@ -1,0 +1,69 @@
+{
+  "type": "FeatureCollection",
+  "name": "Tata POI",
+  "features": [
+    {
+      "type": "Feature",
+      "id": "kastely",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [18.321456, 47.651234]
+      },
+      "properties": {
+        "name": "Esterházy kastély",
+        "audio": "kastely.mp3",
+        "radius": 80
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "poi_varmegallo",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [18.3285, 47.6468]
+      },
+      "properties": {
+        "name": "Vármegálló",
+        "audio": "varmegallo.mp3",
+        "radius": 50
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "poi_001",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [18.3192, 47.64745]
+      },
+      "properties": {
+        "name": "Tatai vár",
+        "audio": "tatai_var.mp3",
+        "radius": 50
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "poi_tata_veg",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [18.31824, 47.64974]
+      },
+      "properties": {
+        "name": "Tata végállomás",
+        "radius": 80
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "poi_tata_ind",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [18.31832, 47.64982]
+      },
+      "properties": {
+        "name": "Tata indulási pont",
+        "radius": 60
+      }
+    }
+  ]
+}

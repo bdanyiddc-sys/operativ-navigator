@@ -1,0 +1,1103 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b1220" />
+    <title>KözműNavigator · Mobil</title>
+    <style>
+        :root {
+            --safe-t: env(safe-area-inset-top, 0px);
+            --safe-b: env(safe-area-inset-bottom, 0px);
+            --safe-l: env(safe-area-inset-left, 0px);
+            --safe-r: env(safe-area-inset-right, 0px);
+            --bg: #0b1220;
+            --glass: rgba(12, 18, 32, 0.82);
+            --line: rgba(148, 163, 184, 0.22);
+            --text: #e8eef7;
+            --muted: #94a3b8;
+            --shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+            --fab-size: 54px;
+            --fab-stack-gap: 8px;
+            --fab-from-edge: max(12px, calc(12px + var(--safe-l)));
+            --fab-from-edge-r: max(12px, calc(12px + var(--safe-r)));
+            --fab-from-bottom: max(22px, calc(22px + var(--safe-b)));
+            --fab-from-top: max(12px, calc(12px + var(--safe-t)));
+        }
+        * { box-sizing: border-box; }
+        html, body {
+            margin: 0;
+            min-height: 100%;
+            min-height: 100dvh;
+            height: 100%;
+            background: var(--bg);
+            color: var(--text);
+            font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+            overflow: hidden;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+            -webkit-font-smoothing: antialiased;
+        }
+        #knm-engine {
+            position: fixed;
+            inset: 0;
+            width: 100vw;
+            height: 100vh;
+            height: 100dvh;
+            border: 0;
+            z-index: 1;
+            background: #0a0a0f;
+        }
+        #knm-chrome {
+            position: fixed;
+            inset: 0;
+            z-index: 89;
+            pointer-events: none;
+        }
+        #knm-chrome .hit {
+            pointer-events: auto;
+        }
+        .fab-stack {
+            position: fixed;
+            z-index: 90;
+            display: flex;
+            flex-direction: column;
+            gap: var(--fab-stack-gap);
+            align-items: stretch;
+        }
+        .fab-stack.tl {
+            top: var(--fab-from-top);
+            left: var(--fab-from-edge);
+        }
+        .fab-stack.tr {
+            top: var(--fab-from-top);
+            right: var(--fab-from-edge-r);
+            align-items: flex-end;
+        }
+        .fab-stack.bl {
+            bottom: var(--fab-from-bottom);
+            left: var(--fab-from-edge);
+        }
+        .fab-stack.br {
+            bottom: var(--fab-from-bottom);
+            right: var(--fab-from-edge-r);
+            align-items: flex-end;
+        }
+        .fab {
+            width: var(--fab-size);
+            height: var(--fab-size);
+            min-width: var(--fab-size);
+            padding: 0;
+            box-sizing: border-box;
+            border-radius: 16px;
+            background: rgba(12, 18, 28, 0.42);
+            border: 1px solid rgba(255, 255, 255, 0.045);
+            color: var(--text);
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.16);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition:
+                transform 0.18s ease,
+                background 0.18s ease,
+                border-color 0.18s ease,
+                box-shadow 0.18s ease;
+        }
+        @media (hover: hover) {
+            .fab:hover {
+                background: rgba(18, 26, 38, 0.55);
+            }
+        }
+        .fab:active {
+            transform: scale(0.96);
+        }
+        .fab.secondary {
+            background: rgba(12, 18, 28, 0.36);
+            border-color: rgba(255, 255, 255, 0.04);
+        }
+        @media (hover: hover) {
+            .fab.secondary:hover {
+                background: rgba(18, 26, 38, 0.5);
+            }
+        }
+        .fab.on {
+            color: #f0f9ff;
+            background: linear-gradient(180deg, rgba(37, 99, 235, 0.82), rgba(30, 64, 175, 0.88));
+            border-color: rgba(96, 165, 250, 0.42);
+            box-shadow:
+                0 0 0 1px rgba(96, 165, 250, 0.1),
+                0 4px 16px rgba(37, 99, 235, 0.22);
+        }
+        @media (hover: hover) {
+            .fab.on:hover {
+                background: linear-gradient(180deg, rgba(45, 110, 240, 0.88), rgba(34, 72, 190, 0.92));
+            }
+        }
+        .fab--icon {
+            flex-direction: column;
+            gap: 3px;
+            letter-spacing: 0;
+            font-size: 0;
+            line-height: 0;
+        }
+        .fab--icon .fab-ic {
+            width: 20px;
+            height: 20px;
+            flex-shrink: 0;
+            opacity: 0.9;
+            color: rgba(248, 250, 252, 0.92);
+        }
+        .fab--icon .fab-lbl {
+            font-size: 8px;
+            font-weight: 600;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: rgba(226, 232, 240, 0.72);
+            line-height: 1;
+        }
+        .coord-chip {
+            position: fixed;
+            z-index: 85;
+            top: calc(var(--fab-from-top) + var(--fab-size) + 10px);
+            right: max(12px, calc(12px + var(--safe-r)));
+            width: auto;
+            max-width: 160px;
+            min-width: 0;
+            height: auto;
+            padding: 7px 10px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.035);
+            background: rgba(10, 16, 26, 0.28);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            font-size: 10px;
+            font-weight: 700;
+            line-height: 1.2;
+            pointer-events: none;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+            text-align: right;
+        }
+        .coord-chip .lines {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            align-items: flex-end;
+            min-width: 0;
+        }
+        .coord-chip .lines > span {
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-variant-numeric: tabular-nums;
+        }
+        .coord-chip .acc {
+            margin: 0;
+            color: rgba(167, 243, 208, 0.88);
+            font-weight: 700;
+        }
+        .brand-wrap {
+            position: fixed;
+            z-index: 74;
+            top: 14px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: auto;
+            height: auto;
+            padding: 0;
+            background: none;
+            border: none;
+            box-shadow: none;
+            backdrop-filter: none;
+            -webkit-backdrop-filter: none;
+            pointer-events: none;
+        }
+        .brand-logo {
+            display: block;
+            width: 170px;
+            max-width: 38vw;
+            height: auto;
+            opacity: 0.96;
+            object-fit: contain;
+            mix-blend-mode: normal;
+            filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.18));
+            pointer-events: none;
+        }
+        @media (max-width: 640px) {
+            .brand-logo {
+                width: 140px;
+                max-width: 34vw;
+            }
+        }
+        @media (max-height: 640px) {
+            .coord-chip {
+                top: calc(var(--fab-from-top) + var(--fab-size) + 6px);
+                max-width: 148px;
+                padding: 6px 9px;
+                font-size: 9px;
+            }
+        }
+        .scrim {
+            position: fixed;
+            inset: 0;
+            z-index: 90;
+            background: rgba(0, 0, 0, 0.22);
+            backdrop-filter: blur(2px);
+            -webkit-backdrop-filter: blur(2px);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.22s ease;
+        }
+        .scrim.open {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .sheet {
+            position: fixed;
+            z-index: 95;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            max-height: min(92dvh, calc(100dvh - var(--safe-t) - 8px));
+            padding: 10px 14px calc(18px + var(--safe-b));
+            border-radius: 22px 22px 0 0;
+            border-top: 1px solid rgba(255, 255, 255, 0.06);
+            background: linear-gradient(180deg, rgba(12, 16, 28, 0.86), rgba(6, 10, 18, 0.92));
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.28);
+            transform: translateY(108%);
+            transition: transform 0.28s cubic-bezier(0.2, 0.85, 0.2, 1);
+            overflow: auto;
+            -webkit-overflow-scrolling: touch;
+            pointer-events: none;
+        }
+        .sheet.open {
+            transform: translateY(0);
+            pointer-events: auto;
+        }
+        .grab {
+            width: 44px;
+            height: 5px;
+            border-radius: 99px;
+            margin: 0 auto 10px;
+            background: rgba(148, 163, 184, 0.45);
+            touch-action: none;
+        }
+        .sheet h2 { margin: 0; }
+        .sheet-title {
+            margin: 0 0 12px;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+        #sheet-map.sheet {
+            padding: 14px 18px calc(22px + var(--safe-b));
+        }
+        #sheet-map .sheet-wrap {
+            padding: 8px 4px 12px;
+        }
+        #sheet-map .grab {
+            margin-bottom: 14px;
+        }
+        #sheet-map .close-x {
+            top: 14px;
+            right: 14px;
+        }
+        .basemap-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 20px;
+        }
+        .map-card {
+            position: relative;
+            display: block;
+            width: 100%;
+            min-height: 152px;
+            padding: 0;
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            border-radius: 24px;
+            overflow: hidden;
+            cursor: pointer;
+            text-align: left;
+            background: rgba(8, 12, 22, 0.35);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+            -webkit-tap-highlight-color: transparent;
+        }
+        .map-card:active {
+            transform: scale(0.985);
+        }
+        .map-card-bg {
+            position: absolute;
+            inset: 0;
+            background-position: 50% 32%;
+            background-size: 220% 220%;
+            opacity: 1;
+            transition: transform 0.35s ease, opacity 0.2s ease;
+        }
+        .map-card:active .map-card-bg {
+            transform: scale(1.04);
+        }
+        .map-card-osm {
+            background-image: linear-gradient(155deg, #bfe8c2 0%, #8bc98f 28%, #7eb6df 72%, #5a9fd4 100%);
+        }
+        .map-card-topo {
+            background-image: linear-gradient(165deg, #d4c4a8 0%, #9daf7a 35%, #6b8f71 70%, #4a6b58 100%);
+        }
+        .map-card-carto-l {
+            background-image: linear-gradient(145deg, #e8f4fc 0%, #b8d4f0 40%, #7eb3e8 100%);
+        }
+        .map-card-carto-d {
+            background-image: linear-gradient(155deg, #1a2332 0%, #243044 45%, #0f141f 100%);
+        }
+        .map-card-shade {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(200deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.45) 55%, rgba(0, 0, 0, 0.65) 100%);
+            pointer-events: none;
+        }
+        .map-card-label {
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 2;
+            padding: 16px 16px 14px;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: #f8fafc;
+            text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+        }
+        .map-card-carto-l .map-card-label {
+            color: #0f172a;
+            text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+        }
+        .tile-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+        }
+        .tile {
+            min-height: 52px;
+            border-radius: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            background: rgba(14, 20, 34, 0.55);
+            color: var(--text);
+            padding: 12px 10px;
+            text-align: center;
+            font-weight: 700;
+            font-size: 12px;
+            letter-spacing: 0.02em;
+        }
+        .tile:active { transform: scale(0.99); }
+        .close-x {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 38px;
+            height: 38px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(14, 18, 30, 0.55);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            color: var(--text);
+            font-size: 20px;
+            line-height: 1;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        .sheet-wrap { position: relative; padding-top: 4px; }
+        .wizard { display: grid; gap: 10px; }
+        .step-tabs {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .step-tabs button {
+            flex: 1 1 auto;
+            min-width: 0;
+            padding: 8px;
+            border-radius: 11px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            background: rgba(14, 20, 34, 0.5);
+            color: var(--text);
+            font-size: 10px;
+            font-weight: 700;
+        }
+        .step-tabs button.on {
+            border-color: rgba(56, 189, 248, 0.55);
+            background: rgba(37, 99, 235, 0.35);
+        }
+        input.field, select.field, textarea.field {
+            width: 100%;
+            min-height: 44px;
+            border-radius: 11px;
+            border: 1px solid var(--line);
+            background: rgba(6, 10, 20, 0.55);
+            color: var(--text);
+            padding: 8px 10px;
+            font-size: 13px;
+        }
+        textarea.field { min-height: 72px; resize: vertical; }
+        .btn-primary {
+            width: 100%;
+            min-height: 46px;
+            border: 0;
+            border-radius: 14px;
+            font-weight: 700;
+            font-size: 12px;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: #fff;
+            background: linear-gradient(180deg, rgba(56, 189, 248, 0.95), rgba(37, 99, 235, 0.98));
+            box-shadow: 0 6px 18px rgba(37, 99, 235, 0.25);
+        }
+        #knm-toast {
+            position: fixed;
+            z-index: 120;
+            left: 50%;
+            right: auto;
+            top: auto;
+            bottom: calc(var(--fab-from-bottom) + var(--fab-size) + 14px);
+            transform: translateX(-50%) translateY(calc(100% + 24px));
+            max-width: 260px;
+            width: min(260px, calc(100% - 32px));
+            padding: 8px 12px;
+            border-radius: 12px;
+            background: rgba(10, 14, 24, 0.88);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            color: var(--text);
+            font-size: 11px;
+            font-weight: 600;
+            line-height: 1.35;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            pointer-events: none;
+            text-align: center;
+            transition: transform 0.28s cubic-bezier(0.2, 0.85, 0.2, 1);
+        }
+        #knm-toast.show {
+            transform: translateX(-50%) translateY(0);
+        }
+    </style>
+</head>
+<body>
+    <iframe id="knm-engine" title="Térkép" src="M_land.html?embed=1"></iframe>
+
+    <div id="knm-chrome" aria-hidden="false">
+        <div class="fab-stack tl hit">
+            <button type="button" class="fab fab--icon" data-sheet="sheet-map" aria-label="Térkép">
+                <svg class="fab-ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M9 5.5 3.5 8v11l5.5-2.5L15 19l5.5-2.5V5.5L15 8 9 5.5zM9 5.5V16M15 8v11"/>
+                </svg>
+                <span class="fab-lbl">Map</span>
+            </button>
+            <button type="button" class="fab fab--icon" data-sheet="sheet-open" aria-label="Megnyitás">
+                <svg class="fab-ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2v11z"/>
+                </svg>
+                <span class="fab-lbl">Open</span>
+            </button>
+        </div>
+        <div class="fab-stack tr hit">
+            <button type="button" class="fab" id="knm-gps-btn">GPS</button>
+        </div>
+
+        <div class="coord-chip" id="knm-coord-chip" aria-live="polite">
+            <div class="lines">
+                <span id="knm-eox">X: —</span>
+                <span id="knm-eoy">Y: —</span>
+                <span id="knm-acc" class="acc">±—m</span>
+            </div>
+        </div>
+
+        <div class="fab-stack bl hit">
+            <button type="button" class="fab secondary" id="knm-btn-layer">LAYER</button>
+        </div>
+        <div class="fab-stack br hit">
+            <button type="button" class="fab" data-sheet="sheet-data">DATA</button>
+        </div>
+
+        <div class="brand-wrap">
+            <img class="brand-logo" src="DKOZMU_003.png" alt="D-KÖZMŰ" decoding="async" onerror="this.closest('.brand-wrap').style.display='none'" />
+        </div>
+    </div>
+
+    <div id="knm-scrim" class="scrim" aria-hidden="true"></div>
+    <div id="knm-toast" role="status"></div>
+
+    <section id="sheet-map" class="sheet" aria-label="Alaptérkép">
+        <div class="sheet-wrap">
+            <button type="button" class="close-x hit" data-close-sheet aria-label="Bezár">×</button>
+            <div class="grab hit" data-grab></div>
+            <div class="basemap-grid">
+                <button type="button" class="map-card hit" data-basemap="osm" aria-label="OpenStreetMap">
+                    <span class="map-card-bg map-card-osm" aria-hidden="true"></span>
+                    <span class="map-card-shade" aria-hidden="true"></span>
+                    <span class="map-card-label" aria-hidden="true">OSM</span>
+                </button>
+                <button type="button" class="map-card hit" data-basemap="osmTopo" aria-label="OpenTopoMap">
+                    <span class="map-card-bg map-card-topo" aria-hidden="true"></span>
+                    <span class="map-card-shade" aria-hidden="true"></span>
+                    <span class="map-card-label" aria-hidden="true">Topo</span>
+                </button>
+                <button type="button" class="map-card hit" data-basemap="cartoLight" aria-label="CARTO Voyager">
+                    <span class="map-card-bg map-card-carto-l" aria-hidden="true"></span>
+                    <span class="map-card-shade" aria-hidden="true"></span>
+                    <span class="map-card-label" aria-hidden="true">Voyager</span>
+                </button>
+                <button type="button" class="map-card hit" data-basemap="cartoDark" aria-label="CARTO Dark">
+                    <span class="map-card-bg map-card-carto-d" aria-hidden="true"></span>
+                    <span class="map-card-shade" aria-hidden="true"></span>
+                    <span class="map-card-label" aria-hidden="true">Dark</span>
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <section id="sheet-open" class="sheet" aria-label="Megnyitás">
+        <div class="sheet-wrap">
+            <button type="button" class="close-x hit" data-close-sheet aria-label="Bezár">×</button>
+            <div class="grab hit" data-grab></div>
+            <div class="tile-grid">
+                <button type="button" class="tile hit" data-open-input="file-mob-dxf">DXF</button>
+                <button type="button" class="tile hit" data-open-input="file-mob-ek">E-közmű ZIP/SHP</button>
+                <button type="button" class="tile hit" data-open-input="file-mob-gis">GeoJSON / GIS</button>
+            </div>
+        </div>
+    </section>
+
+    <section id="sheet-data" class="sheet" aria-label="Adat">
+        <div class="sheet-wrap">
+            <button type="button" class="close-x hit" data-close-sheet aria-label="Bezár">×</button>
+            <div class="grab hit" data-grab></div>
+            <h2 class="sheet-title">Adat</h2>
+            <div class="wizard">
+                <div class="step-tabs">
+                    <button type="button" class="on" data-wstep="1">1</button>
+                    <button type="button" data-wstep="2">2</button>
+                    <button type="button" data-wstep="3">3</button>
+                    <button type="button" data-wstep="4">4</button>
+                </div>
+                <div id="w1">
+                    <div class="tile-grid">
+                        <button type="button" class="tile hit" data-geom="point">Pont</button>
+                        <button type="button" class="tile hit" data-geom="line">Vonal</button>
+                        <button type="button" class="tile hit" data-geom="poly">Poligon</button>
+                    </div>
+                </div>
+                <div id="w2" style="display:none">
+                    <select id="knm-cat" class="field" aria-label="Kategória">
+                        <option>közmű</option>
+                        <option>épület</option>
+                        <option>egyéb</option>
+                    </select>
+                </div>
+                <div id="w3" style="display:none">
+                    <input id="knm-obj" class="field" type="text" aria-label="Objektum" />
+                </div>
+                <div id="w4" style="display:none">
+                    <textarea id="knm-note" class="field" aria-label="Megjegyzés"></textarea>
+                </div>
+                <button type="button" class="btn-primary hit" id="knm-draft-save">Mentés</button>
+            </div>
+        </div>
+    </section>
+
+    <script src="https://cdn.jsdelivr.net/npm/proj4@2.9.2/dist/proj4.js" defer></script>
+    <script defer>
+(function () {
+    'use strict';
+
+    var EOV_DEF =
+        '+proj=somerc +lat_0=47.14439372222222 +lon_0=19.04857177777778 +k_0=0.99993 +x_0=650000 +y_0=200000 +ellps=GRS67 +towgs84=52.17,-71.82,-14.9,0,0,0,0 +units=m +no_defs';
+
+    var frame = document.getElementById('knm-engine');
+    var scrim = document.getElementById('knm-scrim');
+    var toastEl = document.getElementById('knm-toast');
+    var gpsBtn = document.getElementById('knm-gps-btn');
+    var watchId = null;
+    var gpsMarker = null;
+    var gpsCircle = null;
+    var draft = { geom: 'point', cat: 'közmű', obj: '', note: '' };
+    var toastT = null;
+    var gpsAutoCenter = true;
+    var lastGpsTap = 0;
+    var gpsOffTimer = null;
+    var gpsLongTimer = null;
+    var gpsLongConsumed = false;
+    var lastGpsLl = null;
+
+    function toast(msg) {
+        toastEl.textContent = msg;
+        toastEl.classList.add('show');
+        clearTimeout(toastT);
+        toastT = setTimeout(function () {
+            toastEl.classList.remove('show');
+        }, 2800);
+    }
+
+    function landWin() {
+        try {
+            return frame.contentWindow;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function landMap() {
+        var w = landWin();
+        if (!w || !w.__DVI_MAP__) return null;
+        return w.__DVI_MAP__;
+    }
+
+    function landL() {
+        var w = landWin();
+        return w && w.L ? w.L : null;
+    }
+
+    function ensureProj4() {
+        var w = landWin();
+        try {
+            if (w && typeof w.proj4 !== 'undefined') {
+                w.proj4.defs('EPSG:23700', EOV_DEF);
+                return w.proj4;
+            }
+        } catch (e0) {}
+        try {
+            if (typeof proj4 !== 'undefined') {
+                proj4.defs('EPSG:23700', EOV_DEF);
+                return proj4;
+            }
+        } catch (e1) {}
+        return null;
+    }
+
+    function invalidateLand() {
+        try {
+            var m = landMap();
+            if (m && m.invalidateSize) m.invalidateSize(false);
+        } catch (e) {}
+        try {
+            var w = landWin();
+            if (w) w.dispatchEvent(new Event('resize'));
+        } catch (e2) {}
+        try {
+            window.dispatchEvent(new Event('resize'));
+        } catch (e3) {}
+    }
+
+    function openSheet(id) {
+        document.querySelectorAll('.sheet').forEach(function (s) {
+            s.classList.toggle('open', s.id === id);
+        });
+        scrim.classList.add('open');
+        scrim.setAttribute('aria-hidden', 'false');
+        setTimeout(invalidateLand, 280);
+    }
+
+    function closeSheets() {
+        document.querySelectorAll('.sheet').forEach(function (s) {
+            s.classList.remove('open');
+        });
+        scrim.classList.remove('open');
+        scrim.setAttribute('aria-hidden', 'true');
+        setTimeout(invalidateLand, 60);
+        setTimeout(invalidateLand, 320);
+    }
+
+    function childClick(id) {
+        var w = landWin();
+        if (!w || !w.document) {
+            toast('Nem elérhető');
+            return false;
+        }
+        var el = w.document.getElementById(id);
+        if (!el) {
+            toast('Nem elérhető');
+            return false;
+        }
+        try {
+            el.click();
+            return true;
+        } catch (e) {
+            toast('Nem elérhető');
+            return false;
+        }
+    }
+
+    function openLandLayerPanel() {
+        childClick('btn-sidebar-toggle');
+        var w = landWin();
+        if (w && w.document) {
+            setTimeout(function () {
+                try {
+                    var wrap = w.document.getElementById('land-mobile-terv-wrap');
+                    if (wrap) {
+                        var d =
+                            wrap.querySelector(':scope > details.land-mob-collapse') ||
+                            wrap.querySelector('details.land-mob-collapse') ||
+                            wrap.querySelector('details');
+                        if (d) d.open = true;
+                    }
+                } catch (e) {}
+            }, 120);
+        }
+    }
+
+    function setChildBasemap(key) {
+        var w = landWin();
+        if (!w || !w.document) {
+            toast('Nem elérhető');
+            return;
+        }
+        var radio = w.document.querySelector('input[name="basemap"][value="' + key + '"]');
+        if (!radio) {
+            toast('Nem elérhető');
+            return;
+        }
+        try {
+            radio.checked = true;
+            radio.dispatchEvent(new Event('change', { bubbles: true }));
+        } catch (e) {
+            toast('Nem elérhető');
+        }
+    }
+
+    function clearGpsLayers() {
+        var map = landMap();
+        var L0 = landL();
+        if (!map || !L0) return;
+        try {
+            if (gpsMarker) {
+                map.removeLayer(gpsMarker);
+                gpsMarker = null;
+            }
+        } catch (e1) {}
+        try {
+            if (gpsCircle) {
+                map.removeLayer(gpsCircle);
+                gpsCircle = null;
+            }
+        } catch (e2) {}
+    }
+
+    function cancelGpsOffTimer() {
+        if (gpsOffTimer) {
+            clearTimeout(gpsOffTimer);
+            gpsOffTimer = null;
+        }
+    }
+
+    function stopGps() {
+        cancelGpsOffTimer();
+        if (watchId != null) {
+            try {
+                navigator.geolocation.clearWatch(watchId);
+            } catch (e) {}
+            watchId = null;
+        }
+        clearGpsLayers();
+        lastGpsLl = null;
+        gpsBtn.classList.remove('on');
+    }
+
+    function updateChip(lat, lng, acc, p4) {
+        var accEl = document.getElementById('knm-acc');
+        if (typeof acc === 'number' && !isNaN(acc)) {
+            accEl.textContent = '±' + Math.round(acc) + 'm';
+        } else {
+            accEl.textContent = '±—m';
+        }
+        var ex = document.getElementById('knm-eox');
+        var ey = document.getElementById('knm-eoy');
+        if (p4) {
+            try {
+                var xy = p4('EPSG:4326', 'EPSG:23700', [lng, lat]);
+                if (xy && xy.length >= 2) {
+                    ex.textContent = 'X: ' + Math.round(xy[0]);
+                    ey.textContent = 'Y: ' + Math.round(xy[1]);
+                    return;
+                }
+            } catch (e) {}
+        }
+        ex.textContent = 'X: —';
+        ey.textContent = 'Y: —';
+    }
+
+    function startGps() {
+        if (!navigator.geolocation) {
+            toast('Nem elérhető');
+            return;
+        }
+        if (window.isSecureContext === false) {
+            toast('Nem elérhető');
+            return;
+        }
+        gpsBtn.classList.add('on');
+        var p4 = ensureProj4();
+        watchId = navigator.geolocation.watchPosition(
+            function (pos) {
+                var map = landMap();
+                var L0 = landL();
+                if (!map || !L0) return;
+                var lat = pos.coords.latitude;
+                var lng = pos.coords.longitude;
+                var acc = pos.coords.accuracy || 12;
+                var ll = L0.latLng(lat, lng);
+                lastGpsLl = ll;
+                if (!gpsMarker) {
+                    gpsMarker = L0
+                        .circleMarker(ll, {
+                            radius: 8,
+                            color: '#ffffff',
+                            weight: 2,
+                            fillColor: '#22c55e',
+                            fillOpacity: 0.95
+                        })
+                        .addTo(map);
+                    gpsCircle = L0
+                        .circle(ll, {
+                            radius: acc,
+                            color: '#22c55e',
+                            weight: 1,
+                            fillColor: '#22c55e',
+                            fillOpacity: 0.12
+                        })
+                        .addTo(map);
+                    if (gpsAutoCenter) {
+                        try {
+                            map.setView(ll, Math.max(map.getZoom(), 16), { animate: true });
+                        } catch (e0) {}
+                    }
+                } else {
+                    gpsMarker.setLatLng(ll);
+                    try {
+                        gpsCircle.setLatLng(ll);
+                        gpsCircle.setRadius(acc);
+                    } catch (e1) {}
+                    if (gpsAutoCenter) {
+                        try {
+                            map.panTo(ll, { animate: true });
+                        } catch (e2) {}
+                    }
+                }
+                updateChip(lat, lng, acc, p4);
+            },
+            function () {
+                toast('Nem elérhető');
+                stopGps();
+            },
+            { enableHighAccuracy: true, maximumAge: 2000, timeout: 22000 }
+        );
+        lastGpsTap = 0;
+    }
+
+    function onGpsClick() {
+        if (gpsLongConsumed) {
+            gpsLongConsumed = false;
+            return;
+        }
+        var now = Date.now();
+        if (watchId != null && now - lastGpsTap < 300) {
+            cancelGpsOffTimer();
+            lastGpsTap = 0;
+            gpsAutoCenter = !gpsAutoCenter;
+            return;
+        }
+        lastGpsTap = now;
+        if (watchId == null) {
+            cancelGpsOffTimer();
+            startGps();
+            toast('GPS bekapcsolva');
+        } else {
+            cancelGpsOffTimer();
+            gpsOffTimer = setTimeout(function () {
+                gpsOffTimer = null;
+                lastGpsTap = 0;
+                stopGps();
+                toast('GPS kikapcsolva');
+            }, 320);
+        }
+    }
+
+    function onGpsPointerDown(e) {
+        if (typeof e.button === 'number' && e.button !== 0) return;
+        gpsLongConsumed = false;
+        clearTimeout(gpsLongTimer);
+        if (watchId == null || !lastGpsLl) return;
+        gpsLongTimer = setTimeout(function () {
+            gpsLongTimer = null;
+            gpsLongConsumed = true;
+            cancelGpsOffTimer();
+            lastGpsTap = 0;
+            var map = landMap();
+            if (map && lastGpsLl) {
+                try {
+                    map.setView(lastGpsLl, Math.max(map.getZoom(), 17), { animate: true });
+                } catch (eZ) {}
+            }
+        }, 520);
+    }
+
+    function onGpsPointerEnd() {
+        clearTimeout(gpsLongTimer);
+        gpsLongTimer = null;
+    }
+
+    document.querySelectorAll('[data-sheet]').forEach(function (btn) {
+        btn.addEventListener(
+            'click',
+            function () {
+                openSheet(btn.getAttribute('data-sheet'));
+            },
+            { passive: true }
+        );
+    });
+    document.querySelectorAll('[data-close-sheet]').forEach(function (b) {
+        b.addEventListener('click', closeSheets, { passive: true });
+    });
+    scrim.addEventListener('click', closeSheets, { passive: true });
+
+    document.querySelectorAll('[data-basemap]').forEach(function (btn) {
+        btn.addEventListener(
+            'click',
+            function () {
+                setChildBasemap(btn.getAttribute('data-basemap'));
+                closeSheets();
+            },
+            { passive: true }
+        );
+    });
+
+    document.querySelectorAll('[data-open-input]').forEach(function (btn) {
+        btn.addEventListener(
+            'click',
+            function () {
+                var id = btn.getAttribute('data-open-input');
+                if (childClick(id)) {
+                    toast('Fájl megnyitása');
+                    closeSheets();
+                }
+            },
+            { passive: true }
+        );
+    });
+
+    document.getElementById('knm-btn-layer').addEventListener(
+        'click',
+        function () {
+            openLandLayerPanel();
+        },
+        { passive: true }
+    );
+
+    gpsBtn.addEventListener('pointerdown', onGpsPointerDown, { passive: true });
+    gpsBtn.addEventListener('pointerup', onGpsPointerEnd, { passive: true });
+    gpsBtn.addEventListener('pointercancel', onGpsPointerEnd, { passive: true });
+    gpsBtn.addEventListener('click', onGpsClick, { passive: true });
+
+    document.querySelectorAll('.sheet').forEach(function (sheet) {
+        var startY = null;
+        var onStart = function (e) {
+            startY = e.touches[0].clientY;
+        };
+        var onMove = function (e) {
+            if (startY == null) return;
+            var dy = e.touches[0].clientY - startY;
+            if (dy > 88) closeSheets();
+        };
+        var onEnd = function () {
+            startY = null;
+        };
+        sheet.addEventListener('touchstart', onStart, { passive: true });
+        sheet.addEventListener('touchmove', onMove, { passive: true });
+        sheet.addEventListener('touchend', onEnd, { passive: true });
+        var grab = sheet.querySelector('[data-grab]');
+        if (grab) grab.addEventListener('touchstart', onStart, { passive: true });
+    });
+
+    function showStep(n) {
+        for (var i = 1; i <= 4; i++) {
+            var el = document.getElementById('w' + i);
+            if (el) el.style.display = i === n ? 'block' : 'none';
+        }
+        document.querySelectorAll('[data-wstep]').forEach(function (b) {
+            b.classList.toggle('on', Number(b.getAttribute('data-wstep')) === n);
+        });
+    }
+    document.querySelectorAll('[data-wstep]').forEach(function (b) {
+        b.addEventListener(
+            'click',
+            function () {
+                showStep(Number(b.getAttribute('data-wstep')));
+            },
+            { passive: true }
+        );
+    });
+    document.querySelectorAll('[data-geom]').forEach(function (b) {
+        b.addEventListener(
+            'click',
+            function () {
+                draft.geom = b.getAttribute('data-geom');
+            },
+            { passive: true }
+        );
+    });
+    document.getElementById('knm-draft-save').addEventListener(
+        'click',
+        function () {
+            draft.cat = (document.getElementById('knm-cat') || {}).value || draft.cat;
+            draft.obj = (document.getElementById('knm-obj') || {}).value || '';
+            draft.note = (document.getElementById('knm-note') || {}).value || '';
+            try {
+                sessionStorage.setItem('knmDraft', JSON.stringify(draft));
+            } catch (e) {}
+            toast('Mentve');
+            closeSheets();
+        },
+        { passive: true }
+    );
+
+    window.addEventListener('resize', invalidateLand, { passive: true });
+    window.addEventListener(
+        'orientationchange',
+        function () {
+            setTimeout(invalidateLand, 200);
+            setTimeout(invalidateLand, 600);
+        },
+        { passive: true }
+    );
+    if (window.visualViewport) {
+        window.visualViewport.addEventListener(
+            'resize',
+            function () {
+                setTimeout(invalidateLand, 80);
+            },
+            { passive: true }
+        );
+    }
+
+    frame.addEventListener('load', function () {
+        invalidateLand();
+        setTimeout(invalidateLand, 400);
+        setTimeout(invalidateLand, 1200);
+    });
+})();
+    </script>
+</body>
+</html>

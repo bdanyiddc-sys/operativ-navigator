@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=5" />
+    <meta name="theme-color" content="#1a237e" />
+    <title>KisvonatNavigator · térkép</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        * { box-sizing: border-box; }
+        html, body {
+            margin: 0;
+            height: 100%;
+            height: 100dvh;
+            overflow: hidden;
+            background: #0a0f1a;
+        }
+        #map {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            height: 100dvh;
+        }
+        .leaflet-container { background: #dde4ed; }
+        .kvn-dest-tip {
+            background: rgba(26, 35, 126, 0.92);
+            color: #fff;
+            border: 0;
+            border-radius: 8px;
+            padding: 4px 8px;
+            font-size: 11px;
+            font-weight: 700;
+            line-height: 1.3;
+            max-width: 220px;
+            white-space: normal;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+        }
+        .kvn-dest-tip::before { border-top-color: rgba(26, 35, 126, 0.92); }
+        .kvn-dest-popup .leaflet-popup-content {
+            margin: 10px 12px;
+            font-size: 13px;
+            line-height: 1.45;
+            min-width: 200px;
+        }
+        .kvn-dest-popup .addr {
+            font-weight: 800;
+            color: #1a237e;
+            margin-bottom: 6px;
+        }
+        .kvn-dest-popup .row { margin: 4px 0; }
+        .kvn-dest-popup .lbl { color: #64748b; font-size: 10px; text-transform: uppercase; }
+        .kvn-poi-tip {
+            background: rgba(124, 58, 237, 0.92);
+            color: #fff;
+            border: 0;
+            border-radius: 8px;
+            padding: 4px 8px;
+            font-size: 11px;
+            font-weight: 700;
+            max-width: 200px;
+        }
+        .kvn-poi-popup .leaflet-popup-content { margin: 10px 12px; font-size: 12px; line-height: 1.4; }
+        @keyframes kvn-task-pulse {
+            0%, 100% { transform: scale(1); opacity: 0.55; }
+            50% { transform: scale(1.45); opacity: 0.1; }
+        }
+        .leaflet-task-pane { z-index: 720 !important; pointer-events: none; }
+        .leaflet-task-pane .kvn-task-marker { pointer-events: auto; }
+        .kvn-task-marker { background: transparent; border: 0; }
+        .kvn-task-pin-wrap {
+            position: relative;
+            width: 56px;
+            height: 56px;
+        }
+        .kvn-task-halo {
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            background: rgba(249, 115, 22, 0.5);
+            animation: kvn-task-pulse 1.6s ease-in-out infinite;
+        }
+        .kvn-task-ring {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: linear-gradient(180deg, #fb923c 0%, #ea580c 55%, #c2410c 100%);
+            border: 4px solid #fff;
+            box-shadow: 0 4px 18px rgba(234, 88, 12, 0.65);
+        }
+        .kvn-task-core {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #fff;
+            box-shadow: inset 0 0 0 1px rgba(234, 88, 12, 0.35);
+        }
+        .kvn-task-popup-wrap .leaflet-popup-content {
+            margin: 10px 12px;
+            font-size: 13px;
+            line-height: 1.45;
+            min-width: 200px;
+        }
+        .kvn-task-popup .lbl {
+            color: #64748b;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+        .kvn-task-popup .row { margin: 0 0 8px; }
+        .kvn-task-popup .row:last-child { margin-bottom: 0; }
+    </style>
+</head>
+<body>
+    <div id="map" aria-label="Kisvonat útvonal térképe"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+(function () {
+    'use strict';
+
+    var CITIES = [
+        { id: 'tata', label: 'Tata', file: 'Tata_utvonal2.geojson', default: true },
+        { id: 'eger', label: 'Eger', file: 'eger3.geojson' },
+        { id: 'gyor', label: 'Győr', file: 'gyor1.geojson' },
+        { id: 'papa', label: 'Pápa', file: 'papa1.geojson' },
+        { id: 'szfv', label: 'Székesfehérvár', file: 'szfv1.geojson' },
+        { id: 'vac', label: 'Vác', file: 'vac1.geojson' }
+    ];
+
+    var osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap',
+        maxZoom: 22,
+        maxNativeZoom: 19
+    });
+
+    var map = L.map('map', {
+        center: [47.65, 18.32],
+        zoom: 13,
+        zoomSnap: 0.25,
+        maxZoom: 22,
+        layers: [osm]
+    });
+
+    window.__KVN_MAP__ = map;
+
+    var loadedLayers = { black: null, red: null };
+    var activeCity = null;
+    var destLayer = L.layerGroup().addTo(map);
+    var poiLayer = L.layerGroup().addTo(map);
+    var taskLayer = L.layerGroup().addTo(map);
+    var navLayer = L.layerGroup().addTo(map);
+    var destinations = [];
+    var pois = [];
+    var tasks = [];
+    var taskMarkerIndex = {};
+
+    (function initTaskPane() {
+        if (!map.getPane('taskPane')) {
+            var pane = map.createPane('taskPane');
+            pane.classList.add('leaflet-task-pane');
+            pane.style.zIndex = '720';
+        }
+    })();
+
+    function styleOutline() {
+        return {
+            color: '#111111',
+            weight: 9,
+            opacity: 1,
+            lineCap: 'round',
+            lineJoin: 'round'
+        };
+    }
+
+    function styleRed() {
+        return {
+            color: '#e53935',
+            weight: 5,
+            opacity: 1,
+            lineCap: 'round',
+            lineJoin: 'round'
+        };
+    }
+
+    function clearRoute() {
+        if (loadedLayers.black) {
+            map.removeLayer(loadedLayers.black);
+            loadedLayers.black = null;
+        }
+        if (loadedLayers.red) {
+            map.removeLayer(loadedLayers.red);
+            loadedLayers.red = null;
+        }
+    }
+
+    function addGeoJsonRoute(geoData) {
+        clearRoute();
+        loadedLayers.black = L.geoJSON(geoData, {
+            interactive: false,
+            style: function (feature) {
+                var g = feature.geometry;
+                if (g.type === 'LineString' || g.type === 'MultiLineString') return styleOutline();
+                if (g.type === 'Polygon' || g.type === 'MultiPolygon') {
+                    return { color: '#111', weight: 2, fillColor: '#e53935', fillOpacity: 0.15 };
+                }
+                return { color: '#111', weight: 6 };
+            },
+            pointToLayer: function (feature, latlng) {
+                return L.circleMarker(latlng, {
+                    radius: 7,
+                    color: '#111',
+                    weight: 3,
+                    fillColor: '#e53935',
+                    fillOpacity: 0.95
+                });
+            }
+        }).addTo(map);
+
+        loadedLayers.red = L.geoJSON(geoData, {
+            style: function (feature) {
+                var g = feature.geometry;
+                if (g.type === 'LineString' || g.type === 'MultiLineString') return styleRed();
+                if (g.type === 'Polygon' || g.type === 'MultiPolygon') {
+                    return { color: '#e53935', weight: 2, fillColor: '#ffcdd2', fillOpacity: 0.25 };
+                }
+                return { color: '#e53935', weight: 4 };
+            },
+            pointToLayer: function (feature, latlng) {
+                return L.circleMarker(latlng, {
+                    radius: 5,
+                    color: '#e53935',
+                    weight: 2,
+                    fillColor: '#ffebee',
+                    fillOpacity: 1
+                });
+            }
+        }).addTo(map);
+
+        var bounds = loadedLayers.red.getBounds();
+        if (bounds.isValid()) {
+            map.fitBounds(bounds, { padding: [48, 48], maxZoom: 16 });
+        }
+    }
+
+    function loadCityGeojson(filename, cityMeta, silent) {
+        var url = new URL(filename, window.location.href).href;
+        return fetch(url, { cache: 'no-store' })
+            .then(function (r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            })
+            .then(function (geoData) {
+                addGeoJsonRoute(geoData);
+                activeCity = cityMeta;
+                if (!silent) {
+                    try {
+                        parent.postMessage({ type: 'kvn:routeLoaded', city: cityMeta }, '*');
+                    } catch (e) {}
+                }
+                return cityMeta;
+            });
+    }
+
+    function escapeHtml(s) {
+        return String(s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function destinationPopupHtml(d) {
+        var addr = d.address || '—';
+        return (
+            '<div class="addr">' + escapeHtml(addr) + '</div>' +
+            '<div class="row"><span class="lbl">Név</span><br>' + escapeHtml(d.name || '—') + '</div>' +
+            '<div class="row"><span class="lbl">Telefon</span><br>' + escapeHtml(d.phone || '—') + '</div>' +
+            '<div class="row"><span class="lbl">Utas</span><br>' + escapeHtml(d.passengers != null ? String(d.passengers) : '—') + '</div>' +
+            '<div class="row"><span class="lbl">Megjegyzés</span><br>' + escapeHtml(d.note || '—') + '</div>'
+        );
+    }
+
+    function renderDestinations(list) {
+        destinations = Array.isArray(list) ? list.slice() : [];
+        destLayer.clearLayers();
+        destinations.forEach(function (d) {
+            if (d.lat == null || d.lng == null || isNaN(d.lat) || isNaN(d.lng)) return;
+            var ll = L.latLng(d.lat, d.lng);
+            var marker = L.marker(ll, {
+                icon: L.divIcon({
+                    className: 'kvn-dest-pin',
+                    html: '<div style="width:14px;height:14px;border-radius:50%;background:#ff6f00;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.35)"></div>',
+                    iconSize: [14, 14],
+                    iconAnchor: [7, 7]
+                })
+            });
+            var addrText = d.address || d.name || 'Célpont';
+            marker.bindTooltip(addrText, {
+                permanent: true,
+                direction: 'top',
+                offset: [0, -10],
+                className: 'kvn-dest-tip'
+            });
+            marker.bindPopup(destinationPopupHtml(d), {
+                className: 'kvn-dest-popup',
+                maxWidth: 280
+            });
+            marker.addTo(destLayer);
+        });
+    }
+
+    function poiPopupHtml(p) {
+        var rows = '<div style="font-weight:800;margin-bottom:6px">' + escapeHtml(p.name || p.id) + '</div>';
+        if (p.text) rows += '<div>szöveg: ' + escapeHtml(p.text) + '</div>';
+        if (p.image) rows += '<div>kép: ' + escapeHtml(p.image) + '</div>';
+        if (p.audio) rows += '<div>hang: ' + escapeHtml(p.audio) + '</div>';
+        if (p.guide) rows += '<div>idegenvezető: ' + escapeHtml(String(p.guide)) + '</div>';
+        rows += '<div>sugár: ' + (p.radius || 50) + ' m</div>';
+        return rows;
+    }
+
+    function taskMarkerHtml() {
+        return (
+            '<div class="kvn-task-pin-wrap">' +
+            '<div class="kvn-task-halo"></div>' +
+            '<div class="kvn-task-ring" aria-hidden="true"></div>' +
+            '<div class="kvn-task-core" aria-hidden="true"></div>' +
+            '</div>'
+        );
+    }
+
+    function formatTaskCoord(lat, lng) {
+        if (lat == null || lng == null || isNaN(lat) || isNaN(lng)) return '—';
+        return Number(lat).toFixed(5) + ', ' + Number(lng).toFixed(5);
+    }
+
+    function taskPopupHtml(task) {
+        return (
+            '<div class="kvn-task-popup">' +
+            '<strong>Feladat</strong><br>' +
+            escapeHtml(task.title || '—') + '<br>' +
+            escapeHtml(task.description || '—') +
+            '</div>'
+        );
+    }
+
+    function taskMarkerStyleByStatus(status) {
+        if (status === 'accepted') {
+            return { radius: 12, color: '#93c5fd', weight: 3, fillColor: '#2563eb', fillOpacity: 1 };
+        }
+        if (status === 'picked_up') {
+            return { radius: 12, color: '#e9d5ff', weight: 3, fillColor: '#9333ea', fillOpacity: 1 };
+        }
+        return { radius: 12, color: '#ff7b00', weight: 3, fillColor: '#ff9900', fillOpacity: 1 };
+    }
+
+    function renderTasks(list) {
+        tasks = Array.isArray(list) ? list.slice() : [];
+        taskMarkerIndex = {};
+        taskLayer.clearLayers();
+        tasks.forEach(function (task) {
+            var st = task.status || 'pending';
+            if (st === 'done' || st === 'cancelled' || st === 'picked_up') return;
+            if (task.lat == null || task.lng == null || isNaN(task.lat) || isNaN(task.lng)) return;
+            var ll = L.latLng(task.lat, task.lng);
+            var style = taskMarkerStyleByStatus(st);
+            var marker = L.circleMarker(ll, Object.assign({ pane: 'taskPane' }, style));
+            marker._kvnTaskId = task.id;
+            marker.bindPopup(taskPopupHtml(task), {
+                className: 'kvn-task-popup-wrap',
+                maxWidth: 300
+            });
+            marker.addTo(taskLayer);
+            if (task.id) taskMarkerIndex[task.id] = marker;
+        });
+        if (taskLayer.bringToFront) taskLayer.bringToFront();
+    }
+
+    function focusTask(taskId) {
+        var id = taskId != null ? String(taskId) : '';
+        if (!id) return false;
+        var marker = taskMarkerIndex[id];
+        if (!marker) return false;
+        var ll = marker.getLatLng();
+        if (map.flyTo) {
+            map.flyTo(ll, 18, { animate: true, duration: 0.8 });
+        } else {
+            map.setView(ll, 18, { animate: true });
+        }
+        setTimeout(function () {
+            try { marker.openPopup(); } catch (e) {}
+        }, 520);
+        return true;
+    }
+
+    function startTaskNavigation(lat, lng, fromLat, fromLng, taskId) {
+        if (lat == null || lng == null || isNaN(lat) || isNaN(lng)) return false;
+        navLayer.clearLayers();
+        var dest = L.latLng(lat, lng);
+        var latlngs = [];
+        if (fromLat != null && fromLng != null && !isNaN(fromLat) && !isNaN(fromLng)) {
+            latlngs.push(L.latLng(fromLat, fromLng));
+        }
+        latlngs.push(dest);
+        if (latlngs.length >= 2) {
+            L.polyline(latlngs, {
+                color: '#ff7b00',
+                weight: 5,
+                opacity: 0.9,
+                dashArray: '10, 10',
+                lineCap: 'round'
+            }).addTo(navLayer);
+        }
+        if (taskId && focusTask(taskId)) return true;
+        if (map.flyTo) {
+            map.flyTo(dest, 18, { animate: true, duration: 0.8 });
+        } else {
+            map.setView(dest, 18, { animate: true });
+        }
+        var marker = taskMarkerIndex[taskId];
+        if (marker) {
+            setTimeout(function () {
+                try { marker.openPopup(); } catch (e) {}
+            }, 520);
+        }
+        return true;
+    }
+
+    function renderPois(list) {
+        pois = Array.isArray(list) ? list.slice() : [];
+        poiLayer.clearLayers();
+        pois.forEach(function (p) {
+            if (p.lat == null || p.lng == null) return;
+            var ll = L.latLng(p.lat, p.lng);
+            var r = p.radius || 50;
+            L.circle(ll, {
+                radius: r,
+                color: '#7c3aed',
+                weight: 2,
+                fillColor: '#a78bfa',
+                fillOpacity: 0.15
+            }).addTo(poiLayer);
+            var marker = L.circleMarker(ll, {
+                radius: 7,
+                color: '#fff',
+                weight: 2,
+                fillColor: '#7c3aed',
+                fillOpacity: 0.9
+            });
+            marker.bindTooltip(p.name || p.id, {
+                permanent: false,
+                direction: 'top',
+                className: 'kvn-poi-tip'
+            });
+            marker.bindPopup(poiPopupHtml(p), { className: 'kvn-poi-popup', maxWidth: 260 });
+            marker.addTo(poiLayer);
+        });
+    }
+
+    window.KVN_API = {
+        getMap: function () { return map; },
+        getActiveCity: function () { return activeCity; },
+        getCities: function () { return CITIES.slice(); },
+        loadCity: function (cityId) {
+            var c = CITIES.find(function (x) { return x.id === cityId; });
+            if (!c) return Promise.reject(new Error('unknown city'));
+            return loadCityGeojson(c.file, { id: c.id, label: c.label, file: c.file }, false);
+        },
+        loadCityByFile: function (filename, label) {
+            return loadCityGeojson(filename, { id: filename, label: label || filename, file: filename }, false);
+        },
+        setDestinations: function (list) {
+            renderDestinations(list);
+        },
+        getDestinations: function () {
+            return destinations.slice();
+        },
+        setPois: function (list) {
+            renderPois(list);
+        },
+        getPois: function () {
+            return pois.slice();
+        },
+        setTasks: function (list) {
+            renderTasks(list);
+        },
+        getTasks: function () {
+            return tasks.slice();
+        },
+        focusTask: function (taskId) {
+            return focusTask(taskId);
+        },
+        startTaskNavigation: function (lat, lng, fromLat, fromLng, taskId) {
+            return startTaskNavigation(lat, lng, fromLat, fromLng, taskId);
+        },
+        clearTaskNavigation: function () {
+            navLayer.clearLayers();
+        }
+    };
+
+    map.whenReady(function () {
+        map.invalidateSize();
+        var tata = CITIES.find(function (c) { return c.default; });
+        if (tata) {
+            loadCityGeojson(tata.file, { id: tata.id, label: tata.label, file: tata.file }, true)
+                .catch(function () {
+                    try {
+                        parent.postMessage({ type: 'kvn:routeError', file: tata.file }, '*');
+                    } catch (e2) {}
+                });
+        }
+    });
+
+    window.addEventListener('resize', function () {
+        map.invalidateSize();
+    });
+})();
+    </script>
+</body>
+</html>

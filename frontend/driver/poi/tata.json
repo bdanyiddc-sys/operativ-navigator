@@ -1,0 +1,42 @@
+[
+  {
+    "id": "kastely",
+    "name": "Esterházy kastély",
+    "lat": 47.651234,
+    "lng": 18.321456,
+    "radius": 80,
+    "audio": "kastely.mp3"
+  },
+  {
+    "id": "poi_varmegallo",
+    "name": "Vármegálló",
+    "lat": 47.6468,
+    "lng": 18.3285,
+    "radius": 50,
+    "audio": "varmegallo.mp3"
+  },
+  {
+    "id": "poi_001",
+    "name": "Tatai vár",
+    "lat": 47.64745,
+    "lng": 18.3192,
+    "radius": 50,
+    "audio": "tatai_var.mp3"
+  },
+  {
+    "id": "poi_tata_veg",
+    "name": "Tata végállomás",
+    "lat": 47.64974,
+    "lng": 18.31824,
+    "radius": 80,
+    "audio": null
+  },
+  {
+    "id": "poi_tata_ind",
+    "name": "Tata indulási pont",
+    "lat": 47.64982,
+    "lng": 18.31832,
+    "radius": 60,
+    "audio": null
+  }
+]
