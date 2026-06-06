@@ -28,6 +28,16 @@
     Cache-Control = "no-cache"
 
 [[headers]]
+  for = "/driver/service-worker.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
   for = "/manifest.json"
+  [headers.values]
+    Content-Type = "application/manifest+json"
+
+[[headers]]
+  for = "/driver/manifest.json"
   [headers.values]
     Content-Type = "application/manifest+json"
