@@ -262,6 +262,188 @@ function initDb(dbPath) {
 
 const REPORT_DEFAULT_CAPACITY = 56;
 const REPORT_TICKET_PRICE_HUF = 2800;
+const SHIFT_REPORT_TICKET_HUF = REPORT_TICKET_PRICE_HUF;
+const tripArchivesDir = path.join(__dirname, 'data', 'trip_archives');
+const dailyReportsDir = path.join(__dirname, 'data', 'daily_reports');
+
+function safeArchiveFilename(raw) {
+  const base = path.basename(String(raw || '').trim());
+  if (!base || !/^[A-Za-z0-9_.-]+\.geojson$/i.test(base)) return null;
+  return base;
+}
+
+function parseEventPayload(row) {
+  try {
+    return JSON.parse(row.payload_json);
+  } catch {
+    return {};
+  }
+}
+
+function haversineMeters(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const p = Math.PI / 180;
+  const dLat = (lat2 - lat1) * p;
+  const dLng = (lng2 - lng1) * p;
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(lat1 * p) * Math.cos(lat2 * p) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function tripDistanceMetersFromRows(tripId, rows) {
+  const pts = rows
+    .filter((row) => row.trip === tripId && (row.type === 'track' || row.type === 'auto_track'))
+    .filter((row) => row.lat != null && row.lng != null)
+    .sort((a, b) => String(a.timestamp).localeCompare(String(b.timestamp)));
+  let sum = 0;
+  for (let i = 1; i < pts.length; i += 1) {
+    sum += haversineMeters(pts[i - 1].lat, pts[i - 1].lng, pts[i].lat, pts[i].lng);
+  }
+  return Math.round(sum);
+}
+
+function countTripEventsByType(tripId, rows, types) {
+  const set = new Set(types);
+  return rows.filter((row) => row.trip === tripId && set.has(row.type)).length;
+}
+
+function buildShiftDailyCsv(shiftId, dateStr) {
+  const rows = selectEventsChronological.all();
+  const tripsInShift = new Set();
+  rows.forEach((row) => {
+    if (!TRIP_START_TYPES.has(row.type) || !row.trip) return;
+    const p = parseEventPayload(row);
+    const sh = String(p.shift || row.shift || '').trim();
+    if (shiftId && sh === shiftId) tripsInShift.add(row.trip);
+  });
+  const summaries = [];
+  rows.forEach((row) => {
+    if (row.type !== 'trip_summary') return;
+    const p = parseEventPayload(row);
+    const shift = String(p.shift || row.shift || '').trim();
+    const tripId = row.trip || p.trip || '';
+    if (shiftId && shift && shift !== shiftId && !tripsInShift.has(tripId)) return;
+    if (shiftId && !shift && !tripsInShift.has(tripId)) return;
+    const day = localDateKey(p.end_time || p.start_time || row.timestamp);
+    if (dateStr && day !== dateStr) return;
+    summaries.push({
+      trip: row.trip || p.trip || '',
+      start_time: p.start_time || null,
+      end_time: p.end_time || row.timestamp,
+      duration_min: p.duration_min != null ? p.duration_min : null,
+      passenger_total: p.passenger_total != null ? p.passenger_total : 0,
+      vehicle_id: p.vehicle_id || '',
+      shift,
+    });
+  });
+
+  const header = [
+    'Járat', 'Indulás', 'Érkezés', 'Menetidő', 'Megtett távolság',
+    'Utasok száma', 'Foglalások száma', 'Felszállási igények száma',
+    'Jegybevétel (Ft)', 'Egyéb bevétel (Ft)', 'Összes bevétel (Ft)',
+  ];
+  const lines = [header.join(';')];
+  let totalRevenue = 0;
+
+  summaries.forEach((s) => {
+    const tripId = s.trip;
+    const distM = tripDistanceMetersFromRows(tripId, rows);
+    const reservations = countTripEventsByType(tripId, rows, ['reservation', 'foglalas', 'booking']);
+    const boardings = countTripEventsByType(tripId, rows, ['boarding', 'felszallas']);
+    const pax = Math.max(0, parseInt(s.passenger_total, 10) || 0);
+    const ticketRev = pax * SHIFT_REPORT_TICKET_HUF;
+    const otherRev = 0;
+    const totalRev = ticketRev + otherRev;
+    totalRevenue += totalRev;
+    lines.push([
+      tripId,
+      s.start_time || '',
+      s.end_time || '',
+      s.duration_min != null ? s.duration_min : '',
+      distM,
+      pax,
+      reservations,
+      boardings,
+      ticketRev,
+      otherRev,
+      totalRev,
+    ].join(';'));
+  });
+
+  lines.push(['ÖSSZESEN', '', '', '', '', '', '', '', '', '', String(totalRevenue)].join(';'));
+  return '\uFEFF' + lines.join('\r\n');
+}
+
+function listTripArchiveFiles() {
+  ensureDataDir(tripArchivesDir);
+  if (!fs.existsSync(tripArchivesDir)) return [];
+  return fs.readdirSync(tripArchivesDir)
+    .filter((f) => f.toLowerCase().endsWith('.geojson'))
+    .map((filename) => {
+      const full = path.join(tripArchivesDir, filename);
+      let meta = {};
+      try {
+        const parsed = JSON.parse(fs.readFileSync(full, 'utf8'));
+        meta = (parsed && parsed.properties) ? parsed.properties : {};
+      } catch {
+        meta = {};
+      }
+      const stat = fs.statSync(full);
+      const m = filename.match(/^([A-Za-z0-9]+)_(\d{8})_(\d{4})/);
+      return {
+        filename,
+        trip_id: meta.trip || meta.trip_id || null,
+        vehicle_id: meta.vehicle_id || (m ? m[1] : null),
+        start_time: meta.start_time || null,
+        end_time: meta.end_time || null,
+        size_bytes: stat.size,
+        saved_at: stat.mtime.toISOString(),
+        label: m ? `${m[1]} - ${m[3].slice(0, 2)}:${m[3].slice(2)}` : filename,
+      };
+    })
+    .sort((a, b) => String(b.saved_at).localeCompare(String(a.saved_at)));
+}
+
+function saveTripArchive(body) {
+  const geo = body && body.geojson;
+  if (!geo || geo.type !== 'FeatureCollection' || !Array.isArray(geo.features)) {
+    throw new Error('geojson FeatureCollection required');
+  }
+  const props = geo.properties || {};
+  let filename = safeArchiveFilename(body.filename);
+  if (!filename) {
+    const vid = String(body.vehicle_id || props.vehicle_id || 'TRIP').replace(/[^\w-]+/g, '');
+    const d = new Date(body.start_time || props.start_time || Date.now());
+    const ymd = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+    const hm = `${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}`;
+    filename = `${vid}_${ymd}_${hm}_trip.geojson`;
+  }
+  ensureDataDir(tripArchivesDir);
+  const enriched = {
+    ...geo,
+    properties: {
+      ...props,
+      trip: body.trip_id || props.trip || null,
+      trip_id: body.trip_id || props.trip || null,
+      vehicle_id: body.vehicle_id || props.vehicle_id || null,
+      start_time: body.start_time || props.start_time || null,
+      end_time: body.end_time || props.end_time || null,
+      archived_at: new Date().toISOString(),
+    },
+  };
+  const full = path.join(tripArchivesDir, filename);
+  fs.writeFileSync(full, JSON.stringify(enriched, null, 2), 'utf8');
+  return { filename, path: full };
+}
+
+function saveDailyShiftCsv(shiftId, dateStr) {
+  const csv = buildShiftDailyCsv(shiftId, dateStr);
+  ensureDataDir(dailyReportsDir);
+  const fname = `napi_jaratok_${dateStr || parseReportDate(null)}_${String(shiftId || 'shift').replace(/[^\w-]+/g, '_').slice(0, 40)}.csv`;
+  const full = path.join(dailyReportsDir, fname);
+  fs.writeFileSync(full, csv, 'utf8');
+  return { filename: fname, path: full };
+}
 const SERVICE_TYPES = new Set(['olajcsere', 'fek', 'gumi', 'akkumulátor', 'lampa', 'tisztitas', 'egyeb']);
 const SERVICE_STATUSES = new Set(['open', 'in_progress', 'done', 'cancelled']);
 const DRIVER_NOTE_CATEGORIES = new Set(['hiba', 'karbantartas', 'tisztitas', 'utaspanasz', 'egyeb']);
@@ -1102,7 +1284,7 @@ app.post('/api/events', (req, res) => {
 });
 
 app.get('/api/events', (req, res) => {
-  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 500, 1), 500);
+  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 500, 1), 3000);
   const rows = selectRecentEvents.all(limit);
   res.json({
     ok: true,
@@ -1160,6 +1342,53 @@ function ingestLatestTrack(byTrip, ev) {
   if (!byTrip[trip] || ts > (byTrip[trip].timestamp || '')) {
     byTrip[trip] = ev;
   }
+}
+
+const ETA_FALLBACK_SPEED_KMH = 15;
+
+function recentSpeedKmhForTrip(tripId, events, maxPoints = 6) {
+  const pts = (events || [])
+    .filter((e) => String(e.trip || '').trim() === tripId)
+    .filter((e) => e.type === 'track' || e.type === 'auto_track')
+    .filter((e) => e.lat != null && e.lng != null)
+    .sort((a, b) => String(a.timestamp || '').localeCompare(String(b.timestamp || '')));
+  if (pts.length < 2) {
+    const last = pts[pts.length - 1];
+    if (!last) return null;
+    const p = last.payload || {};
+    const sp = p.speed != null ? p.speed : last.speed;
+    const n = Number(sp);
+    return Number.isFinite(n) && n > 0 ? Math.round(n) : null;
+  }
+  const slice = pts.slice(-maxPoints);
+  let totalDist = 0;
+  let totalMs = 0;
+  for (let i = 1; i < slice.length; i += 1) {
+    totalDist += haversineMeters(slice[i - 1].lat, slice[i - 1].lng, slice[i].lat, slice[i].lng);
+    const t0 = new Date(slice[i - 1].timestamp).getTime();
+    const t1 = new Date(slice[i].timestamp).getTime();
+    if (!Number.isNaN(t0) && !Number.isNaN(t1) && t1 > t0) {
+      totalMs += t1 - t0;
+    }
+  }
+  if (totalMs < 1000 || totalDist < 5) return null;
+  const kmh = (totalDist / (totalMs / 1000)) * 3.6;
+  if (kmh < 1 || kmh > 120) return null;
+  return Math.round(kmh);
+}
+
+function estimateEtaMinutes(distanceM, speedKmh) {
+  if (distanceM == null || distanceM <= 40) return 0;
+  const speed = speedKmh != null && speedKmh > 1 ? speedKmh : ETA_FALLBACK_SPEED_KMH;
+  return (distanceM / 1000) / speed * 60;
+}
+
+function formatEtaBandLabel(minutes) {
+  if (minutes == null || minutes <= 0) return 'Megérkezett';
+  if (minutes <= 5) return 'Kb. 3-5 percen belül érkezik';
+  if (minutes <= 10) return 'Kb. 5-10 percen belül érkezik';
+  if (minutes <= 15) return 'Kb. 10-15 percen belül érkezik';
+  return null;
 }
 
 function passengersForTrip(trip, events) {
@@ -1221,6 +1450,7 @@ function buildVehiclePositionsFromEvents(recentEvents) {
         lat: ev.lat,
         lng: ev.lng,
       });
+      const speedKmh = recentSpeedKmhForTrip(trip, allEvents);
       return {
         vehicle: vehicleId,
         vehicle_name: meta.vehicle_name || vehicleId,
@@ -1234,6 +1464,7 @@ function buildVehiclePositionsFromEvents(recentEvents) {
         lat: ev.lat,
         lng: ev.lng,
         last_gps: ev.timestamp || null,
+        speed_kmh: speedKmh,
         live: true,
       };
     });
@@ -1582,6 +1813,82 @@ app.get('/api/reports/daily.csv', (req, res) => {
     console.error('GET /api/reports/daily.csv failed:', err);
     res.status(500).json({ ok: false, error: 'Failed to export CSV' });
   }
+});
+
+app.post('/api/trip-archives', (req, res) => {
+  try {
+    const saved = saveTripArchive(req.body || {});
+    res.status(201).json({ ok: true, filename: saved.filename });
+  } catch (err) {
+    console.error('POST /api/trip-archives failed:', err);
+    res.status(400).json({ ok: false, error: err.message || 'Failed to save archive' });
+  }
+});
+
+app.get('/api/admin/trip-archives', (_req, res) => {
+  try {
+    const archives = listTripArchiveFiles();
+    res.json({ ok: true, count: archives.length, archives });
+  } catch (err) {
+    console.error('GET /api/admin/trip-archives failed:', err);
+    res.status(500).json({ ok: false, error: 'Failed to list archives' });
+  }
+});
+
+app.get('/api/admin/trip-archives/:filename', (req, res) => {
+  const filename = safeArchiveFilename(req.params.filename);
+  if (!filename) return res.status(400).json({ ok: false, error: 'Invalid filename' });
+  const full = path.join(tripArchivesDir, filename);
+  if (!fs.existsSync(full)) return res.status(404).json({ ok: false, error: 'not found' });
+  res.type('application/geo+json');
+  return res.sendFile(full, (err) => {
+    if (err) res.status(500).json({ ok: false, error: 'read failed' });
+  });
+});
+
+app.post('/api/shift-reports', (req, res) => {
+  const body = req.body || {};
+  const shiftId = String(body.shift_id || body.shift || '').trim();
+  const dateStr = parseReportDate(body.date);
+  if (!shiftId) return res.status(400).json({ ok: false, error: 'shift_id required' });
+  try {
+    const saved = saveDailyShiftCsv(shiftId, dateStr);
+    res.status(201).json({ ok: true, filename: saved.filename, date: dateStr });
+  } catch (err) {
+    console.error('POST /api/shift-reports failed:', err);
+    res.status(500).json({ ok: false, error: 'Failed to generate CSV' });
+  }
+});
+
+app.get('/api/admin/daily-reports', (_req, res) => {
+  try {
+    ensureDataDir(dailyReportsDir);
+    const reports = (fs.existsSync(dailyReportsDir) ? fs.readdirSync(dailyReportsDir) : [])
+      .filter((f) => f.toLowerCase().endsWith('.csv'))
+      .map((filename) => {
+        const full = path.join(dailyReportsDir, filename);
+        const stat = fs.statSync(full);
+        return { filename, size_bytes: stat.size, saved_at: stat.mtime.toISOString() };
+      })
+      .sort((a, b) => String(b.saved_at).localeCompare(String(a.saved_at)));
+    res.json({ ok: true, count: reports.length, reports });
+  } catch (err) {
+    console.error('GET /api/admin/daily-reports failed:', err);
+    res.status(500).json({ ok: false, error: 'Failed to list reports' });
+  }
+});
+
+app.get('/api/admin/daily-reports/:filename', (req, res) => {
+  const filename = path.basename(String(req.params.filename || ''));
+  if (!filename || !filename.toLowerCase().endsWith('.csv')) {
+    return res.status(400).json({ ok: false, error: 'Invalid filename' });
+  }
+  const full = path.join(dailyReportsDir, filename);
+  if (!fs.existsSync(full)) return res.status(404).json({ ok: false, error: 'not found' });
+  res.type('text/csv; charset=utf-8');
+  return res.sendFile(full, (err) => {
+    if (err) res.status(500).json({ ok: false, error: 'read failed' });
+  });
 });
 
 app.get('/api/service-records', (req, res) => {
