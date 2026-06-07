@@ -22,7 +22,7 @@ operativ-navigator/
 | Utas | `https://<netlify-domain>/public/` |
 | Sofőr | `https://<netlify-domain>/driver/` |
 | Admin | `https://<netlify-domain>/admin/` |
-| API | `https://operativ-navigator-backend.onrender.com` |
+| API | `https://operativ-navigator.onrender.com` |
 
 ## GitHub
 
