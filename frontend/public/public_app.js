@@ -5,7 +5,7 @@
     if (!DATA) return;
 
     var WALK_SPEED_M_PER_MIN = 80;
-    var TRAIN_APPROACH_M_PER_MIN = 220;
+    var ETA_FALLBACK_SPEED_KMH = 15;
     var GPS_ACCURACY_TRUST_M = 120;
 
     var state = {
@@ -90,32 +90,54 @@
         return String(v.freeSeats) + ' / ' + cap + ' szabad';
     }
 
-    function getTrainDistanceM() {
+    function estimateEtaMinutes(distanceM, speedKmh) {
+        if (distanceM == null || distanceM <= 40) return 0;
+        var speed = (speedKmh != null && speedKmh > 1) ? speedKmh : ETA_FALLBACK_SPEED_KMH;
+        return (distanceM / 1000) / speed * 60;
+    }
+
+    function formatEtaBand(minutes) {
+        if (minutes == null || minutes <= 0) return 'Megérkezett';
+        if (minutes <= 5) return 'Kb. 3-5 percen belül érkezik';
+        if (minutes <= 10) return 'Kb. 5-10 percen belül érkezik';
+        if (minutes <= 15) return 'Kb. 10-15 percen belül érkezik';
+        return null;
+    }
+
+    /** Jármű → kiválasztott / legközelebbi megálló (utas indulási döntéshez) */
+    function getVehicleToStopDistanceM() {
         var v = state.activeVehicle;
-        if (!v || !state.userPos || v.lat == null) return null;
-        return haversineM(state.userPos.lat, state.userPos.lng, v.lat, v.lng);
+        var stop = getDisplayStop();
+        if (!v || !v.live || v.lat == null || v.lng == null) return null;
+        if (!stop || stop.lat == null || stop.lng == null) return null;
+        return haversineM(v.lat, v.lng, stop.lat, stop.lng);
     }
 
     function getTrainProximityLabel() {
-        var dist = getTrainDistanceM();
+        var dist = getVehicleToStopDistanceM();
         if (dist == null) return null;
         if (dist <= 40) return 'Megérkezett';
         if (dist <= 250) return 'A közelben';
-        if (dist <= 700) return 'Hamarosan érkezik';
+        if (dist <= 700) return 'Közeledik';
+        return 'Közlekedik';
+    }
+
+    function getTrainArrivalLineForStop(stop) {
+        var v = state.activeVehicle;
+        if (!v || !v.live || v.lat == null || v.lng == null) return null;
+        if (!stop || stop.lat == null || stop.lng == null) return null;
+        var dist = haversineM(v.lat, v.lng, stop.lat, stop.lng);
+        if (dist <= 40) return 'Megérkezett';
+        var min = estimateEtaMinutes(dist, v.speedKmh != null ? v.speedKmh : null);
+        var band = formatEtaBand(min);
+        if (band) return band;
+        if (dist <= 250) return 'A közelben';
+        if (dist <= 700) return 'Közeledik';
         return 'Közlekedik';
     }
 
     function getTrainArrivalLine() {
-        var dist = getTrainDistanceM();
-        if (dist == null) return null;
-        if (dist <= 40) return 'Megérkezett';
-        var acc = state.userAccuracy;
-        var gpsReliable = acc != null && acc <= GPS_ACCURACY_TRUST_M;
-        if (gpsReliable && dist <= 1500) {
-            var min = Math.max(1, Math.round(dist / TRAIN_APPROACH_M_PER_MIN));
-            return 'kb. ' + min + ' perc';
-        }
-        return getTrainProximityLabel();
+        return getTrainArrivalLineForStop(getDisplayStop());
     }
 
     function popupSeatsLine() {
@@ -451,7 +473,7 @@
         var selectedTime = ctx.selectedTime || '';
         var showBoard = !!ctx.showBoard;
         var showBookForm = !!selectedTime && !showBoard;
-        var trainLine = getTrainArrivalLine();
+        var trainLine = getTrainArrivalLineForStop(stop);
         var walk = stopWalkLabel(stop);
         var seatsLine = popupSeatsLine();
         var waitingLine = getWaitingLine(stop.id);

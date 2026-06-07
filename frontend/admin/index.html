@@ -793,6 +793,20 @@
         .closed-summary-row .time { color: var(--muted); font-variant-numeric: tabular-nums; }
         .closed-summary-row .schedule { font-weight: 700; color: #e9d5ff; }
         .closed-summary-row .passengers { font-weight: 700; color: #fbbf24; white-space: nowrap; }
+        .archive-list { display: flex; flex-direction: column; gap: 6px; }
+        .archive-row {
+            display: flex; align-items: center; justify-content: space-between; gap: 8px;
+            padding: 8px 10px; border-radius: 8px; background: rgba(15, 23, 42, 0.55);
+            border: 1px solid rgba(148, 163, 184, 0.2); cursor: pointer;
+        }
+        .archive-row.is-active { border-color: rgba(96, 165, 250, 0.7); background: rgba(30, 58, 138, 0.35); }
+        .archive-row-title { font-weight: 700; font-size: 12px; }
+        .archive-row-meta { font-size: 10px; color: var(--muted); }
+        .archive-row-actions { display: flex; gap: 6px; flex-shrink: 0; }
+        .archive-row-actions button {
+            font-size: 10px; padding: 4px 8px; border-radius: 6px; border: 1px solid rgba(148,163,184,.35);
+            background: rgba(30,41,59,.8); color: #e2e8f0; cursor: pointer;
+        }
         .closed-divider {
             border: none;
             border-top: 1px dashed rgba(255, 255, 255, 0.2);
@@ -2015,6 +2029,15 @@
                     </div>
                 </details>
             </section>
+            <section class="panel panel-archive-col" aria-label="Járat archívum">
+                <details class="panel-acc acc-archive" id="acc-archive" open>
+                    <summary class="panel-head">JÁRAT ARCHÍVUM</summary>
+                    <div class="panel-body">
+                        <div id="panel-trip-archives" class="archive-list"></div>
+                        <div id="archive-panel-actions" class="closed-panel-actions"></div>
+                    </div>
+                </details>
+            </section>
             <section class="panel panel-events" aria-label="Eseménynapló">
                 <details class="panel-acc acc-events" id="acc-events">
                     <summary class="panel-head">Eseménynapló · utolsó 50</summary>
@@ -2267,6 +2290,10 @@
     var tasksLayer = null;
     var vehicleTripLayer = null;
     var tripLabelsLayer = null;
+    var archiveLayer = null;
+    var lastTripArchives = [];
+    var selectedArchiveFilename = null;
+    var lastDailyReports = [];
     var lastPublicVehiclePositions = [];
     var lastTasks = [];
     var lastBookings = { scheduled: [], boarding: [], custom: [] };
@@ -3410,6 +3437,84 @@
         return base + '/' + rel;
     }
 
+    var ETA_FALLBACK_SPEED_KMH = 15;
+
+    function haversineMeters(lat1, lng1, lat2, lng2) {
+        var R = 6371000;
+        var toRad = function (d) { return d * Math.PI / 180; };
+        var dLat = toRad(lat2 - lat1);
+        var dLng = toRad(lng2 - lng1);
+        var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+            Math.sin(dLng / 2) * Math.sin(dLng / 2);
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+
+    function computeRecentSpeedKmh(tripId, events, maxPoints) {
+        var pts = trackPointsChronologicalForTrip(tripId, events);
+        maxPoints = maxPoints || 6;
+        if (pts.length < 2) {
+            var last = pts[pts.length - 1];
+            if (!last || last.speed == null) return null;
+            var n = Number(last.speed);
+            return Number.isFinite(n) && n > 0 ? Math.round(n) : null;
+        }
+        var slice = pts.slice(-maxPoints);
+        var totalDist = 0;
+        var totalMs = 0;
+        for (var i = 1; i < slice.length; i += 1) {
+            totalDist += haversineMeters(slice[i - 1].lat, slice[i - 1].lng, slice[i].lat, slice[i].lng);
+            var t0 = new Date(slice[i - 1].time || 0).getTime();
+            var t1 = new Date(slice[i].time || 0).getTime();
+            if (!isNaN(t0) && !isNaN(t1) && t1 > t0) totalMs += t1 - t0;
+        }
+        if (totalMs < 1000 || totalDist < 5) return null;
+        var kmh = (totalDist / (totalMs / 1000)) * 3.6;
+        if (kmh < 1 || kmh > 120) return null;
+        return Math.round(kmh);
+    }
+
+    function estimateEtaMinutes(distanceM, speedKmh) {
+        if (distanceM == null || distanceM <= 40) return 0;
+        var speed = (speedKmh != null && speedKmh > 1) ? speedKmh : ETA_FALLBACK_SPEED_KMH;
+        return (distanceM / 1000) / speed * 60;
+    }
+
+    function formatEtaBandLabel(minutes) {
+        if (minutes == null || minutes <= 0) return 'Megérkezett';
+        if (minutes <= 5) return 'Kb. 3-5 percen belül érkezik';
+        if (minutes <= 10) return 'Kb. 5-10 percen belül érkezik';
+        if (minutes <= 15) return 'Kb. 10-15 percen belül érkezik';
+        return null;
+    }
+
+    function approachTargetsForTrip(trip) {
+        var targets = [];
+        if (trip && trip.start_lat != null && trip.start_lng != null) {
+            targets.push({ lat: Number(trip.start_lat), lng: Number(trip.start_lng) });
+        }
+        (lastBookings.boarding || []).forEach(function (row) {
+            if (!row || row.lat == null || row.lng == null) return;
+            if (trip && trip.city && row.city && String(row.city) !== String(trip.city)) return;
+            targets.push({ lat: Number(row.lat), lng: Number(row.lng) });
+        });
+        return targets;
+    }
+
+    function computeApproachEtaLabel(trip, stats, events) {
+        if (!trip || stats.lastLat == null || stats.lastLng == null) return null;
+        var targets = approachTargetsForTrip(trip);
+        if (!targets.length) return null;
+        var dist = null;
+        targets.forEach(function (t) {
+            var d = haversineMeters(stats.lastLat, stats.lastLng, t.lat, t.lng);
+            if (dist == null || d < dist) dist = d;
+        });
+        var speed = computeRecentSpeedKmh(trip.trip, events) || stats.lastSpeed;
+        var min = estimateEtaMinutes(dist, speed);
+        return formatEtaBandLabel(min);
+    }
+
     function getTrackPointsForTrip(tripId, events) {
         var pts = [];
         if (!tripId) return pts;
@@ -3436,6 +3541,9 @@
         var speedLine = speed != null && speed !== ''
             ? ('Sebesség: ' + escapeHtml(String(speed)) + ' km/h<br>')
             : 'Sebesség: —<br>';
+        var approachLine = e.approachLabel
+            ? ('Közeledés: <strong>' + escapeHtml(e.approachLabel) + '</strong><br>')
+            : '';
         var seqLine = '';
         if (point && point.seq != null && point.seqTotal != null) {
             seqLine = 'Pont sorszáma: ' + escapeHtml(String(point.seq)) + ' / ' + escapeHtml(String(point.seqTotal)) + '<br>';
@@ -3451,6 +3559,7 @@
             'GPS idő: ' + escapeHtml(formatTime(gpsTime)) + '<br>' +
             seqLine +
             speedLine +
+            approachLine +
             '</div>';
     }
 
@@ -3872,6 +3981,7 @@
         tasksLayer = L.layerGroup().addTo(map);
         vehicleTripLayer = L.layerGroup().addTo(map);
         tripLabelsLayer = L.layerGroup().addTo(map);
+        archiveLayer = L.layerGroup().addTo(map);
         map.on('click', onAdminMapClickForTask);
         setTimeout(function () { if (map) map.invalidateSize(); }, 100);
     }
@@ -4057,6 +4167,7 @@
 
     function enrichTrip(trip, events) {
         var stats = buildTripStats(trip.trip, events);
+        var recentSpeed = computeRecentSpeedKmh(trip.trip, events);
         return {
             trip: trip.trip,
             driver_name: trip.driver_name || '—',
@@ -4067,12 +4178,15 @@
             shift: trip.shift || '—',
             started_at: trip.started_at,
             schedule: trip.schedule || '',
+            start_lat: trip.start_lat,
+            start_lng: trip.start_lng,
             passengers: stats.passengers,
             trackCount: stats.trackCount,
             voiceCount: stats.voiceCount,
             reservationCount: stats.reservationCount,
             lastGpsTime: stats.lastGpsTime,
-            lastSpeed: stats.lastSpeed != null ? stats.lastSpeed : null,
+            lastSpeed: recentSpeed != null ? recentSpeed : (stats.lastSpeed != null ? stats.lastSpeed : null),
+            approachLabel: computeApproachEtaLabel(trip, stats, events),
             lastLat: stats.lastLat != null ? stats.lastLat : trip.start_lat,
             lastLng: stats.lastLng != null ? stats.lastLng : trip.start_lng
         };
@@ -4179,6 +4293,175 @@
 
     function countTrackPointsForTrip(tripId, events) {
         return trackPointsChronologicalForTrip(tripId, events).length;
+    }
+
+    function archiveEventMarkerHtml(role) {
+        if (role === 'event_trip_start') return '🚩';
+        if (role === 'event_trip_end') return '🏁';
+        if (role === 'event_boarding') return '🟢';
+        if (role === 'event_reservation') return '🔵';
+        return '📍';
+    }
+
+    function renderArchiveGeoJsonOnMap(geo) {
+        initMap();
+        if (!map || !archiveLayer || !geo || !Array.isArray(geo.features)) return;
+        archiveLayer.clearLayers();
+        var bounds = [];
+        geo.features.forEach(function (f) {
+            if (!f || !f.geometry) return;
+            var role = (f.properties && f.properties.role) || '';
+            var g = f.geometry;
+            if (g.type === 'LineString' && Array.isArray(g.coordinates)) {
+                var latlngs = g.coordinates.map(function (c) { return [c[1], c[0]]; });
+                L.polyline(latlngs, {
+                    color: '#93c5fd',
+                    weight: 3,
+                    opacity: 0.65,
+                    lineCap: 'round'
+                }).addTo(archiveLayer);
+                latlngs.forEach(function (ll) { bounds.push(ll); });
+                return;
+            }
+            if (g.type !== 'Point' || !g.coordinates || g.coordinates.length < 2) return;
+            var lat = g.coordinates[1];
+            var lng = g.coordinates[0];
+            bounds.push([lat, lng]);
+            if (role === 'gps_point') {
+                L.circleMarker([lat, lng], {
+                    radius: 3,
+                    color: '#93c5fd',
+                    weight: 1,
+                    fillColor: '#bfdbfe',
+                    fillOpacity: 0.85
+                }).addTo(archiveLayer);
+                return;
+            }
+            var iconHtml = archiveEventMarkerHtml(role);
+            var popup = '';
+            if (f.properties) {
+                if (f.properties.event) popup += '<b>' + escapeHtml(String(f.properties.event)) + '</b><br>';
+                if (f.properties.stop) popup += 'Megálló: ' + escapeHtml(String(f.properties.stop)) + '<br>';
+                if (f.properties.time) popup += escapeHtml(String(f.properties.time));
+            }
+            L.marker([lat, lng], {
+                icon: L.divIcon({
+                    className: 'archive-event-marker',
+                    html: '<div style="font-size:18px;line-height:1">' + iconHtml + '</div>',
+                    iconSize: [22, 22],
+                    iconAnchor: [11, 11]
+                })
+            }).bindPopup(popup || iconHtml).addTo(archiveLayer);
+        });
+        if (bounds.length && map.fitBounds) {
+            map.fitBounds(bounds, { padding: [40, 40], maxZoom: 17 });
+        }
+    }
+
+    function fetchTripArchives() {
+        return fetchJson('/api/admin/trip-archives').then(function (data) {
+            lastTripArchives = (data && data.archives) ? data.archives : [];
+            renderTripArchivesPanel();
+            return lastTripArchives;
+        }).catch(function () {
+            lastTripArchives = [];
+            renderTripArchivesPanel();
+            return [];
+        });
+    }
+
+    function fetchDailyReports() {
+        return fetchJson('/api/admin/daily-reports').then(function (data) {
+            lastDailyReports = (data && data.reports) ? data.reports : [];
+            renderTripArchivesPanel();
+            return lastDailyReports;
+        }).catch(function () {
+            lastDailyReports = [];
+            return [];
+        });
+    }
+
+    function renderTripArchivesPanel() {
+        var el = document.getElementById('panel-trip-archives');
+        var actions = document.getElementById('archive-panel-actions');
+        if (!el) return;
+        if (!lastTripArchives.length) {
+            el.innerHTML = '<p class="tasks-empty">Még nincs archivált járat GeoJSON.</p>';
+        } else {
+            el.innerHTML = lastTripArchives.map(function (a) {
+                var active = selectedArchiveFilename === a.filename ? ' is-active' : '';
+                return '<div class="archive-row' + active + '" data-archive-file="' + escapeHtml(a.filename) + '">' +
+                    '<div><div class="archive-row-title">' + escapeHtml(a.label || a.filename) + '</div>' +
+                    '<div class="archive-row-meta">' + escapeHtml(a.trip_id || '—') + ' · ' +
+                    escapeHtml(formatDiagTime(a.start_time || a.saved_at)) + '</div></div>' +
+                    '<div class="archive-row-actions">' +
+                    '<button type="button" data-archive-map="' + escapeHtml(a.filename) + '">Térkép</button>' +
+                    '<button type="button" data-archive-dl="' + escapeHtml(a.filename) + '">GeoJSON</button>' +
+                    '</div></div>';
+            }).join('');
+        }
+        if (actions) {
+            var csvBtn = lastDailyReports.length
+                ? '<button type="button" class="btn-csv-report hit" data-dl-daily-report="' +
+                    escapeHtml(lastDailyReports[0].filename) + '">Napi CSV letöltés</button>'
+                : '<span class="setup-meta">Napi CSV: műszak záráskor készül</span>';
+            actions.innerHTML = '<button type="button" class="btn-csv-report hit" data-refresh-archives>Frissítés</button> ' + csvBtn;
+        }
+        el.querySelectorAll('[data-archive-map]').forEach(function (btn) {
+            btn.addEventListener('click', function (ev) {
+                ev.stopPropagation();
+                showArchiveOnMap(btn.getAttribute('data-archive-map'));
+            });
+        });
+        el.querySelectorAll('[data-archive-dl]').forEach(function (btn) {
+            btn.addEventListener('click', function (ev) {
+                ev.stopPropagation();
+                downloadArchiveGeoJson(btn.getAttribute('data-archive-dl'));
+            });
+        });
+        el.querySelectorAll('.archive-row').forEach(function (row) {
+            row.addEventListener('click', function () {
+                showArchiveOnMap(row.getAttribute('data-archive-file'));
+            });
+        });
+        if (actions) {
+            var refreshBtn = actions.querySelector('[data-refresh-archives]');
+            if (refreshBtn) refreshBtn.addEventListener('click', function () {
+                fetchTripArchives();
+                fetchDailyReports();
+            });
+            var dlDaily = actions.querySelector('[data-dl-daily-report]');
+            if (dlDaily) dlDaily.addEventListener('click', function () {
+                window.open(API_BASE + '/api/admin/daily-reports/' + encodeURIComponent(dlDaily.getAttribute('data-dl-daily-report')), '_blank');
+            });
+        }
+    }
+
+    function showArchiveOnMap(filename) {
+        var file = String(filename || '').trim();
+        if (!file) return;
+        selectedArchiveFilename = file;
+        renderTripArchivesPanel();
+        fetchJson('/api/admin/trip-archives/' + encodeURIComponent(file))
+            .then(function (geo) {
+                renderArchiveGeoJsonOnMap(geo);
+                showAdminToast('Archív járat betöltve: ' + file);
+            })
+            .catch(function () {
+                showAdminToast('Archív betöltése sikertelen');
+            });
+    }
+
+    function downloadArchiveGeoJson(filename) {
+        var file = String(filename || '').trim();
+        if (!file) return;
+        fetchJson('/api/admin/trip-archives/' + encodeURIComponent(file))
+            .then(function (geo) {
+                downloadText(file, JSON.stringify(geo, null, 2), 'application/geo+json;charset=utf-8');
+            })
+            .catch(function () {
+                showAdminToast('Letöltés sikertelen');
+            });
     }
 
     function exportTripGeoJson(tripId) {
@@ -4395,6 +4678,7 @@
             '<div class="line">Indulás: <strong>' + escapeHtml(formatTime(e.started_at)) + '</strong></div>' +
             '<div class="line">Utas: <strong>' + escapeHtml(String(e.passengers)) + ' fő</strong></div>' +
             '<div class="line">GPS: <strong>' + escapeHtml(formatTime(e.lastGpsTime)) + '</strong></div>' +
+            (e.approachLabel ? '<div class="line approach-eta">🚂 <strong>' + escapeHtml(e.approachLabel) + '</strong></div>' : '') +
             '</article>';
     }
 
@@ -4559,6 +4843,8 @@
             '<div class="detail-section">' +
             detailRow('Aktuális utasszám', e.passengers + ' fő') +
             detailRow('Track pontok száma', String(e.trackCount)) +
+            (e.lastSpeed != null ? detailRow('Becsült sebesség', e.lastSpeed + ' km/h') : '') +
+            (e.approachLabel ? detailRow('Közeledés', e.approachLabel) : '') +
             '</div>';
     }
 
@@ -6096,7 +6382,9 @@
             fetchJson('/api/events?limit=' + EVENT_FETCH_LIMIT),
             fetchJson('/api/tasks?limit=200'),
             fetchJson('/api/vehicles'),
-            fetchJson('/api/admin/bookings')
+            fetchJson('/api/admin/bookings'),
+            fetchJson('/api/admin/trip-archives'),
+            fetchJson('/api/admin/daily-reports')
         ])
             .then(function (results) {
                 var tripsData = results[0];
@@ -6104,6 +6392,8 @@
                 var tasksData = results[2];
                 var vehiclesData = results[3];
                 var bookingsData = results[4];
+                var archivesData = results[5];
+                var dailyReportsData = results[6];
                 lastTrips = (tripsData && tripsData.trips) ? tripsData.trips : [];
                 lastEvents = normalizeEvents((eventsData && eventsData.events) ? eventsData.events : []);
                 notifyNewPassengerEvents(lastEvents);
@@ -6115,6 +6405,9 @@
                 };
                 notifyNewBookings(nextBookings);
                 lastBookings = nextBookings;
+                lastTripArchives = (archivesData && archivesData.archives) ? archivesData.archives : [];
+                lastDailyReports = (dailyReportsData && dailyReportsData.reports) ? dailyReportsData.reports : [];
+                renderTripArchivesPanel();
                 renderTaskMarkers(lastTasks);
                 renderTasksPanel(lastTasks);
                 renderBookingsPanel(lastBookings);

@@ -147,11 +147,12 @@
     };
 
     function getApiBase() {
+        if (window.OPNAV_API_BASE) return window.OPNAV_API_BASE;
         var host = window.location.hostname;
         if (host === 'localhost' || host === '127.0.0.1') {
             return 'http://localhost:3000';
         }
-        return window.location.origin;
+        return 'https://operativ-navigator.onrender.com';
     }
 
     var API_BASE = window.OPNAV_API_BASE || getApiBase();
@@ -225,7 +226,7 @@
     }
 
     function normalizeVehicleFromApi(v, cityId) {
-        var cap = PUBLIC_DEFAULT_CAPACITY;
+        var cap = Math.max(1, parseInt(v.capacity, 10) || PUBLIC_DEFAULT_CAPACITY);
         var passengers = Math.max(0, parseInt(v.passengers, 10) || 0);
         if (v.free != null) {
             var freeFromApi = Math.max(0, parseInt(v.free, 10) || 0);
@@ -234,7 +235,9 @@
             var freeSeatsApi = Math.max(0, parseInt(v.freeSeats, 10) || 0);
             passengers = Math.max(passengers, cap - freeSeatsApi);
         }
-        var freeSeats = Math.max(0, cap - passengers);
+        var freeSeats = v.free != null
+            ? Math.max(0, parseInt(v.free, 10) || 0)
+            : Math.max(0, cap - passengers);
         var vid = String(v.vehicle || v.id || v.vehicle_id || '').trim();
         var lat = v.lat != null ? Number(v.lat) : null;
         var lng = v.lng != null ? Number(v.lng) : null;
@@ -251,6 +254,7 @@
             status: live ? 'Közlekedik' : 'Nem közlekedik',
             nextStop: v.nextStop || '—',
             nextDeparture: v.nextDeparture || '—',
+            speedKmh: v.speed_kmh != null ? Number(v.speed_kmh) : null,
             active: live,
             live: live
         };

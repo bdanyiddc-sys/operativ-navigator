@@ -1261,6 +1261,7 @@
                     <p class="diag-row">QUEUE: <strong id="diag-queue">0</strong></p>
                     <p class="diag-row">TRACK: <strong id="diag-track">0 pont</strong></p>
                     <p class="diag-row">AKTÍV JÁRAT: <strong id="diag-active-trip">—</strong></p>
+                    <p class="diag-row" id="diag-poi-narr-row" hidden>POI NARR: <strong id="diag-poi-narr">—</strong></p>
                     <p class="diag-row">UTOLSÓ KÜLDÉS: <strong id="diag-last-send">—</strong></p>
                     <p class="diag-row diag-backend" id="diag-backend-row" hidden>BACKEND: <strong id="diag-backend">—</strong></p>
                 </div>
@@ -1400,7 +1401,7 @@
     var SCHEDULE_ES_VALUE = '__eseti__';
     var SCHEDULE_ES_LABEL = 'Eseti menet';
     var DEFAULT_MIN_TRIP_MINUTES = 35;
-    var POSITION_SEND_MS = 30000;
+    var POSITION_SEND_MS = 10000;
     var AUTO_TRACK_MS = POSITION_SEND_MS;
     var GPS_WATCH_OPTIONS = { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 };
     var GPS_WATCHDOG_INTERVAL_MS = 10000;
@@ -1474,7 +1475,12 @@
     var POI_AUDIO_DIR = 'audio/';
     var POI_JSON_DIR = 'poi/';
     var poiCatalogCityKey = '';
-    /* POI GPS V2 (később): GPS update → isNearPoi(lat,lng,poi) → enter detection → egyszeri trigger → playPoiAudio(poi.audio) */
+    var playedPoiIds = {};
+    var lastPoiNarrationDebug = null;
+    var poiNarrationLog = [];
+    /** GPS narráció teszt üzemmód – minden POI egységes sugara (méter) */
+    var TEST_RADIUS_METERS = 50;
+    // TODO: Teszt üzemmód vége után visszaállni a POI Radius attribútum használatára (distance <= poi.radius).
     var activeCityId = 'tata';
     var autoTrackTimer = null;
     var gpsLockedOn = true;
@@ -1485,23 +1491,44 @@
         { id: 'gyor', label: 'Győr', file: 'gyor1.geojson', lat: 47.687, lng: 17.635 },
         { id: 'papa', label: 'Pápa', file: 'papa1.geojson', lat: 47.330, lng: 17.467 },
         { id: 'szfv', label: 'Székesfehérvár', file: 'szfv1.geojson', lat: 47.192, lng: 18.411 },
-        { id: 'vac', label: 'Vác', file: 'vac1.geojson', lat: 47.775, lng: 19.134 }
+        { id: 'vac', label: 'Vác', file: 'vac1.geojson', lat: 47.775, lng: 19.134 },
+        { id: 'teszt01', label: 'Teszt01', file: 'teszt01.geojson', lat: 47.192, lng: 18.411 }
     ];
     var cityGpsManualLock = false;
 
-    var SCHEDULE_BY_CITY = {
-        tata: ['Tata1', 'Tata2', 'Tata3'],
-        eger: ['Eger1', 'Eger2', 'Eger3'],
-        gyor: ['Gyor1', 'Gyor2', 'Gyor3'],
-        papa: ['Papa1', 'Papa2'],
-        szfv: ['Szfv1', 'Szfv2', 'Szfv3'],
-        vac: ['Vac1', 'Vac2']
+    /** Műszak menetrend – minden GeoJSON útvonal + Tata variánsok + Eseti */
+    var ROUTE_CATALOG = [
+        { scheduleId: 'Tata1', label: 'Tata – Tata1', cityId: 'tata', routeFile: 'Tata_utvonal2.geojson', cityLabel: 'Tata' },
+        { scheduleId: 'Tata2', label: 'Tata – Tata2', cityId: 'tata', routeFile: 'Tata_utvonal2.geojson', cityLabel: 'Tata' },
+        { scheduleId: 'Tata3', label: 'Tata – Tata3', cityId: 'tata', routeFile: 'Tata_utvonal2.geojson', cityLabel: 'Tata' },
+        { scheduleId: 'Eger', label: 'Eger', cityId: 'eger', routeFile: 'eger3.geojson', cityLabel: 'Eger' },
+        { scheduleId: 'Gyor', label: 'Győr', cityId: 'gyor', routeFile: 'gyor1.geojson', cityLabel: 'Győr' },
+        { scheduleId: 'Papa', label: 'Pápa', cityId: 'papa', routeFile: 'papa1.geojson', cityLabel: 'Pápa' },
+        { scheduleId: 'Szfv', label: 'Székesfehérvár', cityId: 'szfv', routeFile: 'szfv1.geojson', cityLabel: 'Székesfehérvár' },
+        { scheduleId: 'Vac', label: 'Vác', cityId: 'vac', routeFile: 'vac1.geojson', cityLabel: 'Vác' },
+        { scheduleId: 'Teszt01', label: 'Teszt01 (GPS narráció)', cityId: 'teszt01', routeFile: 'teszt01.geojson', cityLabel: 'Teszt01', poiFile: 'poi/teszt01_poi.geojson' }
+    ];
+    var ROUTE_BY_SCHEDULE = {};
+    ROUTE_CATALOG.forEach(function (r) { ROUTE_BY_SCHEDULE[r.scheduleId] = r; });
+
+    var LEGACY_SCHEDULE_ALIASES = {
+        Eger1: 'Eger', Eger2: 'Eger', Eger3: 'Eger',
+        Gyor1: 'Gyor', Gyor2: 'Gyor', Gyor3: 'Gyor',
+        Papa1: 'Papa', Papa2: 'Papa',
+        Szfv1: 'Szfv', Szfv2: 'Szfv', Szfv3: 'Szfv',
+        Vac1: 'Vac', Vac2: 'Vac'
     };
 
     var SCHEDULE_META = {
         Tata1: { minMinutes: 35, endPoiId: 'poi_tata_veg' },
         Tata2: { minMinutes: 35, endPoiId: 'poi_tata_veg' },
         Tata3: { minMinutes: 35, endPoiId: 'poi_tata_veg' },
+        Eger: { minMinutes: 35, endPoiId: null },
+        Gyor: { minMinutes: 35, endPoiId: null },
+        Papa: { minMinutes: 35, endPoiId: null },
+        Szfv: { minMinutes: 35, endPoiId: null },
+        Vac: { minMinutes: 35, endPoiId: null },
+        Teszt01: { minMinutes: 35, endPoiId: null },
         Eger1: { minMinutes: 35, endPoiId: null },
         Eger2: { minMinutes: 35, endPoiId: null },
         Eger3: { minMinutes: 35, endPoiId: null },
@@ -1767,21 +1794,164 @@
         }).replace(/\s+/g, '');
     }
 
-    function refreshScheduleSelect() {
+    function normalizeScheduleSlug(slug) {
+        var s = String(slug || '').trim();
+        if (!s) return s;
+        return LEGACY_SCHEDULE_ALIASES[s] || s;
+    }
+
+    function defaultScheduleForCity(cityId) {
+        if (cityId === 'tata') return 'Tata1';
+        var match = ROUTE_CATALOG.find(function (r) { return r.cityId === cityId; });
+        return match ? match.scheduleId : 'Tata1';
+    }
+
+    function getActiveRouteMeta() {
+        if (isEsetiSchedule()) return null;
+        var slug = normalizeScheduleSlug(getScheduleSlug());
+        return ROUTE_BY_SCHEDULE[slug] || null;
+    }
+
+    function refreshScheduleSelect(preferredSchedule) {
         var sel = document.getElementById('field-schedule');
         if (!sel) return;
-        var opts = (SCHEDULE_BY_CITY[activeCityId] || [cityScheduleKey() + '1', cityScheduleKey() + '2']).slice();
         var saved = '';
         try { saved = sessionStorage.getItem(STORAGE_SCHEDULE) || ''; } catch (e) {}
-        var html = opts.map(function (o) {
-            return '<option value="' + o + '">' + o + '</option>';
+        saved = normalizeScheduleSlug(saved);
+        var html = ROUTE_CATALOG.map(function (r) {
+            return '<option value="' + r.scheduleId + '">' + r.label + '</option>';
         }).join('');
         html += '<option value="' + SCHEDULE_ES_VALUE + '">' + SCHEDULE_ES_LABEL + '</option>';
         sel.innerHTML = html;
-        var valid = opts.concat([SCHEDULE_ES_VALUE]);
-        if (saved && valid.indexOf(saved) >= 0) sel.value = saved;
-        else sel.value = opts[0] || SCHEDULE_ES_VALUE;
+        var valid = ROUTE_CATALOG.map(function (r) { return r.scheduleId; }).concat([SCHEDULE_ES_VALUE]);
+        var pick = normalizeScheduleSlug(preferredSchedule || saved);
+        if (pick && valid.indexOf(pick) >= 0) sel.value = pick;
+        else sel.value = defaultScheduleForCity(activeCityId);
         saveScheduleSelection();
+    }
+
+    function isGpsNarrationRoute() {
+        var route = getActiveRouteMeta();
+        return !!(route && route.scheduleId === 'Teszt01');
+    }
+
+    function poiNarrationKey(poi) {
+        if (!poi) return '';
+        if (poi.id) return String(poi.id);
+        if (poi.audiopoint) return 'ap_' + String(poi.audiopoint);
+        return '';
+    }
+
+    function resetPoiNarrationState() {
+        playedPoiIds = {};
+        lastPoiNarrationDebug = null;
+        poiNarrationLog = [];
+        poiCatalog.forEach(function (p) {
+            if (p) p.played = false;
+        });
+        updatePoiNarrationDiag();
+        renderTrainLog();
+    }
+
+    function logPoiNarrationActivation(poi, distM) {
+        var entry = {
+            audiopoint: poi.audiopoint || '—',
+            name: poi.name || '—',
+            distance: Math.round(distM),
+            at: Date.now()
+        };
+        lastPoiNarrationDebug = entry;
+        poiNarrationLog.unshift(entry);
+        if (poiNarrationLog.length > 20) poiNarrationLog.length = 20;
+        console.info(
+            '[POI narráció] POI aktiválva:\nAudiopoint=' + entry.audiopoint +
+            '\nNev=' + entry.name +
+            '\nTávolság=' + entry.distance + ' m'
+        );
+        updatePoiNarrationDiag();
+        renderTrainLog();
+    }
+
+    function updatePoiNarrationDiag() {
+        var row = document.getElementById('diag-poi-narr-row');
+        var el = document.getElementById('diag-poi-narr');
+        if (!el) return;
+        if (!isGpsNarrationRoute()) {
+            if (row) row.hidden = true;
+            return;
+        }
+        if (row) row.hidden = false;
+        if (lastPoiNarrationDebug) {
+            el.textContent = 'A#' + lastPoiNarrationDebug.audiopoint + ' · ' +
+                lastPoiNarrationDebug.name + ' · ' + lastPoiNarrationDebug.distance + ' m';
+            el.className = 'ok';
+        } else {
+            var played = Object.keys(playedPoiIds).length;
+            el.textContent = played ? (played + ' pont lejátszva') : 'várakozás…';
+            el.className = '';
+        }
+    }
+
+    function checkGpsPoiNarration(lat, lng) {
+        if (!isGpsNarrationRoute()) return;
+        if (!poiCatalog.length) return;
+        if (!isValidGps({ lat: lat, lng: lng, accuracy: lastGpsAccuracy })) return;
+
+        for (var i = 0; i < poiCatalog.length; i++) {
+            var poi = poiCatalog[i];
+            if (!poi || poi.lat == null || poi.lng == null) continue;
+            if (!poi.audiopoint && !poi.audio) continue;
+
+            var key = poiNarrationKey(poi);
+            if (!key || playedPoiIds[key]) continue;
+
+            // Teszt üzemmód: fix 50 m – a GeoJSON Radius mező jelenleg nem számít.
+            var radius = TEST_RADIUS_METERS;
+            var dist = distanceMeters(lat, lng, poi.lat, poi.lng);
+            if (dist > radius) continue;
+
+            playedPoiIds[key] = true;
+            poi.played = true;
+
+            var audioFile = poi.audio || (poi.audiopoint ? String(poi.audiopoint) + '.mp3' : null);
+            logPoiNarrationActivation(poi, dist);
+            playPoiAudio(audioFile);
+            toast('🔊 ' + (poi.name || ('Audiopont ' + poi.audiopoint)));
+            break;
+        }
+    }
+
+    function applyScheduleRouteSelection(opts) {
+        opts = opts || {};
+        resetPoiNarrationState();
+        if (isEsetiSchedule()) {
+            updateMetaDisplay();
+            return Promise.resolve();
+        }
+        var route = getActiveRouteMeta();
+        if (!route) {
+            updateMetaDisplay();
+            return Promise.resolve();
+        }
+        activeCityId = route.cityId;
+        try { localStorage.setItem(STORAGE_CITY, route.cityId); } catch (e) {}
+        document.querySelectorAll('.city-btn').forEach(function (b) {
+            b.classList.toggle('is-active', b.getAttribute('data-city') === route.cityId);
+        });
+        updateMetaDisplay();
+        var api = engineApi();
+        var loadP = Promise.resolve();
+        if (api && api.loadCityByFile) {
+            if (!opts.silent) toast('Betöltés: ' + route.label);
+            loadP = api.loadCityByFile(route.routeFile, route.cityLabel).then(function () {
+                if (!opts.silent) toast(route.label + ' betöltve');
+            }).catch(function () {
+                if (!opts.silent) toast('Útvonal betöltése sikertelen');
+            });
+        }
+        return loadP.then(function () {
+            return loadPoiCatalog(route.cityId);
+        });
     }
 
     function getScheduleSlug() {
@@ -1798,7 +1968,8 @@
 
     function getScheduleMeta() {
         if (isEsetiSchedule()) return { minMinutes: DEFAULT_MIN_TRIP_MINUTES, endPoiId: null };
-        return SCHEDULE_META[getScheduleSlug()] || { minMinutes: DEFAULT_MIN_TRIP_MINUTES, endPoiId: null };
+        var slug = normalizeScheduleSlug(getScheduleSlug());
+        return SCHEDULE_META[slug] || SCHEDULE_META[getScheduleSlug()] || { minMinutes: DEFAULT_MIN_TRIP_MINUTES, endPoiId: null };
     }
 
     function saveScheduleSelection() {
@@ -1950,14 +2121,20 @@
     }
 
     function normalizePoi(raw) {
-        if (!raw || !raw.id) return null;
+        if (!raw) return null;
+        var id = raw.id != null && String(raw.id).trim() !== '' ? String(raw.id) : '';
+        if (!id && raw.audiopoint != null && String(raw.audiopoint).trim() !== '') {
+            id = 'ap_' + String(raw.audiopoint).trim();
+        }
+        if (!id) return null;
         return {
-            id: String(raw.id),
-            name: String(raw.name || raw.id),
+            id: id,
+            name: String(raw.name || raw.id || id),
             lat: raw.lat != null ? Number(raw.lat) : null,
             lng: raw.lng != null ? Number(raw.lng) : null,
-            radius: raw.radius != null ? parseInt(raw.radius, 10) : 50,
+            radius: raw.radius != null ? Number(raw.radius) : 50,
             audio: normalizePoiAudioFile(raw.audio),
+            audiopoint: raw.audiopoint != null ? String(raw.audiopoint).trim() : null,
             image: raw.image || null,
             text: raw.text || null,
             guide: raw.guide != null ? raw.guide : null
@@ -1985,21 +2162,38 @@
         return POI_JSON_DIR + normalizeCityPoiKey(city) + '.json';
     }
 
+    function poiCoordsFromGeometry(geom) {
+        if (!geom) return null;
+        if (geom.type === 'Point' && Array.isArray(geom.coordinates) && geom.coordinates.length >= 2) {
+            return { lng: geom.coordinates[0], lat: geom.coordinates[1] };
+        }
+        if (geom.type === 'MultiPoint' && Array.isArray(geom.coordinates) && geom.coordinates.length) {
+            var first = geom.coordinates[0];
+            if (Array.isArray(first) && first.length >= 2) {
+                return { lng: first[0], lat: first[1] };
+            }
+        }
+        return null;
+    }
+
     function parsePoiGeoJsonFeature(feature, index) {
         if (!feature || feature.type !== 'Feature' || !feature.geometry) return null;
-        var geom = feature.geometry;
-        if (geom.type !== 'Point' || !Array.isArray(geom.coordinates) || geom.coordinates.length < 2) {
-            return null;
-        }
+        var coords = poiCoordsFromGeometry(feature.geometry);
+        if (!coords) return null;
         var props = feature.properties || {};
-        var id = props.id || feature.id || ('poi_' + index);
+        var audiopoint = props.Audiopoint != null ? String(props.Audiopoint).trim() : '';
+        var id = props.id != null && String(props.id).trim() !== '' ? props.id : (feature.id || (audiopoint ? 'ap_' + audiopoint : ('poi_' + index)));
+        var audio = props.audio || props.Audio || (audiopoint ? audiopoint + '.mp3' : null);
+        var name = props.Nev || props.name || props.Name || (audiopoint ? 'Audiopont ' + audiopoint : id);
+        var radius = props.Radius != null ? props.Radius : props.radius;
         return normalizePoi({
             id: id,
-            name: props.name,
-            lat: geom.coordinates[1],
-            lng: geom.coordinates[0],
-            radius: props.radius,
-            audio: props.audio,
+            name: name,
+            lat: coords.lat,
+            lng: coords.lng,
+            radius: radius,
+            audio: audio,
+            audiopoint: audiopoint || null,
             image: props.image || null,
             text: props.text || null,
             guide: props.guide != null ? props.guide : null
@@ -2018,18 +2212,26 @@
         return [];
     }
 
-    function loadPoiGeoJsonCatalog(city) {
-        var cityKey = normalizeCityPoiKey(city);
-        var file = poiGeoJsonFilenameForCity(cityKey);
-        var url = new URL(file, window.location.href).href;
+    function loadPoiGeoJsonFromPath(relativePath) {
+        var url = new URL(relativePath, window.location.href).href;
         return fetch(url, { cache: 'no-store' })
             .then(function (r) {
-                if (!r.ok) throw new Error('poi geojson');
+                if (!r.ok) throw new Error('poi geojson path');
                 return r.json();
             })
             .then(function (data) {
                 return parsePoiGeoJsonCollection(data);
             });
+    }
+
+    function loadPoiGeoJsonCatalog(city) {
+        var cityKey = normalizeCityPoiKey(city);
+        var route = getActiveRouteMeta();
+        if (route && route.poiFile && route.cityId === cityKey) {
+            return loadPoiGeoJsonFromPath(route.poiFile);
+        }
+        var file = poiGeoJsonFilenameForCity(cityKey);
+        return loadPoiGeoJsonFromPath(file);
     }
 
     function loadPoiJsonCatalog(city) {
@@ -2050,6 +2252,7 @@
             return p && p.lat != null && p.lng != null;
         });
         poiCatalogCityKey = cityKey || '';
+        resetPoiNarrationState();
         try {
             localStorage.setItem(STORAGE_POI_CATALOG, JSON.stringify(poiCatalog));
             localStorage.setItem(STORAGE_POI_CATALOG + '_city', poiCatalogCityKey);
@@ -3657,6 +3860,8 @@
             activeTripEl.className = activeTrip ? 'ok' : '';
         }
 
+        updatePoiNarrationDiag();
+
         sendEl.textContent = formatDiagTime(getLastSendIso());
         sendEl.className = getLastSendIso() ? 'ok' : '';
 
@@ -4229,6 +4434,7 @@
             lat: gps.lat != null ? roundCoord(gps.lat) : null,
             lng: gps.lng != null ? roundCoord(gps.lng) : null,
             accuracy: gps.accuracy != null ? Math.round(gps.accuracy) : null,
+            speed: gps.speed != null ? Math.round(gps.speed) : null,
             timestamp: nowIso()
         };
     }
@@ -4287,6 +4493,7 @@
             driver_name: getDriverName(),
             vehicle_id: getVehicleId(),
             vehicle_name: getVehicleName(),
+            shift: getShift() || '',
             start_time: start,
             end_time: end,
             duration_min: durationMin,
@@ -4733,6 +4940,7 @@
         hideTripEndPrompt();
         updateMetaDisplay();
         releaseWakeLock();
+        requestShiftDailyReport(shiftId);
         toast('Műszak lezárva');
     }
 
@@ -4744,15 +4952,17 @@
     function nowIso() { return new Date().toISOString(); }
 
     function currentGpsPayload() {
-        if (!lastGpsLl) return { lat: null, lng: null, accuracy: null };
+        if (!lastGpsLl) return { lat: null, lng: null, accuracy: null, speed: null };
         return {
             lat: Number(lastGpsLl.lat.toFixed(7)),
             lng: Number(lastGpsLl.lng.toFixed(7)),
-            accuracy: lastGpsAccuracy
+            accuracy: lastGpsAccuracy,
+            speed: lastGpsSpeed != null ? Math.round(lastGpsSpeed) : null
         };
     }
 
     var lastGpsAccuracy = null;
+    var lastGpsSpeed = null;
 
     function trimEvents() {
         while (events.length > MAX_EVENTS) {
@@ -4833,6 +5043,7 @@
 
         pushEvent(recEnd, { silent: !!opts.silent });
         pushEvent(recSummary, { silent: true });
+        uploadTripArchive(szam, startIso, endIso);
         resetPassengersCurrent();
         setCurrentJarat('', false);
         hideTripEndPrompt();
@@ -4942,11 +5153,21 @@
     function renderTrainLog() {
         var box = document.getElementById('train-log');
         var visible = events.filter(function (r) { return !isTrackType(r.type); });
-        if (!visible.length) {
+        var narrHtml = '';
+        if (isGpsNarrationRoute() && poiNarrationLog.length) {
+            narrHtml = poiNarrationLog.slice(0, 5).map(function (n) {
+                var t = new Date(n.at).toLocaleTimeString('hu-HU', {
+                    hour: '2-digit', minute: '2-digit', second: '2-digit'
+                });
+                return '<div class="log-row log-row-narr"><span><b>' + t + '</b> · POI aktiválva · A#' +
+                    n.audiopoint + ' · ' + n.name + ' · ' + n.distance + ' m</span></div>';
+            }).join('');
+        }
+        if (!visible.length && !narrHtml) {
             box.innerHTML = '<div class="log-row"><span>Még nincs esemény.</span></div>';
             return;
         }
-        box.innerHTML = visible.slice(0, 10).map(function (r) {
+        var eventsHtml = visible.slice(0, 10).map(function (r) {
             var t = new Date(eventTime(r) || Date.now()).toLocaleTimeString('hu-HU', {
                 hour: '2-digit', minute: '2-digit', second: '2-digit'
             });
@@ -4970,6 +5191,7 @@
                 : '—';
             return '<div class="log-row"><span><b>' + t + '</b> · ' + eventTypeLabel(r.type) + val + jar + '</span><span>' + pos + '</span></div>';
         }).join('');
+        box.innerHTML = narrHtml + eventsHtml;
     }
 
     function eventsChronological() {
@@ -5132,6 +5354,223 @@
         }, null, 2);
     }
 
+    function trackPointsForTripArchive(tripId) {
+        return eventsChronological()
+            .filter(function (ev) {
+                return eventTrip(ev) === tripId && isTrackType(ev.type)
+                    && ev.lat != null && ev.lng != null;
+            })
+            .map(function (ev) {
+                return {
+                    lng: Number(ev.lng),
+                    lat: Number(ev.lat),
+                    time: eventTime(ev),
+                    speed: ev.speed != null ? Number(ev.speed) : null,
+                    accuracy: ev.accuracy
+                };
+            })
+            .sort(function (a, b) {
+                return new Date(a.time || 0).getTime() - new Date(b.time || 0).getTime();
+            });
+    }
+
+    function tripArchiveEventFeatures(tripId) {
+        var features = [];
+        eventsChronological().forEach(function (ev) {
+            if (eventTrip(ev) !== tripId) return;
+            var type = String(ev.type || '').trim();
+            if (type === 'trip_start' || type === 'jarat_inditas' || type === 'indulas') {
+                if (ev.lat == null || ev.lng == null) return;
+                features.push({
+                    type: 'Feature',
+                    id: 'event-trip-start',
+                    geometry: { type: 'Point', coordinates: [Number(ev.lng), Number(ev.lat)] },
+                    properties: {
+                        event: 'trip_start',
+                        role: 'event_trip_start',
+                        time: eventTime(ev),
+                        trip: tripId
+                    }
+                });
+            }
+            if (type === 'trip_end' || type === 'jarat_zaras') {
+                features.push({
+                    type: 'Feature',
+                    id: 'event-trip-end',
+                    geometry: ev.lat != null && ev.lng != null
+                        ? { type: 'Point', coordinates: [Number(ev.lng), Number(ev.lat)] }
+                        : null,
+                    properties: {
+                        event: 'trip_end',
+                        role: 'event_trip_end',
+                        time: eventTime(ev),
+                        trip: tripId,
+                        passengers_final: ev.passengers_final
+                    }
+                });
+            }
+            if (type === 'reservation' || type === 'foglalas' || type === 'booking') {
+                if (ev.lat == null || ev.lng == null) return;
+                features.push({
+                    type: 'Feature',
+                    id: 'event-reservation-' + (ev.id || features.length),
+                    geometry: { type: 'Point', coordinates: [Number(ev.lng), Number(ev.lat)] },
+                    properties: {
+                        event: 'reservation',
+                        role: 'event_reservation',
+                        stop: ev.stop_name || ev.label || ev.stop || '—',
+                        time: eventTime(ev),
+                        trip: tripId
+                    }
+                });
+            }
+            if (type === 'boarding' || type === 'felszallas') {
+                if (ev.lat == null || ev.lng == null) return;
+                features.push({
+                    type: 'Feature',
+                    id: 'event-boarding-' + (ev.id || features.length),
+                    geometry: { type: 'Point', coordinates: [Number(ev.lng), Number(ev.lat)] },
+                    properties: {
+                        event: 'boarding',
+                        role: 'event_boarding',
+                        stop: ev.stop_name || ev.label || ev.stop || '—',
+                        time: eventTime(ev),
+                        trip: tripId
+                    }
+                });
+            }
+        });
+        return features.filter(function (f) { return f.geometry; });
+    }
+
+    function buildTripArchiveGeoJson(tripId, startIso, endIso) {
+        var pts = trackPointsForTripArchive(tripId);
+        var tripIndex = buildTripMetaIndex();
+        var meta = getTripMeta(tripId, tripIndex) || { trip: tripId };
+        var features = [];
+
+        pts.forEach(function (p, idx) {
+            features.push({
+                type: 'Feature',
+                id: 'gps-point-' + idx,
+                geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
+                properties: {
+                    role: 'gps_point',
+                    time: p.time,
+                    timestamp: p.time,
+                    lat: p.lat,
+                    lng: p.lng,
+                    speed: p.speed,
+                    trip: tripId
+                }
+            });
+        });
+
+        if (pts.length >= 2) {
+            features.unshift({
+                type: 'Feature',
+                id: 'gps-track-line',
+                geometry: {
+                    type: 'LineString',
+                    coordinates: pts.map(function (p) { return [p.lng, p.lat]; })
+                },
+                properties: {
+                    role: 'gps_track',
+                    name: 'GPS nyomvonal',
+                    trip: tripId,
+                    point_count: pts.length
+                }
+            });
+        }
+
+        tripArchiveEventFeatures(tripId).forEach(function (f) { features.push(f); });
+
+        return {
+            type: 'FeatureCollection',
+            name: 'Trip Archive – ' + tripId,
+            properties: {
+                trip: tripId,
+                trip_id: tripId,
+                vehicle_id: meta.vehicle_id || getVehicleId() || '',
+                vehicle_name: meta.vehicle_name || getVehicleName() || '',
+                driver_id: meta.driver_id || getDriverId() || '',
+                driver_name: meta.driver_name || getDriverName() || '',
+                city: meta.city || getCityLabel(),
+                shift: meta.shift || getShift() || '',
+                schedule: meta.schedule || getScheduleLabel(),
+                start_time: startIso || meta.start_time || null,
+                end_time: endIso || null,
+                point_count: pts.length
+            },
+            features: features
+        };
+    }
+
+    function tripArchiveFilename(tripId, meta, startIso) {
+        var vid = String((meta && meta.vehicle_id) || getVehicleId() || 'TRIP').replace(/[^\w-]+/g, '');
+        var d = startIso ? new Date(startIso) : new Date();
+        if (isNaN(d.getTime())) d = new Date();
+        var y = d.getFullYear();
+        var mo = String(d.getMonth() + 1).padStart(2, '0');
+        var da = String(d.getDate()).padStart(2, '0');
+        var hh = String(d.getHours()).padStart(2, '0');
+        var mm = String(d.getMinutes()).padStart(2, '0');
+        return vid + '_' + y + mo + da + '_' + hh + mm + '_trip.geojson';
+    }
+
+    function uploadTripArchive(tripId, startIso, endIso) {
+        if (!isBackendConfigured()) return Promise.resolve();
+        var geo = buildTripArchiveGeoJson(tripId, startIso, endIso);
+        if (!geo.features.length) return Promise.resolve();
+        var meta = getTripMeta(tripId) || {};
+        var filename = tripArchiveFilename(tripId, meta, startIso);
+        return fetch(API_BASE + '/api/trip-archives', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+            body: JSON.stringify({
+                filename: filename,
+                trip_id: tripId,
+                vehicle_id: meta.vehicle_id || getVehicleId(),
+                start_time: startIso,
+                end_time: endIso,
+                geojson: geo
+            })
+        })
+            .then(function (r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            })
+            .then(function () {
+                console.info('[kvn] Trip archívum mentve:', filename);
+            })
+            .catch(function (err) {
+                console.warn('[kvn] Trip archívum feltöltés sikertelen:', err);
+            });
+    }
+
+    function requestShiftDailyReport(shiftId) {
+        if (!isBackendConfigured() || !shiftId) return Promise.resolve();
+        var today = new Date();
+        var dateStr = today.getFullYear() + '-' +
+            String(today.getMonth() + 1).padStart(2, '0') + '-' +
+            String(today.getDate()).padStart(2, '0');
+        return fetch(API_BASE + '/api/shift-reports', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+            body: JSON.stringify({ shift_id: shiftId, vehicle_id: getVehicleId(), date: dateStr })
+        })
+            .then(function (r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            })
+            .then(function (data) {
+                console.info('[kvn] Napi CSV riport:', data.filename || 'ok');
+            })
+            .catch(function (err) {
+                console.warn('[kvn] Napi CSV riport sikertelen:', err);
+            });
+    }
+
     function downloadText(name, text, type) {
         var blob = new Blob([text], { type: type || 'application/json;charset=utf-8' });
         var a = document.createElement('a');
@@ -5150,17 +5589,30 @@
             cityGpsManualLock = true;
             try { localStorage.setItem(STORAGE_CITY_MANUAL, '1'); } catch (eM) {}
         }
-        refreshScheduleSelect();
+        if (!isEsetiSchedule()) {
+            refreshScheduleSelect(defaultScheduleForCity(cityId));
+        } else {
+            refreshScheduleSelect();
+        }
         updateMetaDisplay();
         var c = CITIES.find(function (x) { return x.id === cityId; });
         document.querySelectorAll('.city-btn').forEach(function (b) {
             b.classList.toggle('is-active', b.getAttribute('data-city') === cityId);
         });
+        var route = getActiveRouteMeta();
         var api = engineApi();
-        if (api && api.loadCity) {
-            if (!opts.silent) toast('Betöltés: ' + (c ? c.label : cityId));
-            api.loadCity(cityId).then(function () {
-                if (!opts.silent) toast((c ? c.label : cityId) + ' betöltve');
+        if (api) {
+            if (!opts.silent) toast('Betöltés: ' + (route ? route.label : (c ? c.label : cityId)));
+            var loadP;
+            if (route && api.loadCityByFile) {
+                loadP = api.loadCityByFile(route.routeFile, route.cityLabel);
+            } else if (api.loadCity) {
+                loadP = api.loadCity(cityId);
+            } else {
+                loadP = Promise.resolve();
+            }
+            loadP.then(function () {
+                if (!opts.silent) toast((route ? route.label : (c ? c.label : cityId)) + ' betöltve');
             }).catch(function () {
                 if (!opts.silent) toast('Útvonal betöltése sikertelen');
             });
@@ -5249,8 +5701,12 @@
         var lat = pos.coords.latitude;
         var lng = pos.coords.longitude;
         var acc = pos.coords.accuracy || 12;
+        var speedKmh = pos.coords.speed != null && !isNaN(pos.coords.speed)
+            ? Math.round(pos.coords.speed * 3.6)
+            : null;
         lastGpsAt = Date.now();
         lastGpsAccuracy = acc;
+        lastGpsSpeed = speedKmh;
         lastGpsLl = { lat: lat, lng: lng };
         console.log('[GPS] position received', lat.toFixed(5), lng.toFixed(5), Math.round(acc) + 'm');
         updateChip(lat, lng, acc);
@@ -5266,12 +5722,13 @@
             setGpsUiState('searching');
         }
         checkTripEndHint(lat, lng);
+        checkGpsPoiNarration(lat, lng);
         if (opts.captureFirstTrack) {
             recordAutoTrack();
         } else if (valid) {
             maybeRecordGpsTrack();
         }
-        if (!cityGpsManualLock) {
+        if (!cityGpsManualLock && !isGpsNarrationRoute()) {
             var detectedCity = detectCityFromGps(lat, lng);
             if (detectedCity && detectedCity !== activeCityId) {
                 setActiveCity(detectedCity, { silent: true });
@@ -5487,7 +5944,10 @@
     gpsBtn.addEventListener('pointercancel', onGpsPointerEnd, { passive: true });
     gpsBtn.addEventListener('click', onGpsClick, { passive: true });
 
-    document.getElementById('field-schedule').addEventListener('change', saveScheduleSelection, { passive: true });
+    document.getElementById('field-schedule').addEventListener('change', function () {
+        saveScheduleSelection();
+        applyScheduleRouteSelection();
+    }, { passive: true });
 
     document.getElementById('btn-jarat-start').addEventListener('click', startJarat, { passive: true });
     document.getElementById('btn-jarat-close').addEventListener('click', function () { closeJarat(); }, { passive: true });
@@ -5604,8 +6064,7 @@
         syncPoisToMap();
         syncDriverTasksOnMap(lastDriverTasks);
         setTimeout(function () {
-            var api = engineApi();
-            if (api && activeCityId) api.loadCity(activeCityId).catch(function () {});
+            applyScheduleRouteSelection({ silent: true });
         }, 700);
         if (gpsWatchId == null) {
             setTimeout(function () {
@@ -5677,7 +6136,6 @@
 
     loadCatalogs();
     loadMasterDataFromApi();
-    loadPoiCatalog(activeCityId);
     loadEvents();
     loadDestinations();
 
@@ -5690,6 +6148,7 @@
 
     buildCityGrid();
     refreshScheduleSelect();
+    applyScheduleRouteSelection({ silent: true });
     renderTrainLog();
     closePassengerPad();
 
