@@ -1153,6 +1153,11 @@
                     <button type="button" class="btn secondary sm" id="filter30">30 nap</button>
                     <button type="button" class="btn ghost sm" id="filterReset">Törlés</button>
                   </div>
+                  <div class="actions" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line)">
+                    <button type="button" class="btn secondary sm" id="btnRentBackupExport">💾 Export foglalások</button>
+                    <button type="button" class="btn secondary sm" id="btnRentBackupImport">📂 Import foglalások</button>
+                    <input type="file" id="rentBackupFileInput" accept=".json,application/json" hidden />
+                  </div>
                 </div>
                 <div class="list" id="bookingList"></div>
               </div>
@@ -4117,6 +4122,86 @@
     setTimeout(function () { URL.revokeObjectURL(a.href); }, 500);
   }
 
+  function rentBackupStamp() {
+    var d = new Date();
+    var y = d.getFullYear();
+    var mo = String(d.getMonth() + 1).padStart(2, '0');
+    var da = String(d.getDate()).padStart(2, '0');
+    var h = String(d.getHours()).padStart(2, '0');
+    var mi = String(d.getMinutes()).padStart(2, '0');
+    return y + mo + da + '_' + h + mi;
+  }
+
+  function exportRentBackup() {
+    fetch('/api/rent/inquiries')
+      .then(function (resp) {
+        return resp.json().then(function (data) {
+          if (!resp.ok || !data || !data.ok || !Array.isArray(data.inquiries)) {
+            throw new Error((data && data.error) || ('HTTP ' + resp.status));
+          }
+          return data.inquiries;
+        });
+      })
+      .then(function (inquiries) {
+        var payload = {
+          exportedAt: new Date().toISOString(),
+          version: '1.0',
+          inquiries: inquiries
+        };
+        var blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'rent_backup_' + rentBackupStamp() + '.json';
+        a.click();
+        setTimeout(function () { URL.revokeObjectURL(a.href); }, 500);
+      })
+      .catch(function (err) {
+        console.error('Rent backup export failed:', err);
+        alert('A foglalások exportja nem sikerült.');
+      });
+  }
+
+  function importRentBackup(file) {
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      var parsed;
+      try {
+        parsed = JSON.parse(String(reader.result || ''));
+      } catch (e) {
+        alert('Érvénytelen JSON fájl.');
+        return;
+      }
+      var inquiries = parsed && Array.isArray(parsed.inquiries) ? parsed.inquiries : null;
+      if (!inquiries || !inquiries.length) {
+        alert('A fájl nem tartalmaz inquiries tömböt.');
+        return;
+      }
+      fetch('/api/rent/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inquiries: inquiries })
+      }).then(function (resp) {
+        return resp.json().then(function (data) {
+          if (!resp.ok || !data || !data.ok) {
+            throw new Error((data && data.error) || ('HTTP ' + resp.status));
+          }
+          return data;
+        });
+      }).then(function (data) {
+        alert('Import kész.\nÚj: ' + (data.imported || 0) + '\nKihagyva (már létezik): ' + (data.skipped || 0));
+        return reloadRentData();
+      }).catch(function (err) {
+        console.error('Rent backup import failed:', err);
+        alert('A foglalások importja nem sikerült.');
+      });
+    };
+    reader.onerror = function () {
+      alert('A fájl beolvasása nem sikerült.');
+    };
+    reader.readAsText(file, 'utf-8');
+  }
+
   function seedDemoIfEmpty() {
     /* kikapcsolva – backend az egyetlen adatforrás, demó rekord nem jöhet létre */
   }
@@ -4247,6 +4332,17 @@
     $('filterPlace').value = '';
     $('filterSearch').value = '';
     render();
+  });
+  $('btnRentBackupExport').addEventListener('click', exportRentBackup);
+  $('btnRentBackupImport').addEventListener('click', function () {
+    var input = $('rentBackupFileInput');
+    if (input) input.click();
+  });
+  $('rentBackupFileInput').addEventListener('change', function () {
+    var input = $('rentBackupFileInput');
+    if (!input || !input.files || !input.files[0]) return;
+    importRentBackup(input.files[0]);
+    input.value = '';
   });
 
   $('btnMapFullscreen').addEventListener('click', function () {
