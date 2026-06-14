@@ -22,6 +22,13 @@
   to = "/admin/"
   status = 301
 
+# API proxy → Render backend (relatív /api/* hívások Netlify-on)
+[[redirects]]
+  from = "/api/*"
+  to = "https://operativ-navigator.onrender.com/api/:splat"
+  status = 200
+  force = true
+
 [[headers]]
   for = "/service-worker.js"
   [headers.values]
