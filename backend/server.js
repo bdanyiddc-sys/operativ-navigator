@@ -12,6 +12,29 @@ const DATABASE_PATH =
 const routesDir = path.resolve(__dirname, 'routes');
 const vehiclesPath = path.join(__dirname, 'data', 'vehicles.json');
 const driversPath = path.join(__dirname, 'data', 'drivers.json');
+const configPath = path.join(__dirname, 'data', 'config.json');
+const schedulesPath = path.join(__dirname, 'data', 'schedules.json');
+const routeUploadsDir = path.join(__dirname, 'data', 'route_uploads');
+const STALE_SHIFT_MS = 30 * 60 * 1000;
+const ROUTE_DISPLAY_TO_SCHEDULE = {
+  'Tata-1': 'Tata1',
+  'Tata-2': 'Tata2',
+  'Tata-3': 'Tata3',
+  Teszt01: 'Teszt01',
+  Eger: 'Eger',
+  Győr: 'Gyor',
+  Gyor: 'Gyor',
+  Pápa: 'Papa',
+  Papa: 'Papa',
+  Székesfehérvár: 'Szfv',
+  Szfv: 'Szfv',
+  Vác: 'Vac',
+  Vac: 'Vac',
+  Egyedi: '__eseti__',
+};
+const KNOWN_ROUTE_DISPLAYS = [
+  'Tata-1', 'Tata-2', 'Tata-3', 'Teszt01', 'Eger', 'Győr', 'Pápa', 'Székesfehérvár', 'Vác',
+];
 const ROUTES_SAMPLE_GEOJSON = 'Tata_utvonal2.geojson';
 const MASTER_DEFAULT_CAPACITY = 56;
 const DEFAULT_VEHICLES = [
@@ -100,6 +123,198 @@ function writeVehicles(list) {
   }));
   fs.writeFileSync(vehiclesPath, JSON.stringify(fileRows, null, 2), 'utf8');
   return normalized;
+}
+
+function readConfigRaw() {
+  try {
+    if (!fs.existsSync(configPath)) return null;
+    return JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  } catch (err) {
+    console.error('[config] read failed:', err);
+    return null;
+  }
+}
+
+function mergeConfigRoutes(configRoutes) {
+  const seen = new Set();
+  const out = [];
+  const add = (r) => {
+    const s = String(r || '').trim();
+    if (!s || seen.has(s)) return;
+    seen.add(s);
+    out.push(s);
+  };
+  (Array.isArray(configRoutes) ? configRoutes : []).forEach(add);
+  KNOWN_ROUTE_DISPLAYS.forEach(add);
+  add('Egyedi');
+  return out;
+}
+
+function buildConfigResponse() {
+  const raw = readConfigRaw();
+  const vehicles = (raw && Array.isArray(raw.vehicles) ? raw.vehicles : []).map((v) => {
+    const id = String(v.id || v.vehicle_id || '').trim();
+    const city = v.city != null ? String(v.city).trim() : '';
+    return { id, city, vehicle_id: id, local: city };
+  }).filter((v) => v.id);
+  const drivers = (raw && Array.isArray(raw.drivers) ? raw.drivers : []).map((d) => {
+    const id = String(d.id || d.driver_id || '').trim();
+    const name = String(d.name || d.driver_name || '').trim();
+    const pin = d.pin != null ? String(d.pin).trim() : '';
+    return { id, name, pin, driver_id: id, driver_name: name };
+  }).filter((d) => d.id);
+  const routes = mergeConfigRoutes(raw && raw.routes);
+  return {
+    vehicles,
+    drivers,
+    routes,
+    route_map: ROUTE_DISPLAY_TO_SCHEDULE,
+  };
+}
+
+function findConfigDriver(driverId) {
+  const cfg = buildConfigResponse();
+  return cfg.drivers.find((d) => d.id === driverId || d.driver_id === driverId) || null;
+}
+
+function validateConfigPin(driverId, pin) {
+  const d = findConfigDriver(driverId);
+  if (!d) return false;
+  return String(d.pin || '') === String(pin || '').trim();
+}
+
+function findOpenShiftByVehicle(vehicleId) {
+  return db.prepare(`
+    SELECT * FROM active_shifts
+    WHERE vehicle_id = ? AND closed_at IS NULL
+    ORDER BY started_at DESC
+    LIMIT 1
+  `).get(vehicleId);
+}
+
+function touchActiveShiftActivity(shiftId, kind, ts) {
+  if (!shiftId) return;
+  const when = ts || new Date().toISOString();
+  if (kind === 'gps') {
+    db.prepare(`
+      UPDATE active_shifts SET last_gps_at = @when
+      WHERE shift_id = @shift_id AND closed_at IS NULL
+    `).run({ shift_id: shiftId, when });
+  } else {
+    db.prepare(`
+      UPDATE active_shifts SET last_heartbeat_at = @when
+      WHERE shift_id = @shift_id AND closed_at IS NULL
+    `).run({ shift_id: shiftId, when });
+  }
+}
+
+function computeShiftDisplayStatus(row) {
+  const base = String(row.status || 'ACTIVE').trim();
+  if (row.closed_at) return 'CLOSED';
+  const last = [row.last_gps_at, row.last_heartbeat_at, row.started_at]
+    .filter(Boolean)
+    .sort()
+    .pop();
+  if (!last) return base;
+  const age = Date.now() - new Date(last).getTime();
+  if (age >= STALE_SHIFT_MS && (base === 'ACTIVE' || base === 'TECHNICAL_ISSUE')) {
+    return 'STALE';
+  }
+  return base;
+}
+
+function rowToActiveShiftClient(row) {
+  if (!row) return null;
+  const displayStatus = computeShiftDisplayStatus(row);
+  return {
+    shift_id: row.shift_id,
+    vehicle_id: row.vehicle_id,
+    driver_id: row.driver_id,
+    driver_name: row.driver_name,
+    route: row.route,
+    city: row.city,
+    status: row.status,
+    display_status: displayStatus,
+    started_at: row.started_at,
+    last_gps_at: row.last_gps_at,
+    last_track_at: row.last_gps_at,
+    last_heartbeat_at: row.last_heartbeat_at,
+    closed_at: row.closed_at,
+  };
+}
+
+function getActiveShiftsFromDb() {
+  const rows = db.prepare(`
+    SELECT * FROM active_shifts
+    WHERE closed_at IS NULL
+    ORDER BY started_at DESC
+  `).all();
+  return rows.map(rowToActiveShiftClient).filter(Boolean);
+}
+
+function closeActiveShiftRow(shiftId, status) {
+  const when = new Date().toISOString();
+  db.prepare(`
+    UPDATE active_shifts
+    SET status = @status, closed_at = @when
+    WHERE shift_id = @shift_id AND closed_at IS NULL
+  `).run({ shift_id: shiftId, status: status || 'CLOSED', when });
+}
+
+function releaseVehicleLock(vehicleId) {
+  const when = new Date().toISOString();
+  db.prepare(`
+    UPDATE active_shifts
+    SET status = 'CLOSED', closed_at = @when
+    WHERE vehicle_id = @vehicle_id AND closed_at IS NULL
+  `).run({ vehicle_id: vehicleId, when });
+}
+
+function countGeoJsonPoints(geo) {
+  if (!geo || !Array.isArray(geo.features)) return 0;
+  let n = 0;
+  geo.features.forEach((f) => {
+    const g = f && f.geometry;
+    if (!g) return;
+    if (g.type === 'Point') n += 1;
+    else if (g.type === 'LineString' && Array.isArray(g.coordinates)) n += g.coordinates.length;
+    else if (g.type === 'MultiLineString' && Array.isArray(g.coordinates)) {
+      g.coordinates.forEach((line) => { if (Array.isArray(line)) n += line.length; });
+    }
+  });
+  return n;
+}
+
+function saveRouteUpload(body) {
+  const geo = body && body.geojson;
+  if (!geo || geo.type !== 'FeatureCollection' || !Array.isArray(geo.features)) {
+    throw new Error('geojson FeatureCollection required');
+  }
+  const id = `ru_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const ts = body.timestamp || new Date().toISOString();
+  const gpsPointCount = body.gps_point_count != null
+    ? Math.max(0, parseInt(body.gps_point_count, 10) || 0)
+    : countGeoJsonPoints(geo);
+  db.prepare(`
+    INSERT INTO route_uploads (
+      id, timestamp, vehicle_id, driver_id, driver_name, route, gps_point_count, geojson_json
+    ) VALUES (
+      @id, @timestamp, @vehicle_id, @driver_id, @driver_name, @route, @gps_point_count, @geojson_json
+    )
+  `).run({
+    id,
+    timestamp: ts,
+    vehicle_id: body.vehicle_id ? String(body.vehicle_id).trim() : null,
+    driver_id: body.driver_id ? String(body.driver_id).trim() : null,
+    driver_name: body.driver_name ? String(body.driver_name).trim() : null,
+    route: body.route ? String(body.route).trim() : null,
+    gps_point_count: gpsPointCount,
+    geojson_json: JSON.stringify(geo),
+  });
+  ensureDataDir(routeUploadsDir);
+  const fname = `${id}.geojson`;
+  fs.writeFileSync(path.join(routeUploadsDir, fname), JSON.stringify(geo, null, 2), 'utf8');
+  return { id, timestamp: ts, gps_point_count: gpsPointCount };
 }
 
 function logRoutesStartup() {
@@ -256,6 +471,71 @@ function initDb(dbPath) {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_driver_notes_created ON driver_notes(created_at DESC);
+    CREATE TABLE IF NOT EXISTS driver_kicks (
+      shift_id TEXT PRIMARY KEY,
+      kicked_at TEXT NOT NULL DEFAULT (datetime('now')),
+      kicked_by TEXT
+    );
+    CREATE TABLE IF NOT EXISTS active_shifts (
+      shift_id TEXT PRIMARY KEY,
+      vehicle_id TEXT NOT NULL,
+      driver_id TEXT NOT NULL,
+      driver_name TEXT,
+      route TEXT,
+      city TEXT,
+      status TEXT NOT NULL DEFAULT 'ACTIVE',
+      started_at TEXT NOT NULL,
+      last_gps_at TEXT,
+      last_heartbeat_at TEXT,
+      closed_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_active_shifts_vehicle ON active_shifts(vehicle_id);
+    CREATE INDEX IF NOT EXISTS idx_active_shifts_open ON active_shifts(closed_at);
+    CREATE TABLE IF NOT EXISTS route_uploads (
+      id TEXT PRIMARY KEY,
+      timestamp TEXT NOT NULL,
+      vehicle_id TEXT,
+      driver_id TEXT,
+      driver_name TEXT,
+      route TEXT,
+      gps_point_count INTEGER NOT NULL DEFAULT 0,
+      geojson_json TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_route_uploads_ts ON route_uploads(timestamp DESC);
+    CREATE TABLE IF NOT EXISTS rent_inquiries (
+      id TEXT PRIMARY KEY,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      status TEXT NOT NULL,
+      event_date TEXT,
+      time_start TEXT,
+      time_end TEXT,
+      customer_name TEXT,
+      company_name TEXT,
+      contact_name TEXT,
+      phone TEXT,
+      email TEXT,
+      city TEXT,
+      street TEXT,
+      house_number TEXT,
+      location_note TEXT,
+      lat REAL,
+      lng REAL,
+      headcount INTEGER,
+      vehicle_id TEXT,
+      driver_id TEXT,
+      business_type TEXT NOT NULL,
+      gis_mode TEXT,
+      source TEXT,
+      payload_json TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_rent_inquiries_event_date ON rent_inquiries(event_date);
+    CREATE INDEX IF NOT EXISTS idx_rent_inquiries_status ON rent_inquiries(status);
+    CREATE INDEX IF NOT EXISTS idx_rent_inquiries_created_at ON rent_inquiries(created_at);
+    CREATE INDEX IF NOT EXISTS idx_rent_inquiries_city ON rent_inquiries(city);
+    CREATE INDEX IF NOT EXISTS idx_rent_inquiries_vehicle_id ON rent_inquiries(vehicle_id);
+    CREATE INDEX IF NOT EXISTS idx_rent_inquiries_driver_id ON rent_inquiries(driver_id);
   `);
   return db;
 }
@@ -876,6 +1156,47 @@ const insertDriverNote = db.prepare(`
   INSERT INTO driver_notes (id, vehicle_id, category, note, driver_id, driver_name)
   VALUES (@id, @vehicle_id, @category, @note, @driver_id, @driver_name)
 `);
+const getRentInquiryById = db.prepare('SELECT * FROM rent_inquiries WHERE id = ?');
+const insertRentInquiry = db.prepare(`
+  INSERT INTO rent_inquiries (
+    id, created_at, updated_at, status, event_date, time_start, time_end,
+    customer_name, company_name, contact_name, phone, email,
+    city, street, house_number, location_note, lat, lng, headcount,
+    vehicle_id, driver_id, business_type, gis_mode, source, payload_json
+  ) VALUES (
+    @id, @created_at, @updated_at, @status, @event_date, @time_start, @time_end,
+    @customer_name, @company_name, @contact_name, @phone, @email,
+    @city, @street, @house_number, @location_note, @lat, @lng, @headcount,
+    @vehicle_id, @driver_id, @business_type, @gis_mode, @source, @payload_json
+  )
+`);
+const updateRentInquiry = db.prepare(`
+  UPDATE rent_inquiries SET
+    updated_at = @updated_at,
+    status = @status,
+    event_date = @event_date,
+    time_start = @time_start,
+    time_end = @time_end,
+    customer_name = @customer_name,
+    company_name = @company_name,
+    contact_name = @contact_name,
+    phone = @phone,
+    email = @email,
+    city = @city,
+    street = @street,
+    house_number = @house_number,
+    location_note = @location_note,
+    lat = @lat,
+    lng = @lng,
+    headcount = @headcount,
+    vehicle_id = @vehicle_id,
+    driver_id = @driver_id,
+    gis_mode = @gis_mode,
+    source = @source,
+    payload_json = @payload_json
+  WHERE id = @id
+`);
+const deleteRentInquiry = db.prepare('DELETE FROM rent_inquiries WHERE id = ?');
 
 function opsId(prefix) {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
@@ -1072,6 +1393,256 @@ function rowToCustom(row) {
   };
 }
 
+function rentPickStr(body, ...keys) {
+  for (const k of keys) {
+    if (body[k] != null && String(body[k]).trim() !== '') return String(body[k]).trim();
+  }
+  return '';
+}
+
+function normalizeRentGisMode(body) {
+  const raw = body.booking_type != null ? body.booking_type : body.gis_mode;
+  const s = String(raw != null ? raw : 'single_location').trim().toLowerCase();
+  return s === 'custom_route' ? 'custom_route' : 'single_location';
+}
+
+function normalizeRentStatus(raw) {
+  if (raw == null || String(raw).trim() === '') return 'ARAJANLATKERES';
+  const s = String(raw).trim();
+  return s === 'ERDEKLODES' ? 'ARAJANLATKERES' : s;
+}
+
+function generateRentInquiryId() {
+  const year = new Date().getFullYear();
+  const prefix = `RENT-${year}-`;
+  return db.transaction(() => {
+    const last = db.prepare(`
+      SELECT id FROM rent_inquiries
+      WHERE id LIKE ?
+      ORDER BY id DESC
+      LIMIT 1
+    `).get(`${prefix}%`);
+    let seq = 1;
+    if (last && last.id) {
+      const m = String(last.id).match(/^RENT-\d{4}-(\d+)$/);
+      if (m) seq = parseInt(m[1], 10) + 1;
+    }
+    const existsStmt = db.prepare('SELECT 1 AS n FROM rent_inquiries WHERE id = ?');
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const id = `${prefix}${String(seq + attempt).padStart(4, '0')}`;
+      if (!existsStmt.get(id)) return id;
+    }
+    return `${prefix}${String(Date.now()).slice(-8)}`;
+  })();
+}
+
+function parseRentInquiryPayload(row) {
+  try {
+    const parsed = JSON.parse(row.payload_json);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch (err) {
+    console.warn(`rent_inquiries payload_json parse failed for id=${row.id}:`, err.message);
+    return {};
+  }
+}
+
+function buildRentInquiryPayload(body, id, nowIso) {
+  const customerName = rentPickStr(body, 'customer_name', 'name', 'ordererName');
+  const eventDate = rentPickStr(body, 'event_date', 'date');
+  const gisMode = normalizeRentGisMode(body);
+  const status = normalizeRentStatus(body.status);
+  const phone = body.phone != null ? String(body.phone).trim() : '';
+  return {
+    ...body,
+    id,
+    projektAzonosito: body.projektAzonosito || body.id || id,
+    createdAt: nowIso,
+    updatedAt: nowIso,
+    letrehozasDatuma: nowIso,
+    status,
+    date: eventDate,
+    event_date: eventDate,
+    timeStart: rentPickStr(body, 'timeStart', 'time_start'),
+    timeEnd: rentPickStr(body, 'timeEnd', 'time_end'),
+    name: customerName,
+    customer_name: customerName,
+    ordererName: customerName,
+    companyName: rentPickStr(body, 'companyName', 'company_name'),
+    contact: rentPickStr(body, 'contact', 'contact_name'),
+    phone,
+    email: rentPickStr(body, 'email'),
+    city: rentPickStr(body, 'city'),
+    street: rentPickStr(body, 'street'),
+    houseNumber: rentPickStr(body, 'houseNumber', 'house_number'),
+    locationNote: rentPickStr(body, 'locationNote', 'location_note'),
+    lat: body.lat != null && body.lat !== '' ? Number(body.lat) : body.lat,
+    lng: body.lng != null && body.lng !== '' ? Number(body.lng) : body.lng,
+    headcount: body.headcount != null && body.headcount !== ''
+      ? parseInt(body.headcount, 10)
+      : body.headcount,
+    bookingType: 'BERLES',
+    booking_type: gisMode,
+    vehicle: rentPickStr(body, 'vehicle', 'vehicle_id'),
+    driver: rentPickStr(body, 'driver', 'driver_id'),
+    source: body.source != null ? String(body.source) : body.source,
+  };
+}
+
+function rentInquiryDbRowFromPayload(payload, id, createdAt, updatedAt) {
+  const lat = payload.lat != null && !Number.isNaN(payload.lat) ? payload.lat : null;
+  const lng = payload.lng != null && !Number.isNaN(payload.lng) ? payload.lng : null;
+  const headcount = payload.headcount != null && !Number.isNaN(payload.headcount)
+    ? payload.headcount
+    : null;
+  return {
+    id,
+    created_at: createdAt,
+    updated_at: updatedAt,
+    status: payload.status,
+    event_date: payload.event_date || payload.date || null,
+    time_start: payload.timeStart || null,
+    time_end: payload.timeEnd || null,
+    customer_name: payload.customer_name || payload.name || null,
+    company_name: payload.companyName || null,
+    contact_name: payload.contact || null,
+    phone: payload.phone || null,
+    email: payload.email || null,
+    city: payload.city || null,
+    street: payload.street || null,
+    house_number: payload.houseNumber || null,
+    location_note: payload.locationNote || null,
+    lat,
+    lng,
+    headcount,
+    vehicle_id: payload.vehicle || payload.vehicle_id || null,
+    driver_id: payload.driver || payload.driver_id || null,
+    business_type: 'BERLES',
+    gis_mode: payload.booking_type || 'single_location',
+    source: payload.source || null,
+    payload_json: JSON.stringify(payload),
+  };
+}
+
+function validateRentInquiryPost(body) {
+  if (!body || typeof body !== 'object') return 'Invalid request body';
+  if (!rentPickStr(body, 'customer_name', 'name', 'ordererName')) {
+    return 'customer_name or name is required';
+  }
+  if (body.phone == null || String(body.phone).trim() === '') return 'phone is required';
+  if (!rentPickStr(body, 'event_date', 'date')) return 'event_date or date is required';
+  return null;
+}
+
+function mergeRentInquiryPatch(existingPayload, existingId, body) {
+  const nowIso = new Date().toISOString();
+  const merged = {
+    ...existingPayload,
+    ...body,
+    id: existingId,
+    projektAzonosito: existingPayload.projektAzonosito || existingId,
+    updatedAt: nowIso,
+    bookingType: 'BERLES',
+  };
+  if ('status' in body) merged.status = normalizeRentStatus(body.status);
+  if ('event_date' in body || 'date' in body) {
+    const d = rentPickStr(body, 'event_date', 'date');
+    merged.date = d;
+    merged.event_date = d;
+  }
+  if ('time_start' in body || 'timeStart' in body) {
+    merged.timeStart = rentPickStr(body, 'timeStart', 'time_start');
+  }
+  if ('time_end' in body || 'timeEnd' in body) {
+    merged.timeEnd = rentPickStr(body, 'timeEnd', 'time_end');
+  }
+  if ('customer_name' in body || 'name' in body || 'ordererName' in body) {
+    const n = rentPickStr(body, 'customer_name', 'name', 'ordererName');
+    merged.name = n;
+    merged.customer_name = n;
+    merged.ordererName = n;
+  }
+  if ('company_name' in body || 'companyName' in body) {
+    merged.companyName = rentPickStr(body, 'companyName', 'company_name');
+  }
+  if ('contact_name' in body || 'contact' in body) {
+    merged.contact = rentPickStr(body, 'contact', 'contact_name');
+  }
+  if ('phone' in body) merged.phone = String(body.phone).trim();
+  if ('email' in body) merged.email = rentPickStr(body, 'email');
+  if ('city' in body) merged.city = rentPickStr(body, 'city');
+  if ('street' in body) merged.street = rentPickStr(body, 'street');
+  if ('house_number' in body || 'houseNumber' in body) {
+    merged.houseNumber = rentPickStr(body, 'houseNumber', 'house_number');
+  }
+  if ('location_note' in body || 'locationNote' in body) {
+    merged.locationNote = rentPickStr(body, 'locationNote', 'location_note');
+  }
+  if ('lat' in body) {
+    merged.lat = body.lat != null && body.lat !== '' ? Number(body.lat) : body.lat;
+  }
+  if ('lng' in body) {
+    merged.lng = body.lng != null && body.lng !== '' ? Number(body.lng) : body.lng;
+  }
+  if ('headcount' in body) {
+    merged.headcount = body.headcount != null && body.headcount !== ''
+      ? parseInt(body.headcount, 10)
+      : body.headcount;
+  }
+  if ('vehicle' in body || 'vehicle_id' in body) {
+    merged.vehicle = rentPickStr(body, 'vehicle', 'vehicle_id');
+  }
+  if ('driver' in body || 'driver_id' in body) {
+    merged.driver = rentPickStr(body, 'driver', 'driver_id');
+  }
+  if ('booking_type' in body || 'gis_mode' in body) {
+    merged.booking_type = normalizeRentGisMode(body);
+  }
+  if ('source' in body) merged.source = body.source != null ? String(body.source) : body.source;
+  return merged;
+}
+
+function rowToRentInquiry(row) {
+  const payload = parseRentInquiryPayload(row);
+  const customerName = row.customer_name || payload.name || payload.customer_name || payload.ordererName || '';
+  const eventDate = row.event_date || payload.date || payload.event_date || '';
+  const gisMode = row.gis_mode || payload.booking_type || 'single_location';
+  const street = row.street || payload.street || '';
+  const houseNumber = row.house_number || payload.houseNumber || '';
+  return {
+    ...payload,
+    id: row.id,
+    projektAzonosito: payload.projektAzonosito || payload.id || row.id,
+    createdAt: normalizeDbTimestamp(row.created_at),
+    updatedAt: normalizeDbTimestamp(row.updated_at),
+    letrehozasDatuma: normalizeDbTimestamp(row.created_at),
+    status: row.status,
+    date: eventDate,
+    event_date: eventDate,
+    timeStart: row.time_start || payload.timeStart || '',
+    timeEnd: row.time_end || payload.timeEnd || '',
+    name: customerName,
+    customer_name: customerName,
+    ordererName: customerName,
+    companyName: row.company_name || payload.companyName || '',
+    contact: row.contact_name || payload.contact || '',
+    phone: formatHuPhoneDisplay(row.phone || payload.phone),
+    email: row.email || payload.email || '',
+    city: row.city || payload.city || '',
+    street,
+    houseNumber,
+    address: [street, houseNumber].filter(Boolean).join(' ').trim() || payload.address || '',
+    locationNote: row.location_note || payload.locationNote || '',
+    lat: row.lat != null ? row.lat : payload.lat,
+    lng: row.lng != null ? row.lng : payload.lng,
+    headcount: row.headcount != null ? row.headcount : payload.headcount,
+    bookingType: 'BERLES',
+    booking_type: gisMode,
+    vehicle: row.vehicle_id || payload.vehicle || '',
+    driver: row.driver_id || payload.driver || '',
+    source: row.source || payload.source || '',
+  };
+}
+
 function normalizePublicReservation(body) {
   if (!body || typeof body !== 'object') return null;
   const phone = normalizeHuPhone(body.phone);
@@ -1197,6 +1768,63 @@ function selectTasksFiltered(statuses, limit) {
   `).all(...statuses, limit);
 }
 
+function getActiveDriverSessions() {
+  const rows = selectEventsChronological.all();
+  const open = new Map();
+  const lastTrack = new Map();
+
+  for (const row of rows) {
+    const shift = row.shift != null ? String(row.shift).trim() : '';
+    if (!shift) continue;
+    let payload = {};
+    try {
+      payload = JSON.parse(row.payload_json);
+    } catch {
+      payload = {};
+    }
+    const type = String(row.type || '').trim();
+    if (type === 'track' || type === 'auto_track') {
+      if (row.lat != null && row.lng != null) {
+        const prev = lastTrack.get(shift);
+        if (!prev || String(row.timestamp || '') >= String(prev.timestamp || '')) {
+          lastTrack.set(shift, { lat: row.lat, lng: row.lng, timestamp: row.timestamp });
+        }
+      }
+    }
+    if (type === 'muszak_inditas') {
+      open.set(shift, {
+        shift_id: shift,
+        driver_id: payload.driver_id || null,
+        driver_name: payload.driver_name || null,
+        vehicle_id: payload.vehicle_id || null,
+        vehicle_name: payload.vehicle_name || null,
+        city: payload.city || null,
+        started_at: row.timestamp,
+        last_lat: row.lat,
+        last_lng: row.lng,
+      });
+      continue;
+    }
+    if (type === 'shift_end') {
+      open.delete(shift);
+      lastTrack.delete(shift);
+    }
+  }
+
+  return Array.from(open.values()).map((s) => {
+    const tr = lastTrack.get(s.shift_id);
+    if (tr) {
+      return {
+        ...s,
+        last_lat: tr.lat,
+        last_lng: tr.lng,
+        last_track_at: tr.timestamp,
+      };
+    }
+    return s;
+  }).sort((a, b) => String(b.started_at || '').localeCompare(String(a.started_at || '')));
+}
+
 function getActiveTrips() {
   const rows = selectEventsChronological.all();
   let openTrip = null;
@@ -1270,6 +1898,16 @@ app.post('/api/events', (req, res) => {
 
   try {
     insertMany(items);
+    items.forEach((item) => {
+      const normalized = normalizeIncomingEvent(item);
+      if (!normalized) return;
+      const shiftId = normalized.shift != null ? String(normalized.shift).trim() : '';
+      if (!shiftId) return;
+      const type = String(normalized.type || '').trim();
+      if (type === 'track' || type === 'auto_track') {
+        touchActiveShiftActivity(shiftId, 'gps', normalized.timestamp);
+      }
+    });
     res.status(201).json({
       ok: true,
       received: items.length,
@@ -1460,6 +2098,7 @@ function buildVehiclePositionsFromEvents(recentEvents) {
         vehicle_local: vehicleLocal,
         passengers,
         free,
+        free_seats: free,
         capacity: cap,
         lat: ev.lat,
         lng: ev.lng,
@@ -1478,6 +2117,126 @@ app.get('/api/vehicles', (_req, res) => {
 app.get('/api/drivers', (_req, res) => {
   const drivers = readDrivers();
   res.json({ ok: true, count: drivers.length, drivers });
+});
+
+app.get('/api/config', (_req, res) => {
+  try {
+    const config = buildConfigResponse();
+    res.json({ ok: true, ...config });
+  } catch (err) {
+    console.error('GET /api/config failed:', err);
+    res.status(500).json({ ok: false, error: 'Failed to load config' });
+  }
+});
+
+function readSchedulesData() {
+  try {
+    if (!fs.existsSync(schedulesPath)) return {};
+    const raw = JSON.parse(fs.readFileSync(schedulesPath, 'utf8'));
+    return raw && typeof raw === 'object' ? raw : {};
+  } catch (err) {
+    console.error('[schedules] read failed:', err);
+    return {};
+  }
+}
+
+app.get('/api/schedules', (req, res) => {
+  try {
+    const cityId = String(req.query.city || '').trim().toLowerCase();
+    const all = readSchedulesData();
+    const schedules = cityId ? (all[cityId] || []) : all;
+    res.json({ ok: true, schedules });
+  } catch (err) {
+    console.error('GET /api/schedules failed:', err);
+    res.status(500).json({ ok: false, error: 'Failed to load schedules' });
+  }
+});
+
+app.post('/api/shifts/start', (req, res) => {
+  const body = req.body || {};
+  const shiftId = String(body.shift_id || '').trim();
+  const vehicleId = String(body.vehicle_id || '').trim();
+  const driverId = String(body.driver_id || '').trim();
+  const driverName = body.driver_name != null ? String(body.driver_name).trim() : '';
+  const route = body.route != null ? String(body.route).trim() : '';
+  const city = body.city != null ? String(body.city).trim() : '';
+  const pin = body.pin != null ? String(body.pin).trim() : '';
+  if (!shiftId || !vehicleId || !driverId) {
+    return res.status(400).json({ ok: false, error: 'shift_id, vehicle_id, driver_id required' });
+  }
+  if (!validateConfigPin(driverId, pin)) {
+    return res.status(403).json({ ok: false, error: 'Hibás PIN' });
+  }
+  try {
+    const existing = findOpenShiftByVehicle(vehicleId);
+    if (existing && existing.shift_id !== shiftId) {
+      return res.status(409).json({
+        ok: false,
+        error: 'A kiválasztott jármű már használatban van.',
+        vehicle_id: vehicleId,
+        active_shift_id: existing.shift_id,
+      });
+    }
+    const now = new Date().toISOString();
+    db.prepare(`
+      INSERT INTO active_shifts (
+        shift_id, vehicle_id, driver_id, driver_name, route, city, status, started_at, last_heartbeat_at
+      ) VALUES (
+        @shift_id, @vehicle_id, @driver_id, @driver_name, @route, @city, 'ACTIVE', @started_at, @started_at
+      )
+      ON CONFLICT(shift_id) DO UPDATE SET
+        vehicle_id = excluded.vehicle_id,
+        driver_id = excluded.driver_id,
+        driver_name = excluded.driver_name,
+        route = excluded.route,
+        city = excluded.city,
+        status = 'ACTIVE',
+        closed_at = NULL,
+        last_heartbeat_at = excluded.last_heartbeat_at
+    `).run({
+      shift_id: shiftId,
+      vehicle_id: vehicleId,
+      driver_id: driverId,
+      driver_name: driverName || null,
+      route: route || null,
+      city: city || null,
+      started_at: now,
+    });
+    res.status(201).json({ ok: true, shift_id: shiftId, vehicle_id: vehicleId });
+  } catch (err) {
+    console.error('POST /api/shifts/start failed:', err);
+    res.status(500).json({ ok: false, error: 'Shift start failed' });
+  }
+});
+
+app.post('/api/shifts/end', (req, res) => {
+  const body = req.body || {};
+  const shiftId = String(body.shift_id || body.shift || '').trim();
+  if (!shiftId) {
+    return res.status(400).json({ ok: false, error: 'shift_id required' });
+  }
+  try {
+    closeActiveShiftRow(shiftId, 'CLOSED');
+    res.json({ ok: true, shift_id: shiftId, closed: true });
+  } catch (err) {
+    console.error('POST /api/shifts/end failed:', err);
+    res.status(500).json({ ok: false, error: 'Shift end failed' });
+  }
+});
+
+app.post('/api/shifts/heartbeat', (req, res) => {
+  const body = req.body || {};
+  const shiftId = String(body.shift_id || body.shift || '').trim();
+  if (!shiftId) {
+    return res.status(400).json({ ok: false, error: 'shift_id required' });
+  }
+  try {
+    touchActiveShiftActivity(shiftId, 'heartbeat');
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('POST /api/shifts/heartbeat failed:', err);
+    res.status(500).json({ ok: false, error: 'Heartbeat failed' });
+  }
 });
 
 app.get('/api/vehicle-positions', (req, res) => {
@@ -1514,6 +2273,183 @@ app.get('/api/admin/trips', (_req, res) => {
     count: trips.length,
     trips,
   });
+});
+
+app.get('/api/admin/active-drivers', (_req, res) => {
+  try {
+    const shifts = getActiveShiftsFromDb();
+    const drivers = shifts.length ? shifts : getActiveDriverSessions().map((s) => ({
+      ...s,
+      route: s.schedule || s.route || null,
+      status: 'ACTIVE',
+      display_status: 'ACTIVE',
+      last_gps_at: s.last_track_at || null,
+    }));
+    res.json({ ok: true, count: drivers.length, drivers, shifts });
+  } catch (err) {
+    console.error('GET /api/admin/active-drivers failed:', err);
+    res.status(500).json({ ok: false, error: 'Failed to load active drivers' });
+  }
+});
+
+app.get('/api/admin/active-shifts', (_req, res) => {
+  try {
+    const shifts = getActiveShiftsFromDb();
+    res.json({ ok: true, count: shifts.length, shifts });
+  } catch (err) {
+    console.error('GET /api/admin/active-shifts failed:', err);
+    res.status(500).json({ ok: false, error: 'Failed to load active shifts' });
+  }
+});
+
+app.post('/api/admin/active-shifts/:shiftId/close', (req, res) => {
+  const shiftId = String(req.params.shiftId || '').trim();
+  if (!shiftId) return res.status(400).json({ ok: false, error: 'shiftId required' });
+  try {
+    const row = db.prepare('SELECT * FROM active_shifts WHERE shift_id = ?').get(shiftId);
+    db.prepare(`
+      INSERT INTO driver_kicks (shift_id, kicked_at, kicked_by)
+      VALUES (@shift_id, datetime('now'), @kicked_by)
+      ON CONFLICT(shift_id) DO UPDATE SET kicked_at = datetime('now'), kicked_by = @kicked_by
+    `).run({ shift_id: shiftId, kicked_by: 'admin_close_shift' });
+    closeActiveShiftRow(shiftId, 'CLOSED');
+    const kickEnd = normalizeIncomingEvent({
+      id: `admin_close_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      type: 'shift_end',
+      shift: shiftId,
+      timestamp: new Date().toISOString(),
+      driver_id: row ? row.driver_id : null,
+      driver_name: row ? row.driver_name : null,
+      vehicle_id: row ? row.vehicle_id : null,
+      note: 'Admin műszak lezárás',
+      source: 'admin_close_shift',
+    });
+    if (kickEnd) insertEvent.run(kickEnd);
+    res.json({ ok: true, shift_id: shiftId, closed: true });
+  } catch (err) {
+    console.error('POST close shift failed:', err);
+    res.status(500).json({ ok: false, error: 'Close shift failed' });
+  }
+});
+
+app.post('/api/admin/active-shifts/:shiftId/close-trip', (req, res) => {
+  const shiftId = String(req.params.shiftId || '').trim();
+  if (!shiftId) return res.status(400).json({ ok: false, error: 'shiftId required' });
+  try {
+    const trips = getActiveTrips();
+    const trip = trips.find((t) => String(t.shift || '') === shiftId) || trips[0];
+    if (!trip) {
+      return res.status(404).json({ ok: false, error: 'Nincs aktív járat' });
+    }
+    const tripEnd = normalizeIncomingEvent({
+      id: `admin_trip_close_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      type: 'trip_end',
+      trip: trip.trip,
+      shift: shiftId,
+      timestamp: new Date().toISOString(),
+      driver_id: trip.driver_id,
+      vehicle_id: trip.vehicle_id,
+      note: 'Admin járat lezárás',
+      source: 'admin_close_trip',
+    });
+    if (tripEnd) insertEvent.run(tripEnd);
+    res.json({ ok: true, shift_id: shiftId, trip_id: trip.trip, closed: true });
+  } catch (err) {
+    console.error('POST close trip failed:', err);
+    res.status(500).json({ ok: false, error: 'Close trip failed' });
+  }
+});
+
+app.post('/api/admin/active-shifts/:shiftId/technical-issue', (req, res) => {
+  const shiftId = String(req.params.shiftId || '').trim();
+  if (!shiftId) return res.status(400).json({ ok: false, error: 'shiftId required' });
+  try {
+    db.prepare(`
+      UPDATE active_shifts SET status = 'TECHNICAL_ISSUE'
+      WHERE shift_id = @shift_id AND closed_at IS NULL
+    `).run({ shift_id: shiftId });
+    res.json({ ok: true, shift_id: shiftId, status: 'TECHNICAL_ISSUE' });
+  } catch (err) {
+    console.error('POST technical-issue failed:', err);
+    res.status(500).json({ ok: false, error: 'Technical issue failed' });
+  }
+});
+
+app.post('/api/admin/vehicles/:vehicleId/release', (req, res) => {
+  const vehicleId = String(req.params.vehicleId || '').trim();
+  if (!vehicleId) return res.status(400).json({ ok: false, error: 'vehicleId required' });
+  try {
+    releaseVehicleLock(vehicleId);
+    res.json({ ok: true, vehicle_id: vehicleId, released: true });
+  } catch (err) {
+    console.error('POST vehicle release failed:', err);
+    res.status(500).json({ ok: false, error: 'Vehicle release failed' });
+  }
+});
+
+app.post('/api/admin/active-drivers/:shiftId/kick', (req, res) => {
+  const shiftId = String(req.params.shiftId || '').trim();
+  if (!shiftId) {
+    return res.status(400).json({ ok: false, error: 'shiftId required' });
+  }
+  try {
+    const active = getActiveDriverSessions();
+    const match = active.find((d) => d.shift_id === shiftId);
+    db.prepare(`
+      INSERT INTO driver_kicks (shift_id, kicked_at, kicked_by)
+      VALUES (@shift_id, datetime('now'), @kicked_by)
+      ON CONFLICT(shift_id) DO UPDATE SET kicked_at = datetime('now'), kicked_by = @kicked_by
+    `).run({
+      shift_id: shiftId,
+      kicked_by: req.body && req.body.by ? String(req.body.by).trim() : 'admin',
+    });
+    const kickEnd = normalizeIncomingEvent({
+      id: `admin_kick_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      type: 'shift_end',
+      shift: shiftId,
+      timestamp: new Date().toISOString(),
+      city: match && match.city ? match.city : null,
+      driver_id: match && match.driver_id ? match.driver_id : null,
+      driver_name: match && match.driver_name ? match.driver_name : null,
+      vehicle_id: match && match.vehicle_id ? match.vehicle_id : null,
+      note: 'Admin kiléptetés',
+      source: 'admin_kick',
+    });
+    if (kickEnd) insertEvent.run(kickEnd);
+    closeActiveShiftRow(shiftId, 'CLOSED');
+    res.json({ ok: true, shift_id: shiftId, kicked: true });
+  } catch (err) {
+    console.error('POST /api/admin/active-drivers kick failed:', err);
+    res.status(500).json({ ok: false, error: 'Kick failed' });
+  }
+});
+
+app.get('/api/driver/shift-kick', (req, res) => {
+  const shiftId = String(req.query.shift || '').trim();
+  if (!shiftId) {
+    return res.json({ ok: true, kicked: false });
+  }
+  try {
+    const row = db.prepare('SELECT shift_id, kicked_at FROM driver_kicks WHERE shift_id = ?').get(shiftId);
+    res.json({ ok: true, kicked: !!row, kicked_at: row ? row.kicked_at : null });
+  } catch (err) {
+    console.error('GET /api/driver/shift-kick failed:', err);
+    res.status(500).json({ ok: false, error: 'Check failed' });
+  }
+});
+
+app.delete('/api/driver/shift-kick', (req, res) => {
+  const shiftId = String((req.query && req.query.shift) || (req.body && req.body.shift) || '').trim();
+  if (!shiftId) {
+    return res.status(400).json({ ok: false, error: 'shift required' });
+  }
+  try {
+    db.prepare('DELETE FROM driver_kicks WHERE shift_id = ?').run(shiftId);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('DELETE /api/driver/shift-kick failed:', err);
+    res.status(500).json({ ok: false, error: 'Ack failed' });
+  }
 });
 
 app.get('/api/tasks', (req, res) => {
@@ -1685,6 +2621,112 @@ app.get('/api/admin/bookings', (req, res) => {
   }
 });
 
+app.post('/api/rent/inquiries', (req, res) => {
+  const validationError = validateRentInquiryPost(req.body);
+  if (validationError) {
+    return res.status(400).json({ ok: false, error: validationError });
+  }
+  try {
+    const nowIso = new Date().toISOString();
+    const id = generateRentInquiryId();
+    const payload = buildRentInquiryPayload(req.body, id, nowIso);
+    const row = rentInquiryDbRowFromPayload(payload, id, nowIso, nowIso);
+    const txn = db.transaction(() => {
+      insertRentInquiry.run(row);
+    });
+    txn();
+    const saved = getRentInquiryById.get(id);
+    res.status(201).json({ ok: true, inquiry: rowToRentInquiry(saved) });
+  } catch (err) {
+    console.error('POST /api/rent/inquiries failed:', err);
+    res.status(500).json({ ok: false, error: 'Failed to save rent inquiry' });
+  }
+});
+
+app.get('/api/rent/inquiries', (req, res) => {
+  try {
+    let sql = 'SELECT * FROM rent_inquiries WHERE 1=1';
+    const params = [];
+    if (req.query.status != null && String(req.query.status).trim() !== '') {
+      sql += ' AND status = ?';
+      params.push(String(req.query.status).trim());
+    }
+    if (req.query.date != null && String(req.query.date).trim() !== '') {
+      sql += ' AND event_date = ?';
+      params.push(String(req.query.date).trim());
+    }
+    if (req.query.city != null && String(req.query.city).trim() !== '') {
+      sql += ' AND city = ?';
+      params.push(String(req.query.city).trim());
+    }
+    sql += ' ORDER BY event_date ASC, created_at DESC';
+    const rows = db.prepare(sql).all(...params);
+    res.json({ ok: true, inquiries: rows.map(rowToRentInquiry) });
+  } catch (err) {
+    console.error('GET /api/rent/inquiries failed:', err);
+    res.status(500).json({ ok: false, error: 'Failed to load rent inquiries' });
+  }
+});
+
+app.get('/api/rent/inquiries/:id', (req, res) => {
+  const id = String(req.params.id || '').trim();
+  if (!id) return res.status(400).json({ ok: false, error: 'id required' });
+  try {
+    const row = getRentInquiryById.get(id);
+    if (!row) return res.status(404).json({ ok: false, error: 'Rent inquiry not found' });
+    res.json({ ok: true, inquiry: rowToRentInquiry(row) });
+  } catch (err) {
+    console.error('GET /api/rent/inquiries/:id failed:', err);
+    res.status(500).json({ ok: false, error: 'Failed to load rent inquiry' });
+  }
+});
+
+app.patch('/api/rent/inquiries/:id', (req, res) => {
+  const id = String(req.params.id || '').trim();
+  if (!id) return res.status(400).json({ ok: false, error: 'id required' });
+  const body = req.body || {};
+  try {
+    const txn = db.transaction(() => {
+      const existing = getRentInquiryById.get(id);
+      if (!existing) return { notFound: true };
+      const existingPayload = parseRentInquiryPayload(existing);
+      const mergedPayload = mergeRentInquiryPatch(existingPayload, id, body);
+      const nowIso = new Date().toISOString();
+      const row = rentInquiryDbRowFromPayload(
+        mergedPayload,
+        id,
+        existing.created_at,
+        nowIso,
+      );
+      updateRentInquiry.run(row);
+      return { row: getRentInquiryById.get(id) };
+    });
+    const result = txn();
+    if (result.notFound) {
+      return res.status(404).json({ ok: false, error: 'Rent inquiry not found' });
+    }
+    res.json({ ok: true, inquiry: rowToRentInquiry(result.row) });
+  } catch (err) {
+    console.error('PATCH /api/rent/inquiries/:id failed:', err);
+    res.status(500).json({ ok: false, error: 'Failed to update rent inquiry' });
+  }
+});
+
+app.delete('/api/rent/inquiries/:id', (req, res) => {
+  const id = String(req.params.id || '').trim();
+  if (!id) return res.status(400).json({ ok: false, error: 'id required' });
+  try {
+    const result = deleteRentInquiry.run(id);
+    if (result.changes === 0) {
+      return res.status(404).json({ ok: false, error: 'Rent inquiry not found' });
+    }
+    res.json({ ok: true, id });
+  } catch (err) {
+    console.error('DELETE /api/rent/inquiries/:id failed:', err);
+    res.status(500).json({ ok: false, error: 'Failed to delete rent inquiry' });
+  }
+});
+
 app.post('/api/reservations', (req, res) => {
   const row = normalizePublicReservation(req.body);
   if (!row) {
@@ -1822,6 +2864,45 @@ app.post('/api/trip-archives', (req, res) => {
   } catch (err) {
     console.error('POST /api/trip-archives failed:', err);
     res.status(400).json({ ok: false, error: err.message || 'Failed to save archive' });
+  }
+});
+
+app.post('/api/upload-route', (req, res) => {
+  try {
+    const saved = saveRouteUpload(req.body || {});
+    res.status(201).json({ ok: true, id: saved.id, gps_point_count: saved.gps_point_count });
+  } catch (err) {
+    console.error('POST /api/upload-route failed:', err);
+    res.status(400).json({ ok: false, error: err.message || 'Failed to upload route' });
+  }
+});
+
+app.get('/api/admin/route-uploads', (_req, res) => {
+  try {
+    const rows = db.prepare(`
+      SELECT id, timestamp, vehicle_id, driver_id, driver_name, route, gps_point_count, created_at
+      FROM route_uploads
+      ORDER BY timestamp DESC
+      LIMIT 500
+    `).all();
+    res.json({ ok: true, count: rows.length, uploads: rows });
+  } catch (err) {
+    console.error('GET /api/admin/route-uploads failed:', err);
+    res.status(500).json({ ok: false, error: 'Failed to list uploads' });
+  }
+});
+
+app.get('/api/admin/route-uploads/:id', (req, res) => {
+  const id = String(req.params.id || '').trim();
+  if (!id) return res.status(400).json({ ok: false, error: 'id required' });
+  try {
+    const row = db.prepare('SELECT * FROM route_uploads WHERE id = ?').get(id);
+    if (!row) return res.status(404).json({ ok: false, error: 'not found' });
+    res.type('application/geo+json');
+    res.send(row.geojson_json);
+  } catch (err) {
+    console.error('GET route-upload failed:', err);
+    res.status(500).json({ ok: false, error: 'read failed' });
   }
 });
 
@@ -1976,6 +3057,33 @@ app.get(['/admin.html', '/admin'], (_req, res) => {
   res.sendFile(path.join(__dirname, 'admin.html'));
 });
 
+const frontendDir = path.join(__dirname, '..', 'frontend');
+const rentDir = path.join(frontendDir, 'rent');
+
+app.get(['/rent/public', '/rent/public/'], (_req, res) => {
+  res.sendFile(path.join(rentDir, 'public.html'));
+});
+app.get(['/rent/admin', '/rent/admin/'], (_req, res) => {
+  res.sendFile(path.join(rentDir, 'admin.html'));
+});
+app.use('/rent', express.static(rentDir, { index: false, fallthrough: true }));
+
+app.get('/', (_req, res) => {
+  res.sendFile(path.join(frontendDir, 'index.html'));
+});
+app.get(['/index', '/index/'], (_req, res) => {
+  res.redirect(301, '/');
+});
+app.get('/index.html', (_req, res) => {
+  res.sendFile(path.join(frontendDir, 'index.html'));
+});
+app.use('/assets', express.static(path.join(frontendDir, 'assets')));
+app.use('/driver', express.static(path.join(frontendDir, 'driver'), { index: 'index.html' }));
+app.use('/public', express.static(path.join(frontendDir, 'public'), { index: 'index.html' }));
+app.get('/opnav-config.js', (_req, res) => {
+  res.sendFile(path.join(frontendDir, 'opnav-config.js'));
+});
+
 app.use((_req, res) => {
   res.status(404).json({ ok: false, error: 'Not found' });
 });
@@ -1988,5 +3096,6 @@ app.use((err, _req, res, _next) => {
 app.listen(PORT, () => {
   console.log(`Operativ Navigator API listening on port ${PORT}`);
   console.log(`Database: ${DATABASE_PATH}`);
+  console.log(`Frontend: http://localhost:${PORT}/  http://localhost:${PORT}/public/  http://localhost:${PORT}/driver/  http://localhost:${PORT}/admin  http://localhost:${PORT}/rent/public  http://localhost:${PORT}/rent/admin`);
   logRoutesStartup();
 });
