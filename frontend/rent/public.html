@@ -492,11 +492,20 @@
     </div>
   </div>
 
+  <script src="../opnav-config.js"></script>
   <script src="booking_storage.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
 (function () {
   'use strict';
+
+  function getApiBase() {
+    if (window.OPNAV_API_BASE) return String(window.OPNAV_API_BASE).replace(/\/+$/, '');
+    var host = location.hostname;
+    if (host === 'localhost' || host === '127.0.0.1') return 'http://localhost:3000';
+    return 'https://operativ-navigator.onrender.com';
+  }
+  var API_BASE = getApiBase();
 
   var HUNGARY_CENTER = [47.1625, 19.5033];
   var HUNGARY_ZOOM = 7;
@@ -1418,7 +1427,7 @@
 
     var controller = new AbortController();
     var timeoutId = setTimeout(function () { controller.abort(); }, 20000);
-    return fetch('/api/rent/inquiries', {
+    return fetch(API_BASE + '/api/rent/inquiries', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(fullPayload),
