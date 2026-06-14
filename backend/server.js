@@ -2668,6 +2668,59 @@ app.get('/api/rent/inquiries', (req, res) => {
   }
 });
 
+function normalizeRentImportTimestamp(raw, fallback) {
+  if (raw == null || String(raw).trim() === '') return fallback;
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return fallback;
+  return d.toISOString();
+}
+
+app.post('/api/rent/import', (req, res) => {
+  const body = req.body || {};
+  const inquiries = Array.isArray(body.inquiries) ? body.inquiries : [];
+  if (!inquiries.length) {
+    return res.status(400).json({ ok: false, error: 'inquiries array is required' });
+  }
+  try {
+    let imported = 0;
+    let skipped = 0;
+    const txn = db.transaction(() => {
+      inquiries.forEach((item) => {
+        const id = item && item.id != null ? String(item.id).trim() : '';
+        if (!id) {
+          skipped += 1;
+          return;
+        }
+        if (getRentInquiryById.get(id)) {
+          skipped += 1;
+          return;
+        }
+        const nowIso = new Date().toISOString();
+        const createdAt = normalizeRentImportTimestamp(
+          item.createdAt || item.letrehozasDatuma || item.created_at,
+          nowIso,
+        );
+        const updatedAt = normalizeRentImportTimestamp(
+          item.updatedAt || item.updated_at,
+          createdAt,
+        );
+        const payload = buildRentInquiryPayload(item, id, createdAt);
+        payload.createdAt = createdAt;
+        payload.updatedAt = updatedAt;
+        payload.letrehozasDatuma = createdAt;
+        const row = rentInquiryDbRowFromPayload(payload, id, createdAt, updatedAt);
+        insertRentInquiry.run(row);
+        imported += 1;
+      });
+    });
+    txn();
+    res.json({ ok: true, imported, skipped });
+  } catch (err) {
+    console.error('POST /api/rent/import failed:', err);
+    res.status(500).json({ ok: false, error: 'Failed to import rent inquiries' });
+  }
+});
+
 app.get('/api/rent/inquiries/:id', (req, res) => {
   const id = String(req.params.id || '').trim();
   if (!id) return res.status(400).json({ ok: false, error: 'id required' });
