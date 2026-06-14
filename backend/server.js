@@ -3106,7 +3106,7 @@ app.use(
   })
 );
 
-app.get(['/admin.html', '/admin'], (_req, res) => {
+app.get(['/admin', '/admin/', '/admin.html'], (_req, res) => {
   res.sendFile(path.join(__dirname, 'admin.html'));
 });
 
