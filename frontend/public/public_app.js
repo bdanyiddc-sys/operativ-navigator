@@ -32,8 +32,35 @@
 
     var elStatusLine, elPeekStop, elPeekStopMeta;
     var elToast, elVersion;
+    var elBoardSheet, elBoardSheetStopName, elBoardSheetArrival, elBoardSheetMeta;
+    var elBoardSheetPhoneWrap, elBoardSheetPhone, elBoardSheetCta;
+    var mobileBoardContext = null;
+    var BOARD_PHONE_KEY = 'kv_board_phone';
 
     function $(id) { return document.getElementById(id); }
+
+    function isMobileUi() {
+        return window.matchMedia('(max-width: 767px)').matches;
+    }
+
+    function routeHitLineWeight() {
+        return isMobileUi() ? 44 : 22;
+    }
+
+    function stopIconDimensions() {
+        if (isMobileUi()) return { size: [48, 48], anchor: [24, 24] };
+        return { size: [44, 44], anchor: [22, 22] };
+    }
+
+    function refreshRouteHitLayer() {
+        if (!routeLayers || !routeLayers.hit) return;
+        var w = routeHitLineWeight();
+        routeLayers.hit.eachLayer(function (layer) {
+            if (layer.setStyle) {
+                layer.setStyle({ color: 'transparent', weight: w, opacity: 0.01 });
+            }
+        });
+    }
 
     function toast(msg) {
         if (!elToast) return;
@@ -193,6 +220,33 @@
         return nextDepartureFromVehicle() || '—';
     }
 
+    function getNextDepartureFromStop(stop) {
+        var times = (stop && stop.departures && stop.departures.length)
+            ? stop.departures
+            : state.schedule.map(function (r) { return r.time; });
+        if (!times.length) return getNextDepartureInfo();
+        var now = new Date();
+        var nowMins = now.getHours() * 60 + now.getMinutes();
+        var sorted = times.slice().sort(function (a, b) {
+            return (parseScheduleMinutes(a) || 0) - (parseScheduleMinutes(b) || 0);
+        });
+        var i;
+        for (i = 0; i < sorted.length; i++) {
+            var tm = parseScheduleMinutes(sorted[i]);
+            if (tm != null && tm > nowMins) {
+                return { text: sorted[i], kind: 'today' };
+            }
+        }
+        if (sorted[0]) return { text: 'holnap ' + sorted[0], kind: 'tomorrow' };
+        return { text: '—', kind: 'none' };
+    }
+
+    function getStopNextArrivalText(stop) {
+        var train = getTrainArrivalLineForStop(stop);
+        if (train) return train;
+        return getNextDepartureFromStop(stop).text || '—';
+    }
+
     function enrichStopDistance(stop) {
         if (!stop) return null;
         if (!state.userPos || stop.lat == null || stop.lng == null) return stop;
@@ -279,9 +333,15 @@
         });
 
         map.whenReady(function () { map.invalidateSize(); });
-        window.addEventListener('resize', function () { map.invalidateSize(); });
+        window.addEventListener('resize', function () {
+            map.invalidateSize();
+            refreshRouteHitLayer();
+        });
         window.addEventListener('orientationchange', function () {
-            setTimeout(function () { map.invalidateSize(); }, 300);
+            setTimeout(function () {
+                map.invalidateSize();
+                refreshRouteHitLayer();
+            }, 300);
         });
     }
 
@@ -309,6 +369,10 @@
         }
         state.routeBoardMode = false;
         updateRouteBoardModeUi();
+        if (isMobileUi()) {
+            openMobileBoardSheet({ type: 'route', latlng: e.latlng });
+            return;
+        }
         openRouteBoardingPopup(e.latlng);
     }
 
@@ -346,7 +410,7 @@
             style: function (feature) {
                 var g = feature.geometry;
                 if (g.type === 'LineString' || g.type === 'MultiLineString') {
-                    return { color: 'transparent', weight: 22, opacity: 0.01 };
+                    return { color: 'transparent', weight: routeHitLineWeight(), opacity: 0.01 };
                 }
                 return { opacity: 0, fillOpacity: 0 };
             },
@@ -635,35 +699,45 @@
             if (stop.lat == null || stop.lng == null) return;
             var enriched = enrichStopDistance(stop) || stop;
             var isNear = display && display.id === stop.id;
+            var iconDim = stopIconDimensions();
             var icon = L.divIcon({
                 className: '',
                 html: '<div class="stop-marker' + (isNear ? ' is-near' : '') + '">🚏</div>',
-                iconSize: [44, 44],
-                iconAnchor: [22, 22]
+                iconSize: iconDim.size,
+                iconAnchor: iconDim.anchor
             });
             var m = L.marker([stop.lat, stop.lng], { icon: icon, zIndexOffset: 800 });
             var ctx = (reopenId === stop.id) ? reopenCtx : { selectedTime: '', showBoard: false };
             m.bindPopup(L.popup(stopPopupLeafletOptions()).setContent(stopPopupHtml(enriched, ctx)));
             m.on('click', function () {
                 state.selectedStopId = stop.id;
-                var ctx = {
+                var clickCtx = {
                     stopId: stop.id,
                     selectedTime: '',
                     showBoard: !!state.routeBoardMode
                 };
-                state.popupContext = ctx;
-                openPopupStopId = stop.id;
+                state.popupContext = clickCtx;
+                if (!isMobileUi()) openPopupStopId = stop.id;
                 if (state.routeBoardMode) {
                     state.routeBoardMode = false;
                     updateRouteBoardModeUi();
                 }
-                setStopPopup(stop.id, ctx, true);
+                if (isMobileUi()) {
+                    openMobileBoardSheet({
+                        type: 'stop',
+                        stopId: stop.id,
+                        stopName: stop.name
+                    });
+                    updateUi();
+                    return;
+                }
+                setStopPopup(stop.id, clickCtx, true);
                 updateUi();
             });
             m.addTo(stopLayer);
             stopMarkers[stop.id] = m;
         });
-        if (reopenId && stopMarkers[reopenId]) {
+        if (reopenId && stopMarkers[reopenId] && !isMobileUi()) {
             setStopPopup(reopenId, reopenCtx, true);
         }
     }
@@ -671,8 +745,145 @@
     function openStopOnMap(stopId, ctx) {
         ctx = ctx || {};
         state.selectedStopId = stopId;
+        var stop = state.stops.find(function (s) { return s.id === stopId; });
+        if (isMobileUi() && !ctx.selectedTime) {
+            if (openMobileBoardSheet({
+                type: 'stop',
+                stopId: stopId,
+                stopName: stop ? stop.name : ''
+            })) {
+                if (stop && map) map.panTo([stop.lat, stop.lng], { animate: true });
+                updateUi();
+                return;
+            }
+        }
         setStopPopup(stopId, ctx, true);
         updateUi();
+    }
+
+    function openMobileBoardSheet(ctx) {
+        if (!isMobileUi() || !elBoardSheet) return false;
+        mobileBoardContext = ctx;
+        if (map) map.closePopup();
+
+        var stop = ctx.stopId
+            ? state.stops.find(function (s) { return s.id === ctx.stopId; })
+            : null;
+        var stopName = ctx.stopName || (stop ? stop.name : '—');
+
+        if (elBoardSheetStopName) {
+            elBoardSheetStopName.textContent = ctx.type === 'route' ? 'Útvonal menti felszállás' : stopName;
+        }
+
+        var arrival = '—';
+        if (ctx.type === 'stop' && stop) {
+            arrival = getStopNextArrivalText(enrichStopDistance(stop) || stop);
+        } else if (ctx.type === 'route') {
+            var disp = getDisplayStop();
+            arrival = (disp ? getStopNextArrivalText(disp) : null) || getNextDepartureInfo().text || '—';
+        }
+        if (elBoardSheetArrival) {
+            elBoardSheetArrival.textContent = 'Következő érkezés: ' + arrival;
+        }
+
+        var meta = '';
+        if (ctx.type === 'stop' && stop) {
+            var walk = stopWalkLabel(enrichStopDistance(stop) || stop);
+            if (walk !== '—') meta += '🚶 ' + walk + ' · ';
+            meta += getWaitingLine(stop.id);
+        }
+        if (elBoardSheetMeta) elBoardSheetMeta.textContent = meta;
+
+        var savedPhone = '';
+        try { savedPhone = sessionStorage.getItem(BOARD_PHONE_KEY) || ''; } catch (e) { savedPhone = ''; }
+        if (elBoardSheetPhoneWrap) elBoardSheetPhoneWrap.hidden = !!savedPhone;
+        if (elBoardSheetPhone) elBoardSheetPhone.value = savedPhone;
+        if (elBoardSheetCta) {
+            elBoardSheetCta.disabled = false;
+            elBoardSheetCta.textContent = 'FELSZÁLLNÉK ITT';
+        }
+
+        elBoardSheet.hidden = false;
+        elBoardSheet.setAttribute('aria-hidden', 'false');
+        requestAnimationFrame(function () { elBoardSheet.classList.add('is-open'); });
+        return true;
+    }
+
+    function closeMobileBoardSheet() {
+        if (!elBoardSheet) return;
+        elBoardSheet.classList.remove('is-open');
+        elBoardSheet.setAttribute('aria-hidden', 'true');
+        setTimeout(function () {
+            elBoardSheet.hidden = true;
+            mobileBoardContext = null;
+        }, 280);
+    }
+
+    function getMobileBoardPhone() {
+        var saved = '';
+        try { saved = sessionStorage.getItem(BOARD_PHONE_KEY) || ''; } catch (e) { saved = ''; }
+        if (saved) {
+            var normalized = DATA.normalizeHuPhone(saved);
+            if (normalized) return normalized;
+        }
+        var raw = (elBoardSheetPhone && elBoardSheetPhone.value || '').trim();
+        return DATA.normalizeHuPhone(raw);
+    }
+
+    function submitMobileBoarding() {
+        if (!mobileBoardContext) return;
+        var phone = getMobileBoardPhone();
+        if (!phone) {
+            toast('Telefon: +36 vagy 06 formátum (pl. +36 30 123 4567)');
+            if (elBoardSheetPhoneWrap) elBoardSheetPhoneWrap.hidden = false;
+            if (elBoardSheetPhone) elBoardSheetPhone.focus();
+            return;
+        }
+        try { sessionStorage.setItem(BOARD_PHONE_KEY, phone); } catch (e) { /* ignore */ }
+
+        if (elBoardSheetCta) {
+            elBoardSheetCta.disabled = true;
+            elBoardSheetCta.textContent = 'Küldés…';
+        }
+        toast('Felszállási jelzés küldése…');
+
+        var payload;
+        if (mobileBoardContext.type === 'route') {
+            payload = {
+                city: state.cityLabel,
+                stop_id: null,
+                stop_name: 'Útvonal menti felszállás',
+                boarding_type: 'route',
+                lat: mobileBoardContext.latlng.lat,
+                lng: mobileBoardContext.latlng.lng,
+                count: 2,
+                phone: phone,
+                created_at: new Date().toISOString()
+            };
+        } else {
+            payload = {
+                city: state.cityLabel,
+                stop_id: mobileBoardContext.stopId,
+                stop_name: mobileBoardContext.stopName,
+                count: 2,
+                phone: phone,
+                created_at: new Date().toISOString()
+            };
+        }
+
+        DATA.submitBoardingRequest(payload).then(function () {
+            if (elBoardSheetCta) elBoardSheetCta.textContent = '✓ Jelzés elküldve';
+            toast(mobileBoardContext.type === 'route'
+                ? 'Felszállási jelzés elküldve (útvonal menti)'
+                : 'Felszállási jelzés elküldve');
+            setTimeout(closeMobileBoardSheet, 900);
+        }).catch(function () {
+            if (elBoardSheetCta) {
+                elBoardSheetCta.disabled = false;
+                elBoardSheetCta.textContent = 'FELSZÁLLNÉK ITT';
+            }
+            toast('Küldés sikertelen');
+        });
     }
 
     function openQuickBook() {
@@ -686,6 +897,9 @@
         var stop = getDisplayStop();
         if (stop) {
             map.panTo([stop.lat, stop.lng], { animate: true });
+        }
+        if (isMobileUi()) {
+            toast('Érints egy megállót vagy az útvonalat');
         }
     }
 
@@ -1004,12 +1218,28 @@
         }, { passive: true });
     }
 
+    function initBoardSheet() {
+        elBoardSheet = $('board-sheet');
+        elBoardSheetStopName = $('board-sheet-stop-name');
+        elBoardSheetArrival = $('board-sheet-arrival');
+        elBoardSheetMeta = $('board-sheet-meta');
+        elBoardSheetPhoneWrap = $('board-sheet-phone-wrap');
+        elBoardSheetPhone = $('board-sheet-phone');
+        elBoardSheetCta = $('board-sheet-cta');
+        var scrim = $('board-sheet-scrim');
+        var closeBtn = $('board-sheet-close');
+        if (scrim) scrim.addEventListener('click', closeMobileBoardSheet, { passive: true });
+        if (closeBtn) closeBtn.addEventListener('click', closeMobileBoardSheet, { passive: true });
+        if (elBoardSheetCta) elBoardSheetCta.addEventListener('click', submitMobileBoarding);
+    }
+
     function bindUi() {
         elStatusLine = $('status-line');
         elPeekStop = $('peek-stop');
         elPeekStopMeta = $('peek-stop-meta');
         elToast = $('toast');
         elVersion = $('version-footer');
+        initBoardSheet();
 
         $('btn-my-location').addEventListener('click', startMyLocation, { passive: true });
         $('btn-schedule-fab').addEventListener('click', function () { openOverlay('schedule-panel'); }, { passive: true });

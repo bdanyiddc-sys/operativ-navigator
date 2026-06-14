@@ -693,6 +693,153 @@ html, body {
     box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.45);
 }
 
+/* ── Mobil felszállás bottom sheet ── */
+.board-sheet {
+    position: fixed;
+    inset: 0;
+    z-index: 850;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    pointer-events: none;
+}
+
+.board-sheet[hidden] { display: none !important; }
+
+.board-sheet.is-open {
+    pointer-events: auto;
+}
+
+.board-sheet-scrim {
+    position: absolute;
+    inset: 0;
+    border: none;
+    padding: 0;
+    margin: 0;
+    background: rgba(15, 23, 42, 0.52);
+    opacity: 0;
+    transition: opacity 0.22s ease;
+}
+
+.board-sheet.is-open .board-sheet-scrim {
+    opacity: 1;
+}
+
+.board-sheet-panel {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 520px;
+    padding: 14px 16px calc(16px + var(--safe-b));
+    border-radius: 18px 18px 0 0;
+    border: 1px solid var(--panel-border);
+    border-bottom: none;
+    background: rgba(12, 18, 32, 0.98);
+    box-shadow: 0 -10px 36px rgba(0, 0, 0, 0.45);
+    transform: translateY(110%);
+    transition: transform 0.28s ease;
+}
+
+.board-sheet.is-open .board-sheet-panel {
+    transform: translateY(0);
+}
+
+.board-sheet-close {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    width: 44px;
+    height: 44px;
+    border: none;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text);
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.board-sheet-stop {
+    margin: 0 44px 8px 0;
+    font-size: 20px;
+    font-weight: 900;
+    line-height: 1.25;
+    color: #f8fafc;
+}
+
+.board-sheet-arrival {
+    margin: 0 0 6px;
+    font-size: 15px;
+    font-weight: 800;
+    color: #fde68a;
+}
+
+.board-sheet-meta {
+    margin: 0 0 12px;
+    font-size: 13px;
+    color: var(--muted);
+    font-weight: 600;
+}
+
+.board-sheet-phone-wrap {
+    display: block;
+    margin: 0 0 12px;
+}
+
+.board-sheet-phone-wrap[hidden] {
+    display: none !important;
+}
+
+.board-sheet-phone-lbl {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--muted);
+}
+
+.board-sheet-phone-wrap input {
+    width: 100%;
+    min-height: 48px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 1px solid var(--panel-border);
+    background: rgba(15, 23, 42, 0.9);
+    color: var(--text);
+    font-size: 16px;
+}
+
+.board-sheet-cta {
+    width: 100%;
+    min-height: 56px;
+    padding: 14px 18px;
+    border: none;
+    border-radius: 14px;
+    background: linear-gradient(180deg, #22c55e 0%, #15803d 100%);
+    color: #fff;
+    font-size: 18px;
+    font-weight: 900;
+    letter-spacing: 0.04em;
+    box-shadow: 0 8px 22px rgba(34, 197, 94, 0.35);
+    cursor: pointer;
+    touch-action: manipulation;
+}
+
+.board-sheet-cta:active {
+    transform: scale(0.98);
+}
+
+.board-sheet-cta:disabled {
+    opacity: 0.65;
+    cursor: wait;
+}
+
+@media (min-width: 768px) {
+    .board-sheet { display: none !important; }
+}
+
 /* ── Toast ── */
 #toast {
     position: fixed;
@@ -813,6 +960,8 @@ body[data-sheet-level="full"] .leaflet-control-container .leaflet-bottom.leaflet
 .stop-marker {
     width: 44px;
     height: 44px;
+    min-width: 44px;
+    min-height: 44px;
     font-size: 26px;
     line-height: 44px;
     text-align: center;
@@ -821,6 +970,18 @@ body[data-sheet-level="full"] .leaflet-control-container .leaflet-bottom.leaflet
     border-radius: 50%;
     border: 2.5px solid rgba(59, 130, 246, 0.75);
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+    touch-action: manipulation;
+}
+
+@media (max-width: 767px) {
+    .stop-marker {
+        width: 48px;
+        height: 48px;
+        min-width: 48px;
+        min-height: 48px;
+        line-height: 48px;
+        font-size: 28px;
+    }
 }
 
 .stop-marker.is-near {

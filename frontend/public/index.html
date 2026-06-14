@@ -49,9 +49,45 @@
         </div>
     </section>
 
+    <section class="board-sheet" id="board-sheet" aria-label="Felszállás jelzése" hidden>
+        <button type="button" class="board-sheet-scrim" id="board-sheet-scrim" aria-label="Bezárás"></button>
+        <div class="board-sheet-panel" role="dialog" aria-modal="true" aria-labelledby="board-sheet-stop-name">
+            <button type="button" class="board-sheet-close" id="board-sheet-close" aria-label="Bezárás">×</button>
+            <h2 class="board-sheet-stop" id="board-sheet-stop-name">—</h2>
+            <p class="board-sheet-arrival" id="board-sheet-arrival">Következő érkezés: —</p>
+            <p class="board-sheet-meta" id="board-sheet-meta"></p>
+            <label class="board-sheet-phone-wrap" id="board-sheet-phone-wrap" hidden>
+                <span class="board-sheet-phone-lbl">Telefon (egyszer megadva, később emlékezünk)</span>
+                <input type="tel" id="board-sheet-phone" inputmode="tel" autocomplete="tel" placeholder="+36 30 123 4567" />
+            </label>
+            <button type="button" class="board-sheet-cta" id="board-sheet-cta">FELSZÁLLNÉK ITT</button>
+        </div>
+    </section>
+
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="/opnav-config.js"></script>
     <script src="public_data.js"></script>
     <script src="public_app.js"></script>
+    <script>
+      window.KV_ANALYTICS_CONFIG = {
+        firebaseConfig: {
+          apiKey: "AIzaSyBxUxHjqx-9PX8PpgW05wZW7yR30wNBOaM",
+          authDomain: "ddc-analitika.firebaseapp.com",
+          projectId: "ddc-analitika"
+        },
+        tenant: "kisvonat",
+        project: "route_public",
+        collectionName: "analytics_events",
+        cellSizeM: 50,
+        maxRepresentativeAccuracyM: 100,
+        sampleIntervalMs: 30 * 60 * 1000,
+        privacyPolicyUrl: "/adatvedelem.html",
+        debug: false
+      };
+    </script>
+    <script
+      type="module"
+      src="js/kv_analytics_sender.js">
+    </script>
 </body>
 </html>
