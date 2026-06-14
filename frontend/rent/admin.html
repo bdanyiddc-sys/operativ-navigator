@@ -1,0 +1,4160 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#f97316" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <title>Reservation Map Admin</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <script src="booking_storage.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #1e293b;
+      --panel2: #334155;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+      --accent: #f97316;
+      --accent2: #fb923c;
+      --line: rgba(255,255,255,0.08);
+      --ok: #22c55e;
+      --warn: #eab308;
+      --route: #38bdf8;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      touch-action: manipulation;
+    }
+    .app {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) clamp(760px, 42vw, 920px);
+      width: 100vw;
+      height: 100vh;
+      min-height: 0;
+      overflow: hidden;
+    }
+    .map-panel {
+      position: relative;
+      width: 100%;
+      max-width: none;
+      min-width: 0;
+      min-height: 0;
+      height: 100%;
+    }
+    #map {
+      width: 100%;
+      height: 100%;
+      touch-action: pan-x pan-y pinch-zoom;
+    }
+    .btn-map-fs {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      z-index: 1000;
+      min-width: 44px;
+      min-height: 44px;
+      border: 0;
+      border-radius: 10px;
+      background: rgba(15, 23, 42, 0.88);
+      color: #fff;
+      font-size: 18px;
+      font-weight: 800;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+      touch-action: manipulation;
+    }
+    body.map-fullscreen { overflow: hidden; }
+    body.map-fullscreen .app { display: block; height: 100vh; height: 100dvh; }
+    body.map-fullscreen .map-panel {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      height: 100vh !important;
+      height: 100dvh !important;
+    }
+    body.map-fullscreen .map-panel #map {
+      height: 100vh !important;
+      height: 100dvh !important;
+    }
+    body.map-fullscreen .work-panel { display: none; }
+    .work-panel {
+      width: 100%;
+      min-width: 0;
+      max-width: none;
+      height: 100vh;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      background: var(--panel);
+      border-left: 1px solid var(--line);
+      overflow: hidden;
+    }
+    .work-header {
+      flex-shrink: 0;
+      padding: 12px 14px 10px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(15, 23, 42, 0.65);
+    }
+    .work-header-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .work-header h1 { margin: 0; font-size: 16px; font-weight: 800; letter-spacing: 0.03em; }
+    .work-header .sub { margin: 4px 0 0; color: var(--muted); font-size: 11px; line-height: 1.4; }
+    .main-nav {
+      flex-shrink: 0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(10, 16, 26, 0.55);
+    }
+    .main-nav-btn {
+      flex: 1 1 auto;
+      min-width: 0;
+      padding: 8px 10px;
+      border-radius: 9px;
+      border: 1px solid var(--line);
+      background: rgba(15, 23, 42, 0.55);
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .main-nav-btn.is-active {
+      border-color: rgba(249, 115, 22, 0.55);
+      background: rgba(154, 52, 18, 0.45);
+      color: #ffedd5;
+    }
+    .module-viewport {
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+      position: relative;
+    }
+    .main-module {
+      display: none;
+      height: 100%;
+      min-height: 0;
+      overflow: hidden;
+      padding: 12px 14px 18px;
+    }
+    .main-module.is-active { display: flex; flex-direction: column; }
+    .detail-module-pane,
+    .bookings-list-module {
+      flex: 1;
+      min-height: 0;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: rgba(15, 23, 42, 0.45);
+      overflow: hidden;
+    }
+    #module-detail.main-module.is-active,
+    #module-bookings.main-module.is-active {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      padding-bottom: 12px;
+    }
+    .booking-detail-header {
+      flex-shrink: 0;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(2, 6, 23, 0.55);
+    }
+    .bdh-top {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .bdh-top .bdh-title {
+      flex: 1;
+      text-align: center;
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+    }
+    .bdh-summary {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+      font-size: 12px;
+    }
+    .bdh-item label {
+      display: block;
+      font-size: 9px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      margin-bottom: 2px;
+    }
+    .bdh-item strong {
+      display: block;
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.3;
+      word-break: break-word;
+    }
+    .bdh-item .bdh-status { display: inline-block; margin-top: 2px; }
+    @media (max-width: 1100px) {
+      .bdh-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    .form-detail-scroll {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+    .detail-head-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+    .street-field-wrap { position: relative; }
+    .street-suggest {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: calc(100% + 4px);
+      z-index: 20;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel2);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+      max-height: 180px;
+      overflow-y: auto;
+    }
+    .street-suggest[hidden] { display: none !important; }
+    .street-suggest-item {
+      display: block;
+      width: 100%;
+      text-align: left;
+      border: 0;
+      border-bottom: 1px solid var(--line);
+      background: transparent;
+      color: var(--text);
+      padding: 8px 10px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .street-suggest-item:hover { background: rgba(249, 115, 22, 0.12); }
+    .legacy-address-hint {
+      font-size: 11px;
+      color: #fde68a;
+      margin: 4px 0 8px;
+      padding: 6px 8px;
+      border-radius: 8px;
+      background: rgba(120, 53, 15, 0.35);
+      border: 1px solid rgba(251, 191, 36, 0.35);
+    }
+    .gis-kv-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin: 10px 0;
+    }
+    .gis-kv {
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: rgba(2, 6, 23, 0.35);
+      font-size: 12px;
+    }
+    .gis-kv span {
+      display: block;
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .gis-kv strong { font-size: 13px; color: var(--text); font-weight: 700; }
+    .route-target-panel {
+      padding: 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      background: rgba(2, 132, 199, 0.12);
+      margin-bottom: 12px;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+    .route-target-panel .rt-title {
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    .route-target-panel .rt-id { font-weight: 900; color: #7dd3fc; }
+    .resources-section { margin-bottom: 16px; }
+    .resources-section h3 {
+      margin: 0 0 8px;
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+    }
+    .pane-head {
+      flex-shrink: 0;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .pane-scroll {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 10px 12px 12px;
+    }
+    .form-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(2, 6, 23, 0.35);
+    }
+    .form-tab {
+      padding: 7px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: transparent;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 800;
+      cursor: pointer;
+      letter-spacing: 0.04em;
+    }
+    .form-tab.is-active {
+      border-color: rgba(249, 115, 22, 0.5);
+      background: rgba(154, 52, 18, 0.35);
+      color: #ffedd5;
+    }
+    .form-tab-panel { display: none; padding: 10px 12px 12px; }
+    .form-tab-panel.is-active { display: block; }
+    .lifecycle-bar {
+      display: flex;
+      flex-wrap: nowrap;
+      align-items: center;
+      gap: 4px;
+      margin: 0 0 12px;
+      padding: 10px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: rgba(2, 6, 23, 0.4);
+      font-size: 11px;
+      font-weight: 700;
+      overflow-x: auto;
+    }
+    .lifecycle-step .lc-short { display: none; }
+    @media (max-width: 900px) {
+      .lifecycle-step .lc-long { display: none; }
+      .lifecycle-step .lc-short { display: inline; }
+      .lifecycle-bar { flex-wrap: wrap; }
+    }
+    .lifecycle-step {
+      padding: 5px 8px;
+      border-radius: 8px;
+      color: var(--muted);
+      border: 1px solid transparent;
+    }
+    .lifecycle-step.is-active { font-weight: 900; }
+    .lifecycle-step.lc-arajanlatkeres.is-active {
+      color: #fde68a; background: rgba(234, 179, 8, 0.25); border-color: rgba(251, 191, 36, 0.5);
+    }
+    .lifecycle-step.lc-megrendelve.is-active {
+      color: #ecfdf5; background: rgba(5, 150, 105, 0.55); border-color: rgba(16, 185, 129, 0.75);
+      box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.35);
+    }
+    .lifecycle-step.lc-teljesitve.is-active {
+      color: #bfdbfe; background: rgba(59, 130, 246, 0.35); border-color: rgba(96, 165, 250, 0.55);
+    }
+    .lc-arrow { color: var(--muted); font-size: 10px; }
+    .gis-route-box {
+      margin: 10px 0;
+      padding: 10px;
+      border-radius: 10px;
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      background: rgba(2, 132, 199, 0.1);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+    .analytics-placeholder {
+      padding: 24px 16px;
+      text-align: center;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+    .analytics-placeholder h3 {
+      margin: 0 0 12px;
+      color: #e9d5ff;
+      font-size: 18px;
+    }
+    .analytics-placeholder ul {
+      text-align: left;
+      max-width: 360px;
+      margin: 16px auto 0;
+      padding-left: 18px;
+    }
+    .module-full-card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      background: rgba(15, 23, 42, 0.45);
+    }
+    #module-calendar .module-full-card,
+    #module-routes .module-full-card,
+    #module-analytics .module-full-card {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+    .module-full-card h2 {
+      margin: 0 0 10px;
+      font-size: 13px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+    }
+    .bookings-list-module .list {
+      max-height: none;
+      flex: 1;
+      min-height: 120px;
+    }
+    .topbar {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .topbar h1 { margin: 0; font-size: 18px; font-weight: 800; letter-spacing: 0.03em; }
+    .topbar p { margin: 4px 0 0; color: var(--muted); font-size: 12px; line-height: 1.4; }
+    .btn {
+      border: 0; cursor: pointer; border-radius: 10px;
+      padding: 10px 14px; font-weight: 700; font-size: 13px;
+      background: var(--accent); color: #fff; white-space: nowrap;
+    }
+    .btn:hover { background: var(--accent2); }
+    .btn.secondary { background: #475569; }
+    .btn.ghost { background: transparent; border: 1px solid var(--line); color: var(--text); }
+    .btn.danger { background: #dc2626; }
+    .btn.route { background: #0284c7; }
+    .btn.sm { padding: 7px 10px; font-size: 12px; min-height: 36px; }
+    .collapse-head {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      border: 0;
+      background: transparent;
+      color: var(--text);
+      padding: 0;
+      cursor: pointer;
+      min-height: 44px;
+      touch-action: manipulation;
+    }
+    .collapse-head h2 { margin: 0; pointer-events: none; }
+    .collapse-icon { font-size: 12px; color: var(--muted); }
+    .collapse-body.is-collapsed { display: none; }
+    .card {
+      border: 1px solid var(--line); border-radius: 12px;
+      padding: 12px; margin-bottom: 12px;
+      background: rgba(15, 23, 42, 0.55);
+    }
+    .card h2 {
+      margin: 0 0 10px; font-size: 14px; font-weight: 800;
+      text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted);
+    }
+    .stats {
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      gap: 8px; margin-bottom: 12px;
+    }
+    .stat {
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid var(--line); border-radius: 10px; padding: 10px;
+    }
+    .stat strong { display: block; font-size: 20px; line-height: 1.1; }
+    .stat span { color: var(--muted); font-size: 11px; }
+    label {
+      display: block; font-size: 13px; font-weight: 600;
+      color: var(--text); margin-bottom: 5px;
+      text-transform: none; letter-spacing: normal;
+    }
+    .tech-only { display: none !important; }
+    .dispatcher-save-bar {
+      flex-shrink: 0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 12px;
+      border-top: 1px solid var(--line);
+      background: rgba(15, 23, 42, 0.92);
+      position: sticky;
+      bottom: 0;
+      z-index: 5;
+    }
+    .dispatcher-save-bar .btn-primary-save {
+      flex: 1 1 140px;
+      min-height: 44px;
+      font-size: 15px;
+    }
+    .main-nav-btn[data-main-module="detail"] {
+      flex: 1.4 1 auto;
+      font-size: 12px;
+    }
+    .lifecycle-step { cursor: pointer; user-select: none; }
+    .lifecycle-step:hover { opacity: 0.92; }
+    .list-intro {
+      font-size: 13px;
+      color: var(--muted);
+      margin: 0 0 10px;
+      line-height: 1.45;
+    }
+    .booking-detail-view .form-detail-scroll {
+      display: flex;
+      flex-direction: column;
+    }
+    .booking-detail-view #formBody {
+      flex: 1;
+      min-height: 0;
+    }
+    .bdh-item strong#bdhId { color: #fdba74; font-size: 15px; }
+    .work-header h1 { font-size: 18px; }
+    .work-header .sub { font-size: 12px; }
+    input, select, textarea {
+      width: 100%; border: 1px solid var(--line); border-radius: 8px;
+      padding: 9px 10px; font-size: 14px;
+      background: var(--panel2); color: var(--text);
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: 2px solid rgba(249, 115, 22, 0.45); border-color: var(--accent);
+    }
+    textarea { min-height: 64px; resize: vertical; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+    .field { margin-bottom: 8px; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .hint { margin: 4px 0 0; font-size: 11px; color: var(--muted); line-height: 1.35; }
+    .geo-status { font-size: 12px; margin-top: 6px; min-height: 18px; }
+    .geo-status.ok { color: var(--ok); }
+    .geo-status.warn { color: var(--warn); }
+    .geo-status.err { color: #f87171; }
+    .route-saved-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 8px;
+      padding: 6px 10px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--ok);
+      background: rgba(34, 197, 94, 0.12);
+      border: 1px solid rgba(34, 197, 94, 0.35);
+    }
+    .filters { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .list {
+      max-height: 300px; overflow-y: auto;
+      border: 1px solid var(--line); border-radius: 10px;
+    }
+    .list-item {
+      padding: 10px 12px; border-bottom: 1px solid var(--line); cursor: pointer;
+    }
+    .list-item:hover, .list-item.is-active { background: rgba(249, 115, 22, 0.12); }
+    .list-item:last-child { border-bottom: 0; }
+    .list-title { font-weight: 800; font-size: 14px; }
+    .list-meta { color: var(--muted); font-size: 12px; margin-top: 3px; }
+    .list-tags { margin-top: 5px; display: flex; flex-wrap: wrap; gap: 5px; }
+    .tag {
+      display: inline-block; padding: 2px 8px; border-radius: 999px;
+      font-size: 11px; font-weight: 700;
+    }
+    .tag-people { background: rgba(34, 197, 94, 0.2); color: #86efac; }
+    .tag-veh { background: rgba(56, 189, 248, 0.2); color: #7dd3fc; }
+    .tag-drv { background: rgba(168, 85, 247, 0.2); color: #d8b4fe; }
+    .tag-st-arajanlatkeres { background: rgba(249, 115, 22, 0.28); color: #fdba74; }
+    .tag-st-ajanlat_kikuldve { background: rgba(234, 179, 8, 0.28); color: #fde047; }
+    .tag-st-varakozik { background: rgba(168, 85, 247, 0.28); color: #d8b4fe; }
+    .tag-st-megrendelve {
+      background: rgba(5, 150, 105, 0.55);
+      color: #ecfdf5;
+      border: 1px solid rgba(16, 185, 129, 0.65);
+      font-weight: 800;
+    }
+    .tag-st-teljesitve { background: rgba(59, 130, 246, 0.35); color: #93c5fd; }
+    .tag-st-lemondva { background: rgba(239, 68, 68, 0.28); color: #fca5a5; }
+    .list-item { position: relative; }
+    .list-item-actions { margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap; }
+    .list-del-btn { font-size: 12px; padding: 4px 8px; min-height: 0; }
+    .rent-modal {
+      position: fixed; inset: 0; z-index: 9999;
+      background: rgba(0,0,0,0.55); display: flex; align-items: center; justify-content: center;
+      padding: 16px;
+    }
+    .rent-modal[hidden] { display: none !important; }
+    .rent-modal-box {
+      background: var(--panel, #1e293b); border: 1px solid var(--line, #334155);
+      border-radius: 10px; padding: 18px 20px; max-width: 360px; width: 100%;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+    }
+    .rent-modal-box p { margin: 0 0 14px; line-height: 1.45; }
+    .rent-modal-actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+    @media (max-width: 720px) {
+      .rent-modal { padding: 12px; align-items: center; }
+      .rent-modal-box { max-width: min(360px, calc(100vw - 24px)); }
+      .rent-modal-actions { flex-direction: column-reverse; width: 100%; }
+      .rent-modal-actions .btn { width: 100%; min-height: 44px; justify-content: center; }
+    }
+    .empty { padding: 20px; text-align: center; color: var(--muted); font-size: 13px; }
+    .route-result {
+      margin-top: 10px; padding: 10px; border-radius: 10px;
+      background: rgba(2, 132, 199, 0.12); border: 1px solid rgba(56, 189, 248, 0.35);
+      font-size: 13px; line-height: 1.55;
+    }
+    .route-result strong { color: #7dd3fc; }
+    .route-target {
+      padding: 8px 10px; border-radius: 8px;
+      background: rgba(15, 23, 42, 0.6); border: 1px solid var(--line);
+      font-size: 13px; margin-bottom: 8px;
+    }
+    .leaflet-popup-content {
+      margin: 10px 12px;
+      line-height: 1.45;
+      font-size: 13px;
+      color: #1e293b;
+      max-width: min(300px, calc(100vw - 48px));
+    }
+    .leaflet-container { font: inherit; }
+    .popup-date { font-weight: 800; font-size: 15px; }
+    .popup-time { font-weight: 700; color: #c2410c; }
+    .popup-people { font-weight: 800; font-size: 14px; margin: 4px 0; }
+    .popup-meta { font-size: 12px; color: #475569; margin: 2px 0; }
+    .popup-place { color: #334155; font-weight: 600; margin-top: 4px; }
+    .popup-nav { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+    .popup-nav a, .popup-nav button {
+      display: inline-block; padding: 6px 10px; border-radius: 8px;
+      text-decoration: none; font-weight: 700; font-size: 12px; color: #fff; border: 0; cursor: pointer;
+    }
+    .nav-gmaps { background: #2563eb; }
+    .nav-waze { background: #0ea5e9; }
+    .nav-route { background: #0284c7; }
+    .leaflet-tooltip.map-label {
+      background: rgba(15, 23, 42, 0.94);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+      color: #f1f5f9;
+      font-size: 11px;
+      line-height: 1.35;
+      padding: 5px 8px;
+      font-weight: 600;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+    .leaflet-tooltip-left.map-label::before,
+    .leaflet-tooltip-right.map-label::before {
+      border-right-color: rgba(15, 23, 42, 0.94);
+    }
+    .map-label .ml-date { font-weight: 800; font-size: 12px; color: #fb923c; }
+    .map-label .ml-time { color: #fde68a; }
+    .map-label .ml-people { font-weight: 800; color: #86efac; }
+    .map-label .ml-status { color: #93c5fd; font-weight: 700; }
+    .map-label .ml-veh { color: #7dd3fc; font-weight: 800; }
+    .view-toggle {
+      display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;
+    }
+    .view-toggle .btn.is-active {
+      background: #0284c7;
+      box-shadow: inset 0 0 0 2px rgba(255,255,255,0.25);
+    }
+    .cal-nav {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 8px; gap: 8px;
+    }
+    .cal-title { font-weight: 800; font-size: 14px; }
+    .cal-grid {
+      display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px;
+    }
+    .cal-head {
+      text-align: center; font-size: 10px; font-weight: 700;
+      color: var(--muted); padding: 4px 0;
+    }
+    .cal-day {
+      border: 1px solid var(--line); border-radius: 8px;
+      min-height: 52px; padding: 4px; cursor: pointer;
+      font-size: 10px; line-height: 1.25;
+    }
+    .cal-day:hover { filter: brightness(1.08); }
+    .cal-day.is-out { opacity: 0.35; pointer-events: none; }
+    .cal-day.is-selected { outline: 2px solid var(--accent); }
+    .cal-day-num { font-weight: 800; font-size: 11px; }
+    .cal-day-meta { color: rgba(255,255,255,0.9); margin-top: 2px; }
+    .load-0 { background: #4b5563; }
+    .load-1 { background: #15803d; }
+    .load-2 { background: #a16207; }
+    .load-3 { background: #b91c1c; }
+    .veh-row {
+      display: grid; grid-template-columns: 56px 1fr auto;
+      gap: 8px; align-items: center;
+      padding: 8px 0; border-bottom: 1px solid var(--line);
+      font-size: 12px;
+    }
+    .veh-row:last-child { border-bottom: 0; }
+    .veh-id { font-weight: 900; color: #7dd3fc; }
+    .veh-st-free { color: #86efac; font-weight: 800; }
+    .veh-st-cond { color: #fde047; font-weight: 800; }
+    .veh-st-booked { color: #fca5a5; font-weight: 800; }
+    .lifecycle-hint {
+      font-size: 11px; color: var(--muted); margin: 0 0 10px; line-height: 1.45;
+    }
+    .suggest-block { margin: 8px 0 4px; }
+    .suggest-label {
+      font-size: 11px; font-weight: 700; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.04em; margin: 0 0 6px;
+    }
+    .suggest-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .suggest-chip {
+      padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line);
+      font-size: 12px; font-weight: 700; cursor: pointer; background: rgba(15, 23, 42, 0.55);
+    }
+    .suggest-chip.st-szabad { border-color: rgba(34, 197, 94, 0.45); color: #86efac; }
+    .suggest-chip.st-feltet { border-color: rgba(234, 179, 8, 0.45); color: #fde047; }
+    .suggest-chip.st-foglalt { border-color: rgba(248, 113, 113, 0.35); color: #fca5a5; opacity: 0.7; cursor: not-allowed; }
+    .suggest-chip.is-picked { outline: 2px solid var(--accent); }
+    .conflict-warn {
+      color: #fecaca; font-size: 12px; font-weight: 700; margin: 8px 0;
+      padding: 8px 10px; border-radius: 8px;
+      background: rgba(220, 38, 38, 0.15); border: 1px solid rgba(248, 113, 113, 0.4);
+    }
+    .admin-login-gate {
+      position: fixed; inset: 0; z-index: 99999;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(2, 6, 23, 0.92); padding: 20px;
+    }
+    .admin-login-gate[hidden] { display: none !important; }
+    .admin-login-box {
+      width: min(360px, 100%); padding: 22px 20px; border-radius: 14px;
+      border: 1px solid var(--line); background: var(--panel);
+    }
+    .admin-login-box h2 { margin: 0 0 14px; font-size: 16px; font-weight: 800; }
+    .admin-login-box label {
+      display: block; margin-bottom: 10px; font-size: 11px; font-weight: 700; color: var(--muted);
+    }
+    .admin-login-box select,
+    .admin-login-box input {
+      width: 100%; margin-top: 4px; padding: 9px 10px; border-radius: 8px;
+      border: 1px solid var(--line); background: var(--panel2); color: var(--text); font-size: 14px;
+    }
+    .admin-login-box button {
+      width: 100%; margin-top: 6px; padding: 10px 14px; border: 0; border-radius: 10px;
+      background: var(--accent); color: #fff; font-weight: 800; cursor: pointer;
+    }
+    .admin-login-err { margin: 10px 0 0; font-size: 12px; color: #fca5a5; min-height: 16px; }
+    .admin-user-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 12px; color: var(--muted); margin-top: 6px;
+    }
+    .admin-user-badge.is-off { opacity: 0.55; }
+    .btn-admin-logout {
+      border: 1px solid var(--line); background: transparent; color: var(--text);
+      border-radius: 8px; padding: 4px 8px; font-size: 11px; font-weight: 700; cursor: pointer;
+    }
+    .future-hint {
+      border-style: dashed;
+      font-size: 12px; color: var(--muted); line-height: 1.45;
+    }
+    .route-geom-field { margin-top: 8px; }
+    .route-geom-field textarea { min-height: 72px; font-family: monospace; font-size: 11px; }
+    @media (max-width: 1000px) {
+      html, body { overflow: auto; height: auto; min-height: 100%; }
+      .app {
+        display: flex;
+        flex-direction: column;
+        height: auto;
+        min-height: 100vh;
+        min-height: 100dvh;
+        grid-template-columns: 1fr;
+      }
+      .map-panel {
+        order: 1;
+        flex: 0 0 auto;
+        height: 42vh;
+        height: 42dvh;
+        min-height: 42vh;
+        min-height: 42dvh;
+      }
+      .map-panel #map {
+        height: 42vh;
+        height: 42dvh;
+        min-height: 42vh;
+        min-height: 42dvh;
+      }
+      .work-panel {
+        order: 2;
+        height: auto;
+        min-height: 0;
+        overflow: visible;
+        flex: 1 1 auto;
+      }
+      .module-viewport { overflow: visible; }
+      .main-module { overflow: visible; height: auto; }
+      .work-panel { min-width: 0; max-width: none; }
+      .detail-module-pane,
+      .bookings-list-module { min-width: 0; }
+      .main-nav { overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; }
+      .main-nav-btn { flex: 0 0 auto; }
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    .rent-data-status { font-size: 12px; margin: 6px 0 0; color: var(--muted); }
+    .rent-data-status.is-ok { color: #4ade80; }
+    .rent-data-status.is-loading { color: #fbbf24; }
+    .rent-data-status.is-error { color: #f87171; }
+    .grid2, .grid3, .filters { grid-template-columns: 1fr; }
+      .btn, .btn.sm, .view-toggle .btn {
+        min-height: 44px;
+        min-width: 44px;
+        padding: 10px 14px;
+      }
+      .work-header-top { flex-direction: column; align-items: stretch; }
+      .work-header-top .btn { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div id="admin-login-gate" class="admin-login-gate" aria-label="Belépés">
+    <form id="admin-login-form" class="admin-login-box">
+      <h2>Reservation Map Admin</h2>
+      <label>Felhasználó
+        <select id="admin-login-user" required></select>
+      </label>
+      <label>PIN
+        <input type="password" id="admin-login-pin" autocomplete="current-password" required />
+      </label>
+      <button type="submit">Belépés</button>
+      <p id="admin-login-err" class="admin-login-err" role="alert"></p>
+    </form>
+  </div>
+
+  <div class="app">
+    <div class="map-panel" id="mapPanel">
+      <div id="map" aria-label="Foglalási térkép"></div>
+      <button type="button" class="btn-map-fs" id="btnMapFullscreen" title="Térkép teljes képernyő" aria-label="Térkép teljes képernyő">⛶</button>
+    </div>
+
+    <aside class="work-panel">
+      <header class="work-header">
+        <div class="work-header-top">
+          <div>
+            <h1>Reservation Map Admin</h1>
+            <p class="sub">Foglalások · térkép · naptár · útvonal</p>
+            <span id="admin-user-badge" class="admin-user-badge is-off">Bejelentkezve: <strong id="admin-user-name">—</strong>
+              <button type="button" id="admin-logout-btn" class="btn-admin-logout" hidden>Kilépés</button>
+            </span>
+          </div>
+          <button type="button" class="btn sm" id="btnNew">Új bérlés</button>
+        </div>
+        <div class="view-toggle" style="margin-top:10px">
+          <button type="button" class="btn secondary sm is-active" id="viewNormal">Normál nézet</button>
+          <button type="button" class="btn secondary sm" id="viewLoad">Terheltségi nézet</button>
+        </div>
+      </header>
+
+      <nav class="main-nav" aria-label="Főmenü">
+        <button type="button" class="main-nav-btn is-active" data-main-module="detail">Foglalási adatlap</button>
+        <button type="button" class="main-nav-btn" data-main-module="bookings">Foglalások</button>
+        <button type="button" class="main-nav-btn" data-main-module="calendar">Naptár</button>
+        <button type="button" class="main-nav-btn" data-main-module="routes">Útvonaltervezés</button>
+      </nav>
+
+      <div class="module-viewport">
+        <section id="module-detail" class="main-module is-active" aria-label="Foglalási adatlap">
+          <div id="formCard" class="detail-module-pane">
+              <div class="booking-detail-header" id="bookingDetailHeader">
+                <div class="bdh-top">
+                  <span class="bdh-title">Foglalási adatlap</span>
+                  <button type="button" class="btn route sm" id="btnOpenRouteModule">Útvonal tervezése</button>
+                </div>
+                <div class="bdh-summary">
+                  <div class="bdh-item"><label>Azonosító</label><strong id="bdhId">—</strong></div>
+                  <div class="bdh-item"><label>Megrendelő</label><strong id="bdhOrderer">—</strong></div>
+                  <div class="bdh-item"><label>Dátum</label><strong id="bdhDate">—</strong></div>
+                  <div class="bdh-item"><label>Létszám</label><strong id="bdhHeadcount">—</strong></div>
+                  <div class="bdh-item"><label>Állapot</label><strong id="bdhStatus" class="bdh-status tag tag-st-arajanlatkeres">—</strong></div>
+                </div>
+              </div>
+              <nav class="form-tabs" role="tablist" aria-label="Adatlap fülek">
+                <button type="button" class="form-tab is-active" data-form-tab="basic">Alapadatok</button>
+                <button type="button" class="form-tab" data-form-tab="client">Ügyfél</button>
+                <button type="button" class="form-tab" data-form-tab="resources">Erőforrások</button>
+                <button type="button" class="form-tab" data-form-tab="gis">GIS / Útvonal</button>
+              </nav>
+              <div class="form-detail-scroll">
+              <div id="formBody">
+                <div class="form-tab-panel is-active" data-form-panel="basic">
+                  <div class="lifecycle-bar" id="lifecycleBar" aria-label="Foglalás állapota" title="Kattints az állapot beállításához">
+                    <span class="lifecycle-step lc-arajanlatkeres" data-lc="ARAJANLATKERES">Árajánlatkérés</span>
+                    <span class="lc-arrow">→</span>
+                    <span class="lifecycle-step lc-ajanlat" data-lc="AJANLAT_KIKULDVE">Ajánlat kiküldve</span>
+                    <span class="lc-arrow">→</span>
+                    <span class="lifecycle-step lc-varakozik" data-lc="VARAKOZIK">Várakozik</span>
+                    <span class="lc-arrow">→</span>
+                    <span class="lifecycle-step lc-megrendelve" data-lc="MEGRENDELVE">Megrendelve</span>
+                    <span class="lc-arrow">→</span>
+                    <span class="lifecycle-step lc-teljesitve" data-lc="TELJESITVE">Teljesítve</span>
+                  </div>
+                  <div class="field">
+                    <label for="status">Állapot</label>
+                    <select id="status">
+                      <option value="ARAJANLATKERES">Árajánlatkérés</option>
+                      <option value="AJANLAT_KIKULDVE">Ajánlat kiküldve</option>
+                      <option value="VARAKOZIK">Várakozik</option>
+                      <option value="MEGRENDELVE">Megrendelve</option>
+                      <option value="LEMONDVA">Lemondva</option>
+                      <option value="TELJESITVE">Teljesítve</option>
+                    </select>
+                  </div>
+                  <input type="hidden" id="bookingType" value="BERLES" />
+                  <div class="field">
+                    <label for="city">Város</label>
+                    <input id="city" placeholder="pl. Eger" />
+                  </div>
+                  <div class="grid2">
+                    <div class="field street-field-wrap">
+                      <label for="street">Utca / tér</label>
+                      <input id="street" placeholder="pl. Dobó tér" autocomplete="off" />
+                      <div id="streetSuggest" class="street-suggest" hidden></div>
+                    </div>
+                    <div class="field">
+                      <label for="houseNumber">Házszám</label>
+                      <input id="houseNumber" placeholder="pl. 1" />
+                    </div>
+                  </div>
+                  <div class="field">
+                    <label for="locationNote">Helyszín megnevezése</label>
+                    <input id="locationNote" placeholder="pl. Hotel előtt" />
+                  </div>
+                  <div class="field">
+                    <label for="placeName">Program megnevezése</label>
+                    <input id="placeName" placeholder="pl. Városnézés" />
+                  </div>
+                  <p id="legacyAddressHint" class="legacy-address-hint" hidden></p>
+                  <input type="hidden" id="address" />
+                  <p class="geo-status" id="geoStatus"></p>
+                  <p class="route-saved-badge" id="routeSavedBadge" hidden>Útvonal rögzítve ✓</p>
+                  <p class="hint">Cím alapján geokódolás. A térképre kattintva is beállítható a pont.</p>
+                  <div class="grid3">
+                    <div class="field">
+                      <label for="date">Dátum</label>
+                      <input id="date" type="date" />
+                    </div>
+                    <div class="field">
+                      <label for="timeStart">Kezdés</label>
+                      <input id="timeStart" type="time" />
+                    </div>
+                    <div class="field">
+                      <label for="timeEnd">Befejezés</label>
+                      <input id="timeEnd" type="time" />
+                    </div>
+                  </div>
+                  <div class="grid2">
+                    <div class="field">
+                      <label for="headcount">Létszám</label>
+                      <input id="headcount" type="number" min="1" placeholder="pl. 52" />
+                    </div>
+                    <div class="field">
+                      <label for="price">Ár (Ft)</label>
+                      <input id="price" type="number" min="0" step="1000" placeholder="pl. 180000" />
+                    </div>
+                  </div>
+                </div>
+
+                <div class="form-tab-panel" data-form-panel="client" hidden>
+                  <div class="field">
+                    <label for="ordererName">Megrendelő neve</label>
+                    <input id="ordererName" />
+                  </div>
+                  <div class="field">
+                    <label for="companyName">Cég</label>
+                    <input id="companyName" />
+                  </div>
+                  <div class="field">
+                    <label for="contact">Kapcsolattartó</label>
+                    <input id="contact" />
+                  </div>
+                  <div class="grid2">
+                    <div class="field">
+                      <label for="phone">Telefon</label>
+                      <input id="phone" type="tel" placeholder="+36 30 123 4567" />
+                    </div>
+                    <div class="field">
+                      <label for="email">Email</label>
+                      <input id="email" type="email" />
+                    </div>
+                  </div>
+                  <div class="field">
+                    <label for="taxId">Adószám</label>
+                    <input id="taxId" placeholder="12345678-2-10" />
+                  </div>
+                  <div class="field">
+                    <label for="note">Megjegyzés</label>
+                    <textarea id="note" placeholder="Esküvő, városnézés, különálló megállók…"></textarea>
+                  </div>
+                </div>
+
+                <div class="form-tab-panel" data-form-panel="resources" hidden>
+                  <div class="grid2">
+                    <div class="field">
+                      <label for="vehicle">Jármű</label>
+                      <input id="vehicle" placeholder="FÜGGŐ" value="FÜGGŐ" />
+                    </div>
+                    <div class="field">
+                      <label for="driver">Sofőr</label>
+                      <input id="driver" placeholder="FÜGGŐ" value="FÜGGŐ" />
+                    </div>
+                  </div>
+                  <div class="suggest-block" id="vehicleSuggestBlock">
+                    <p class="suggest-label">Járművek</p>
+                    <div id="vehicleSuggestList" class="suggest-chips"></div>
+                  </div>
+                  <div class="suggest-block" id="driverSuggestBlock">
+                    <p class="suggest-label">Sofőrök</p>
+                    <div id="driverSuggestList" class="suggest-chips"></div>
+                  </div>
+                  <div id="resourceConflictWarn" class="conflict-warn" hidden></div>
+                </div>
+
+                <div class="form-tab-panel" data-form-panel="gis" hidden>
+                  <div class="field tech-only">
+                    <label for="geometryType">Geometria típus</label>
+                    <select id="geometryType">
+                      <option value="POINT">POINT – pont</option>
+                      <option value="ROUTE">ROUTE – útvonal</option>
+                    </select>
+                  </div>
+                  <div class="field route-geom-field tech-only" id="routeGeometryField" hidden>
+                    <label for="routeGeometry">Útvonal GeoJSON</label>
+                    <textarea id="routeGeometry"></textarea>
+                  </div>
+                  <div class="field">
+                    <label>Koordináták</label>
+                    <p class="hint" id="gisCoordDisplay">—</p>
+                  </div>
+                  <div class="gis-kv-grid">
+                    <div class="gis-kv"><span>Típus</span><strong id="gisBookingType">—</strong></div>
+                    <div class="gis-kv"><span>Pontok száma</span><strong id="gisPointCount">—</strong></div>
+                    <div class="gis-kv"><span>Indulás cím</span><strong id="gisStartAddr">—</strong></div>
+                    <div class="gis-kv"><span>Cél cím</span><strong id="gisEndAddr">—</strong></div>
+                  </div>
+                  <div class="gis-kv-grid">
+                    <div class="gis-kv"><span>Távolság</span><strong id="gisDistance">—</strong></div>
+                    <div class="gis-kv"><span>Menetidő</span><strong id="gisTravelTime">—</strong></div>
+                    <div class="gis-kv"><span>Javasolt indulás</span><strong id="gisDeparture">—</strong></div>
+                    <div class="gis-kv"><span>Útvonal állapot</span><strong id="gisRouteStatus">—</strong></div>
+                  </div>
+                  <div class="gis-route-box" id="gisRouteSummary" hidden></div>
+                  <div class="actions">
+                    <button type="button" class="btn secondary sm" id="btnGisExportGeoJson" disabled>GeoJSON letöltése</button>
+                    <button type="button" class="btn route sm" id="btnAttachCalcRoute">Útvonal hozzárendelése és vissza az adatlaphoz</button>
+                    <button type="button" class="btn ghost sm" id="btnGisOpenRouteModule">Útvonal tervezése</button>
+                  </div>
+                </div>
+
+                <input type="hidden" id="editId" />
+                <input type="hidden" id="lat" />
+                <input type="hidden" id="lng" />
+
+                <div class="actions" style="margin-top:8px;padding-top:10px;border-top:1px solid var(--line)">
+                  <button type="button" class="btn" id="btnSave">Mentés</button>
+                  <button type="button" class="btn ghost" id="btnClear">Űrlap ürítése</button>
+                  <button type="button" class="btn danger sm" id="btnDelete" hidden>🗑 Törlés</button>
+                  <button type="button" class="btn secondary sm tech-only" id="btnExport">Export JSON</button>
+                  <button type="button" class="btn secondary sm tech-only" id="btnExportBookingsGeo">GeoJSON export</button>
+                </div>
+              </div>
+              </div>
+          </div>
+        </section>
+
+        <section id="module-bookings" class="main-module" aria-label="Foglalások" hidden>
+          <div id="bookingListView" class="bookings-list-module">
+              <div class="pane-head">Foglalások</div>
+              <div class="pane-scroll">
+                <div class="stats" style="margin-bottom:10px">
+                  <div class="stat"><strong id="statCount">0</strong><span>foglalás</span></div>
+                  <p id="rentDataStatus" class="rent-data-status" hidden></p>
+                  <div class="stat"><strong id="statPeople">0</strong><span>össz. fő</span></div>
+                  <div class="stat"><strong id="statDays">0</strong><span>érintett nap</span></div>
+                  <div class="stat"><strong id="statPeak">—</strong><span>csúcs nap (fő)</span></div>
+                </div>
+                <div class="filters-compact">
+                  <div class="filters">
+                    <div class="field">
+                      <label for="filterDay">Konkrét nap</label>
+                      <input id="filterDay" type="date" />
+                    </div>
+                    <div class="field">
+                      <label for="filterPlace">Helyszín</label>
+                      <input id="filterPlace" placeholder="Helyszín vagy cím…" />
+                    </div>
+                    <div class="field">
+                      <label for="filterFrom">Dátumtól</label>
+                      <input id="filterFrom" type="date" />
+                    </div>
+                    <div class="field">
+                      <label for="filterTo">Dátumig</label>
+                      <input id="filterTo" type="date" />
+                    </div>
+                  </div>
+                  <div class="field" style="margin-top:8px">
+                    <label for="filterSearch">Szöveges keresés</label>
+                    <input id="filterSearch" placeholder="Megrendelő, cég, jármű, sofőr, telefon…" />
+                  </div>
+                  <div class="actions">
+                    <button type="button" class="btn secondary sm" id="filterToday">Mai nap</button>
+                    <button type="button" class="btn secondary sm" id="filterTomorrow">Holnap</button>
+                    <button type="button" class="btn secondary sm" id="filter5">5 nap</button>
+                    <button type="button" class="btn secondary sm" id="filter7">7 nap</button>
+                    <button type="button" class="btn secondary sm" id="filter30">30 nap</button>
+                    <button type="button" class="btn ghost sm" id="filterReset">Törlés</button>
+                  </div>
+                </div>
+                <div class="list" id="bookingList"></div>
+              </div>
+          </div>
+        </section>
+
+        <section id="module-calendar" class="main-module" aria-label="Naptár" hidden>
+          <div class="module-full-card" id="calendarCard">
+            <h2>Naptár nézet</h2>
+            <div class="cal-nav">
+              <button type="button" class="btn ghost sm" id="calPrev">‹</button>
+              <span class="cal-title" id="calTitle">—</span>
+              <button type="button" class="btn ghost sm" id="calNext">›</button>
+            </div>
+            <div class="cal-grid" id="calendarGrid"></div>
+            <p class="hint">Szín: napi létszám. Kattintás: nap szűrése a foglalások listájában.</p>
+          </div>
+        </section>
+
+        <section id="module-routes" class="main-module" aria-label="Útvonaltervezés" hidden>
+          <div class="module-full-card" id="routeCard">
+            <h2>Útvonaltervezés</h2>
+            <div class="route-target-panel" id="routeTargetPanel">
+              <div class="rt-title">Célfoglalás</div>
+              <div id="routeTargetLabel">Nincs kiválasztott célfoglalás.</div>
+            </div>
+            <div class="field">
+              <label for="routeDepot">Kiindulási telephely</label>
+              <select id="routeDepot"></select>
+            </div>
+            <div class="field">
+              <label for="routeCustomFrom">Egyedi kiindulási cím (opcionális)</label>
+              <input id="routeCustomFrom" placeholder="Ha kitöltöd, felülírja a telephelyet" />
+            </div>
+            <div class="grid2">
+              <div class="field">
+                <label for="routeSpeed">Átlagsebesség (km/h)</label>
+                <input id="routeSpeed" type="number" min="5" max="120" value="30" />
+              </div>
+              <div class="field">
+                <label for="routeBookingId">Célfoglalás</label>
+                <select id="routeBookingId"></select>
+              </div>
+            </div>
+            <div class="actions">
+              <button type="button" class="btn route" id="btnCalcRoute">Útvonal számítása</button>
+              <button type="button" class="btn secondary sm tech-only" id="btnExportGeoJson" disabled>GeoJSON export</button>
+              <button type="button" class="btn route sm" id="btnWriteBackRoute">Útvonal hozzárendelése és vissza az adatlaphoz</button>
+              <button type="button" class="btn ghost sm" id="btnBackToBookingFromRoute">Vissza módosítás nélkül</button>
+            </div>
+            <div class="route-result" id="routeResult" hidden></div>
+            <p class="hint">OSRM geometria + menetidő. A foglalás kezdési ideje = célérkezés.</p>
+          </div>
+        </section>
+
+        <section id="module-analytics" class="main-module" aria-label="Analitika" hidden>
+          <div class="module-full-card analytics-placeholder">
+            <h3>Analitika · Hamarosan</h3>
+            <p>Marketing és érdeklődési elemzések később.</p>
+            <ul>
+              <li>Marketing hőtérkép</li>
+              <li>Városi hőtérkép</li>
+              <li>Országos érdeklődési térkép</li>
+              <li>Város → város érdeklődés</li>
+              <li>Időszakos elemzés</li>
+            </ul>
+          </div>
+        </section>
+      </div>
+    </aside>
+  </div>
+
+  <div id="rentDeleteModal" class="rent-modal" hidden role="dialog" aria-modal="true" aria-labelledby="rentDeleteModalTitle">
+    <div class="rent-modal-box">
+      <p id="rentDeleteModalTitle">Biztosan törölni szeretné a rendelést?</p>
+      <div class="rent-modal-actions">
+        <button type="button" class="btn danger" id="rentDeleteConfirm">IGEN</button>
+        <button type="button" class="btn ghost" id="rentDeleteCancel">MÉGSEM</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script type="application/json" id="admin-users-json">
+[
+  { "username": "ZF", "pin": "kisvonat", "role": "admin" },
+  { "username": "ZFR", "pin": "kisvonat", "role": "admin" },
+  { "username": "Lili", "pin": "kisvonat", "role": "dispatcher" },
+  { "username": "Service", "pin": "kisvonat", "role": "service" },
+  { "username": "Admin", "pin": "kisvonat", "role": "admin" }
+]
+  </script>
+  <script>
+(function () {
+  'use strict';
+
+  var STORAGE_KEY = 'opnav_foglalasi_terkep_v3';
+  var STORAGE_KEY_LEGACY = 'opnav_foglalasi_terkep_v1';
+  var MODULE_VERSION = '5.0.0';
+  var LABEL_ZOOM_FULL = 11;
+  var mapViewMode = 'normal';
+  var calendarMonth = new Date();
+  var FLEET_VEHICLES = ['KV01', 'KV02', 'KV03', 'KV04', 'KV05', 'KV11'];
+  var FLEET_VEHICLE_CITIES = {};
+  var FLEET_DRIVERS = [];
+  var VEHICLE_CAPACITY = 56;
+  var DEFAULT_PENDING = 'FÜGGŐ';
+  var DEFAULT_STATUS = 'ARAJANLATKERES';
+  var RENT_STATUS_VALUES = [
+    'ARAJANLATKERES',
+    'AJANLAT_KIKULDVE',
+    'VARAKOZIK',
+    'MEGRENDELVE',
+    'LEMONDVA',
+    'TELJESITVE'
+  ];
+  var DEFAULT_BOOKING_TYPE = 'BERLES';
+  var DEFAULT_GEOMETRY_TYPE = 'POINT';
+  var DEFAULT_SPEED_KMH = 30;
+  var API_BASE = localStorage.getItem('rsv_api_base') || 'http://localhost:3000';
+  var adminUsers = [];
+  var adminLoggedUser = null;
+  var appBooted = false;
+  var activeMainModule = 'detail';
+  var activeFormTab = 'basic';
+  var ROUTE_DRAFT_ID = '__ROUTE_DRAFT__';
+  var formDraftSnapshot = null;
+  var streetSuggestTimer = null;
+  var streetSuggestSeq = 0;
+
+  var RESOURCE_STATE_LABEL = {
+    SZABAD: 'Szabad',
+    FELTETELES: 'Feltételes',
+    FOGLALT: 'Foglalt'
+  };
+
+  var RESOURCE_STATE_CLASS = {
+    SZABAD: 'st-szabad',
+    FELTETELES: 'st-feltet',
+    FOGLALT: 'st-foglalt'
+  };
+
+  var VEH_PLAN_CLASS = {
+    SZABAD: 'veh-st-free',
+    FELTETELES: 'veh-st-cond',
+    FOGLALT: 'veh-st-booked'
+  };
+
+  var STATUS_COLORS = {
+    ARAJANLATKERES: '#f97316',
+    AJANLAT_KIKULDVE: '#eab308',
+    VARAKOZIK: '#a855f7',
+    MEGRENDELVE: '#059669',
+    LEMONDVA: '#ef4444',
+    TELJESITVE: '#3b82f6'
+  };
+
+  var STATUS_SHORT = {
+    ARAJANLATKERES: 'ÁK',
+    AJANLAT_KIKULDVE: 'AK',
+    VARAKOZIK: 'VÁ',
+    MEGRENDELVE: 'MR',
+    LEMONDVA: 'LM',
+    TELJESITVE: 'TEL'
+  };
+
+  var STATUS_LABEL = {
+    ARAJANLATKERES: 'Árajánlatkérés',
+    AJANLAT_KIKULDVE: 'Ajánlat kiküldve',
+    VARAKOZIK: 'Várakozik',
+    MEGRENDELVE: 'Megrendelve',
+    LEMONDVA: 'Lemondva',
+    TELJESITVE: 'Teljesítve'
+  };
+
+  var BOOKING_TYPE_LABEL = {
+    MENETRENDI_JARAT: 'Menetrendi járat',
+    BERLES: 'Bérlés'
+  };
+
+  var DEPOTS = [
+    { id: 'SZFV', name: 'Székesfehérvár', address: 'Székesfehérvár', lat: 47.1860, lng: 18.4221 },
+    { id: 'TATA', name: 'Tata', address: 'Tata', lat: 47.6529, lng: 18.3187 },
+    { id: 'EGER', name: 'Eger', address: 'Eger', lat: 47.9025, lng: 20.3772 },
+    { id: 'VESZPREM', name: 'Veszprém', address: 'Veszprém', lat: 47.0930, lng: 17.9115 },
+    { id: 'GYOR', name: 'Győr', address: 'Győr', lat: 47.6875, lng: 17.6504 },
+    { id: 'BALATONFURED', name: 'Balatonfüred', address: 'Balatonfüred', lat: 46.9580, lng: 17.8880 }
+  ];
+
+  var map = L.map('map', { zoomControl: true, tapTolerance: 20 }).setView([47.1625, 19.5033], 7);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+  }).addTo(map);
+
+  var bookings = [];
+  var calculatedRoutes = [];
+  var rentDataSource = '';
+  var isSavingBooking = false;
+  var isPatchingRoute = false;
+  var pendingDeleteId = null;
+  var lastFormHeadcount = null;
+  var markers = [];
+  var markerEntries = [];
+  var markerLayer = L.layerGroup().addTo(map);
+  var bookingRouteLayer = L.layerGroup().addTo(map);
+  var routeLayer = L.layerGroup().addTo(map);
+  var draftMarker = null;
+  var geocodeTimer = null;
+  var geocodeSeq = 0;
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  function adminUserName(u) {
+    return String((u && (u.username || u.user)) || '');
+  }
+
+  function readAdminUsersEmbedded() {
+    var node = document.getElementById('admin-users-json');
+    if (node && node.textContent) {
+      try {
+        var parsed = JSON.parse(node.textContent);
+        if (Array.isArray(parsed) && parsed.length) return parsed;
+      } catch (e) { /* fallback below */ }
+    }
+    return [];
+  }
+
+  function fetchAdminUsers() {
+    var embedded = readAdminUsersEmbedded();
+    return Promise.resolve(embedded.length ? embedded : []);
+  }
+
+  function verifyAdminLogin(userName, pinVal) {
+    return adminUsers.find(function (u) {
+      return adminUserName(u) === userName && String(u.pin) === String(pinVal);
+    }) || null;
+  }
+
+  function applyAdminUser(userName, role) {
+    adminLoggedUser = userName;
+    sessionStorage.setItem('admin_user', userName);
+    if (role) sessionStorage.setItem('admin_user_role', role);
+    var gate = $('admin-login-gate');
+    var badge = $('admin-user-badge');
+    var nameEl = $('admin-user-name');
+    var logoutBtn = $('admin-logout-btn');
+    if (gate) gate.hidden = true;
+    if (badge) badge.classList.remove('is-off');
+    if (nameEl) nameEl.textContent = userName;
+    if (logoutBtn) logoutBtn.hidden = false;
+    bootApplication();
+  }
+
+  function showAdminLoginGate() {
+    adminLoggedUser = null;
+    sessionStorage.removeItem('admin_user');
+    sessionStorage.removeItem('admin_user_role');
+    var gate = $('admin-login-gate');
+    var badge = $('admin-user-badge');
+    var pin = $('admin-login-pin');
+    var err = $('admin-login-err');
+    var logoutBtn = $('admin-logout-btn');
+    if (gate) gate.hidden = false;
+    if (badge) badge.classList.add('is-off');
+    if (pin) pin.value = '';
+    if (err) err.textContent = '';
+    if (logoutBtn) logoutBtn.hidden = true;
+    var nameEl = $('admin-user-name');
+    if (nameEl) nameEl.textContent = '—';
+  }
+
+  function adminLogout() {
+    showAdminLoginGate();
+  }
+
+  function loadFleetConfig() {
+    function applyConfig(data) {
+      if (!data) return false;
+      var vehicles = data.vehicles;
+      var drivers = data.drivers;
+      if (Array.isArray(vehicles) && vehicles.length) {
+        FLEET_VEHICLE_CITIES = {};
+        FLEET_VEHICLES = vehicles.map(function (v) {
+          var id = String(v.id || v.vehicle_id || '').trim();
+          if (id) {
+            FLEET_VEHICLE_CITIES[id] = String(v.city || v.local || '').trim();
+          }
+          return id;
+        }).filter(Boolean);
+      }
+      if (Array.isArray(drivers) && drivers.length) {
+        FLEET_DRIVERS = drivers.map(function (d) {
+          return {
+            id: String(d.id || d.driver_id || '').trim(),
+            name: String(d.name || d.driver_name || '').trim()
+          };
+        }).filter(function (d) { return d.id || d.name; });
+      }
+      if (FLEET_VEHICLES.length || FLEET_DRIVERS.length) {
+        renderResourceSuggestions();
+      }
+      return !!(FLEET_VEHICLES.length || FLEET_DRIVERS.length);
+    }
+
+    function fetchConfigJsonPaths() {
+      var paths = [
+        '../../operativ-navigator_RESTORE/backend/data/config.json',
+        '../operativ-navigator_RESTORE/backend/data/config.json',
+        '../../../operativ-navigator_RESTORE/backend/data/config.json',
+        API_BASE.replace(/\/$/, '') + '/data/config.json'
+      ];
+      function tryPath(i) {
+        if (i >= paths.length) return Promise.resolve(false);
+        return fetch(paths[i], { headers: { Accept: 'application/json' } })
+          .then(function (r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+          })
+          .then(function (raw) { return applyConfig(raw); })
+          .catch(function () { return tryPath(i + 1); });
+      }
+      return tryPath(0);
+    }
+
+    return fetch(API_BASE.replace(/\/$/, '') + '/api/config', { headers: { Accept: 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        if (data && data.ok) return applyConfig(data);
+        return fetchConfigJsonPaths();
+      })
+      .catch(function () { return fetchConfigJsonPaths(); });
+  }
+
+  function initAdminLogin() {
+    return fetchAdminUsers().then(function (rows) {
+      adminUsers = rows.length ? rows : readAdminUsersEmbedded();
+      var gate = $('admin-login-gate');
+      var form = $('admin-login-form');
+      var sel = $('admin-login-user');
+      var pin = $('admin-login-pin');
+      var err = $('admin-login-err');
+      var logoutBtn = $('admin-logout-btn');
+
+      if (sel) {
+        sel.innerHTML = adminUsers.map(function (u) {
+          var name = adminUserName(u);
+          return '<option value="' + escapeHtml(name) + '">' + escapeHtml(name) + '</option>';
+        }).join('');
+      }
+
+      var saved = sessionStorage.getItem('admin_user');
+      if (saved && adminUsers.some(function (u) { return adminUserName(u) === saved; })) {
+        var role = sessionStorage.getItem('admin_user_role') || '';
+        if (!role) {
+          var u = adminUsers.find(function (x) { return adminUserName(x) === saved; });
+          role = u && u.role ? u.role : '';
+        }
+        applyAdminUser(saved, role);
+      } else {
+        showAdminLoginGate();
+      }
+
+      if (form) {
+        form.addEventListener('submit', function (ev) {
+          ev.preventDefault();
+          var user = sel ? sel.value : '';
+          var pinVal = pin ? pin.value : '';
+          var match = verifyAdminLogin(user, pinVal);
+          if (!match) {
+            if (err) err.textContent = 'Hibás felhasználó vagy PIN.';
+            return;
+          }
+          if (err) err.textContent = '';
+          if (pin) pin.value = '';
+          applyAdminUser(user, match.role || '');
+        });
+      }
+
+      if (logoutBtn) {
+        logoutBtn.addEventListener('click', function (ev) {
+          ev.preventDefault();
+          adminLogout();
+        });
+      }
+
+      if (gate && !adminLoggedUser) gate.hidden = false;
+    });
+  }
+
+  function isPendingAssign(val) {
+    var v = String(val || '').trim().toUpperCase();
+    return !v || v === DEFAULT_PENDING;
+  }
+
+  function parseTimeMinutes(t) {
+    if (!t) return 0;
+    var p = String(t).split(':');
+    return (parseInt(p[0], 10) || 0) * 60 + (parseInt(p[1], 10) || 0);
+  }
+
+  function bookingsConflictOnSlot(a, b) {
+    if (!a || !b || a.id === b.id) return false;
+    if (!a.date || !b.date || a.date !== b.date) return false;
+    if (!a.timeStart || !a.timeEnd || !b.timeStart || !b.timeEnd) return false;
+    var a0 = parseTimeMinutes(a.timeStart);
+    var a1 = parseTimeMinutes(a.timeEnd);
+    var b0 = parseTimeMinutes(b.timeStart);
+    var b1 = parseTimeMinutes(b.timeEnd);
+    return a0 < b1 && b0 < a1;
+  }
+
+  function vehicleUsedByBooking(b) {
+    return !isPendingAssign(b && b.vehicle);
+  }
+
+  function driverUsedByBooking(b) {
+    return !isPendingAssign(b && b.driver);
+  }
+
+  function driverMatchesValue(driver, value) {
+    var d = String(value || '').trim();
+    if (!d || d.toUpperCase() === DEFAULT_PENDING) return false;
+    return driver.id === d || driver.name === d;
+  }
+
+  function normalizeCityName(name) {
+    return String(name || '').trim().toLowerCase()
+      .replace(/ő/g, 'o').replace(/ű/g, 'u').replace(/á/g, 'a')
+      .replace(/é/g, 'e').replace(/í/g, 'i').replace(/ó/g, 'o')
+      .replace(/ö/g, 'o').replace(/ú/g, 'u').replace(/ü/g, 'u');
+  }
+
+  function statusLabel(status) {
+    var s = normalizeStatus(status);
+    return STATUS_LABEL[s] || s;
+  }
+
+  function getVehiclePresentation(vid, draft) {
+    var slotState = getVehicleSlotState(vid, draft);
+    if (slotState === 'FOGLALT') {
+      return { label: 'Foglalt', uiClass: 'st-foglalt', disabled: true };
+    }
+    if (slotState === 'FELTETELES') {
+      return { label: 'Feltételes', uiClass: 'st-feltet', disabled: false };
+    }
+    var bookingCity = normalizeCityName($('city').value || draft.city || '');
+    var vehCity = normalizeCityName(FLEET_VEHICLE_CITIES[vid] || '');
+    if (bookingCity && vehCity && bookingCity !== vehCity) {
+      return { label: 'Átcsoportosítható / más városból', uiClass: 'st-feltet', disabled: false };
+    }
+    return { label: 'Szabad', uiClass: 'st-szabad', disabled: false };
+  }
+
+  function openBookingForm(id) {
+    var b = bookings.find(function (x) { return x.id === id; });
+    if (!b) return;
+    fillForm(b);
+    setFormTab('basic');
+    setMainModule('detail');
+    var pts = getBookingRoutePoints(b);
+    if (pts.length >= 2) {
+      map.fitBounds(L.latLngBounds(pts.map(function (p) { return [p.lat, p.lng]; })), { padding: [36, 36], animate: true });
+    } else if (pts.length === 1) {
+      map.setView([pts[0].lat, pts[0].lng], 15, { animate: true });
+    } else if (b.lat != null && b.lng != null) {
+      map.setView([b.lat, b.lng], 15, { animate: true });
+    }
+    renderList(getFiltered());
+  }
+
+  function buildAddressForStorage() {
+    var street = $('street').value.trim();
+    var house = $('houseNumber').value.trim();
+    if (street && house) return street + ' ' + house;
+    if (street) return street;
+    return $('address').value.trim();
+  }
+
+  function syncHiddenAddress() {
+    $('address').value = buildAddressForStorage();
+  }
+
+  function formatAddressDisplay(b) {
+    if (!b) return '—';
+    if (b.street) {
+      return [b.street, b.houseNumber].filter(Boolean).join(' ') || b.address || '—';
+    }
+    return b.address || '—';
+  }
+
+  function formatEndpointAddress(addr) {
+    if (!addr) return '—';
+    if (typeof addr === 'string') return addr;
+    var parts = [addr.city, addr.street, addr.house_number || addr.houseNumber].filter(Boolean);
+    if (parts.length) return parts.join(', ');
+    return addr.display_name || '—';
+  }
+
+  function bookingRouteTypeLabel(b, pts) {
+    var t = String((b && b.booking_type) || '').toLowerCase();
+    if (t === 'custom_route' || t === 'point_to_point') return 'Útvonal';
+    if (t === 'single_location') return 'Helyszín';
+    if (pts && pts.length >= 2) return 'Útvonal';
+    if (b && b.geometryType === 'ROUTE') return 'Útvonal';
+    return 'Helyszín';
+  }
+
+  function fillAddressFields(b) {
+    b = b || {};
+    $('street').value = b.street || '';
+    $('houseNumber').value = b.houseNumber || '';
+    $('locationNote').value = b.locationNote || '';
+    var legacyHint = $('legacyAddressHint');
+    if (!b.street && b.address) {
+      if (!$('street').value) $('street').value = b.address;
+      if (legacyHint) {
+        legacyHint.hidden = false;
+        legacyHint.textContent = 'Régi cím formátum (address): ' + b.address;
+      }
+    } else if (legacyHint) {
+      legacyHint.hidden = true;
+      legacyHint.textContent = '';
+    }
+    syncHiddenAddress();
+  }
+
+  function buildGeocodeQuery() {
+    var city = $('city').value.trim();
+    var street = $('street').value.trim();
+    var house = $('houseNumber').value.trim();
+    var parts = [city, street, house].filter(Boolean);
+    return parts.join(', ');
+  }
+
+  function scheduleStreetSuggest() {
+    clearTimeout(streetSuggestTimer);
+    streetSuggestTimer = setTimeout(function () {
+      var city = $('city').value.trim();
+      var street = $('street').value.trim();
+      var box = $('streetSuggest');
+      if (!box) return;
+      if (city.length < 2 || street.length < 2) {
+        box.hidden = true;
+        box.innerHTML = '';
+        return;
+      }
+      var seq = ++streetSuggestSeq;
+      var q = city + ', ' + street;
+      var url = 'https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=hu&addressdetails=0&q=' +
+        encodeURIComponent(q);
+      fetch(url, { headers: { Accept: 'application/json' } })
+        .then(function (r) { return r.ok ? r.json() : []; })
+        .then(function (rows) {
+          if (seq !== streetSuggestSeq) return;
+          if (!rows || !rows.length) {
+            box.hidden = true;
+            box.innerHTML = '';
+            return;
+          }
+          box.innerHTML = rows.map(function (row) {
+            var label = row.display_name || '';
+            var short = label.split(',')[0];
+            return '<button type="button" class="street-suggest-item" data-street="' +
+              escapeHtml(short) + '">' + escapeHtml(label) + '</button>';
+          }).join('');
+          box.hidden = false;
+          box.querySelectorAll('.street-suggest-item').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+              $('street').value = btn.getAttribute('data-street') || btn.textContent;
+              box.hidden = true;
+              syncHiddenAddress();
+              scheduleGeocode();
+            });
+          });
+        })
+        .catch(function () {
+          box.hidden = true;
+        });
+    }, 450);
+  }
+
+  function captureFormDraftSnapshot() {
+    formDraftSnapshot = {
+      editId: $('editId').value,
+      placeName: $('placeName').value,
+      city: $('city').value,
+      street: $('street').value,
+      houseNumber: $('houseNumber').value,
+      locationNote: $('locationNote').value,
+      date: $('date').value,
+      timeStart: $('timeStart').value,
+      timeEnd: $('timeEnd').value,
+      headcount: $('headcount').value,
+      status: $('status').value,
+      bookingType: $('bookingType').value,
+      vehicle: $('vehicle').value,
+      driver: $('driver').value,
+      geometryType: $('geometryType').value,
+      routeGeometry: $('routeGeometry').value,
+      price: $('price').value,
+      ordererName: $('ordererName').value,
+      companyName: $('companyName').value,
+      taxId: $('taxId').value,
+      contact: $('contact').value,
+      phone: $('phone').value,
+      email: $('email').value,
+      note: $('note').value,
+      lat: $('lat').value,
+      lng: $('lng').value
+    };
+  }
+
+  function buildBookingFromFormForRoute() {
+    syncHiddenAddress();
+    var id = $('editId').value || ROUTE_DRAFT_ID;
+    return normalizeBooking({
+      id: id,
+      placeName: $('placeName').value.trim(),
+      city: $('city').value.trim(),
+      street: $('street').value.trim(),
+      houseNumber: $('houseNumber').value.trim(),
+      locationNote: $('locationNote').value.trim(),
+      address: buildAddressForStorage(),
+      date: $('date').value,
+      timeStart: $('timeStart').value,
+      timeEnd: $('timeEnd').value,
+      headcount: readHeadcountForSave(getCurrentBookingBase()),
+      status: normalizeStatus($('status').value),
+      bookingType: $('bookingType').value === 'MENETRENDI_JARAT' ? 'MENETRENDI_JARAT' : DEFAULT_BOOKING_TYPE,
+      vehicle: ($('vehicle').value.trim() || DEFAULT_PENDING),
+      driver: ($('driver').value.trim() || DEFAULT_PENDING),
+      lat: $('lat').value ? parseFloat($('lat').value) : null,
+      lng: $('lng').value ? parseFloat($('lng').value) : null
+    });
+  }
+
+  function getRouteTargetBookingId() {
+    return $('editId').value || $('routeBookingId').value || ROUTE_DRAFT_ID;
+  }
+
+  function getRouteTargetBooking() {
+    var selId = $('routeBookingId').value;
+    var editId = $('editId').value;
+    var lookupId = selId || editId;
+    if (lookupId && lookupId !== ROUTE_DRAFT_ID) {
+      var saved = bookings.find(function (x) { return x.id === lookupId; });
+      if (saved) return saved;
+    }
+    return buildBookingFromFormForRoute();
+  }
+
+  function openRoutePlanning() {
+    captureFormDraftSnapshot();
+    var id = $('editId').value;
+    if (id) {
+      selectRouteTarget(id, false);
+    } else {
+      $('routeBookingId').value = ROUTE_DRAFT_ID;
+      updateRouteTargetLabel();
+    }
+    renderRouteTargetPanel();
+    setMainModule('routes');
+  }
+
+  function backToBookingFromRoute() {
+    setMainModule('detail');
+    renderGisTabSummary();
+  }
+
+  function attachCalcRouteToBookingAndBack() {
+    if (!attachCalcRouteToBooking(true)) return;
+    setMainModule('detail');
+    setFormTab('basic');
+    renderBasicRouteSavedBadge(getCurrentBookingBase());
+    setGeoStatus('Útvonal visszaírva. Mentés szükséges a tároláshoz.', 'warn');
+    renderGisTabSummary();
+  }
+
+  function bookingHasSavedRoute(b) {
+    if (!b) return false;
+    var geom = b.routeGeometry;
+    if (geom && geom.coordinates && geom.coordinates.length >= 2) return true;
+    if (geom && geom.type === 'LineString' && Array.isArray(geom.coordinates) && geom.coordinates.length >= 2) {
+      return true;
+    }
+    if (b.routePoints && b.routePoints.length >= 2) return true;
+    return getBookingRoutePoints(b).length >= 2;
+  }
+
+  function renderBasicRouteSavedBadge(b) {
+    var el = $('routeSavedBadge');
+    if (!el) return;
+    if (!b && $('routeGeometry') && $('routeGeometry').value.trim()) {
+      b = { routeGeometry: parseRouteGeometryInput($('routeGeometry').value.trim()) };
+    }
+    el.hidden = !bookingHasSavedRoute(b);
+    el.textContent = 'Útvonal rögzítve ✓';
+  }
+
+  function completeBookingSaveSuccess(saved) {
+    setMainModule('detail');
+    fillForm(saved);
+    setFormTab('basic');
+    renderBasicRouteSavedBadge(saved);
+    if (bookingHasSavedRoute(saved)) {
+      setGeoStatus('Útvonal sikeresen mentve', 'ok');
+    } else {
+      setGeoStatus('Mentve a szerverre.', 'ok');
+    }
+    render();
+    var scrollEl = document.querySelector('.form-detail-scroll');
+    if (scrollEl) scrollEl.scrollTop = 0;
+  }
+
+  function renderBookingDetailHeader() {
+    var id = $('editId').value;
+    var idEl = $('bdhId');
+    if (!idEl) return;
+    idEl.textContent = id || 'Új árajánlatkérés';
+    $('bdhOrderer').textContent = $('ordererName').value.trim() || $('companyName').value.trim() || '—';
+    $('bdhDate').textContent = $('date').value
+      ? formatHuDate($('date').value) + ' ' + formatTimeShort($('timeStart').value || '00:00')
+      : '—';
+    $('bdhHeadcount').textContent = (function () {
+      var hc = parseHeadcountValue($('headcount').value, null);
+      if (hc == null && lastFormHeadcount != null && lastFormHeadcount > 0) hc = lastFormHeadcount;
+      if (hc == null && id) {
+        var stored = bookings.find(function (b) { return b.id === id; });
+        hc = resolveBookingHeadcount(stored);
+      }
+      return hc != null ? (hc + ' fő') : '—';
+    })();
+    var stEl = $('bdhStatus');
+    var st = normalizeStatus($('status').value);
+    stEl.textContent = statusLabel(st);
+    stEl.className = 'bdh-status tag ' + statusTagClass(st);
+  }
+
+  function renderLifecycleBar() {
+    var st = normalizeStatus($('status').value);
+    document.querySelectorAll('.lifecycle-step[data-lc]').forEach(function (el) {
+      el.classList.toggle('is-active', el.getAttribute('data-lc') === st);
+    });
+  }
+
+  function initLifecycleClicks() {
+    document.querySelectorAll('.lifecycle-step[data-lc]').forEach(function (el) {
+      el.addEventListener('click', function () {
+        $('status').value = el.getAttribute('data-lc');
+        renderLifecycleBar();
+        renderBookingDetailHeader();
+        renderResourceSuggestions();
+      });
+    });
+  }
+
+  function setFormTab(tabId) {
+    activeFormTab = tabId || 'basic';
+    document.querySelectorAll('.form-tab[data-form-tab]').forEach(function (btn) {
+      var on = btn.getAttribute('data-form-tab') === activeFormTab;
+      btn.classList.toggle('is-active', on);
+    });
+    document.querySelectorAll('.form-tab-panel[data-form-panel]').forEach(function (panel) {
+      var on = panel.getAttribute('data-form-panel') === activeFormTab;
+      panel.classList.toggle('is-active', on);
+      panel.hidden = !on;
+    });
+    if (activeFormTab === 'gis') renderGisTabSummary();
+  }
+
+  function setMainModule(moduleId) {
+    activeMainModule = moduleId || 'detail';
+    document.querySelectorAll('.main-nav-btn[data-main-module]').forEach(function (btn) {
+      btn.classList.toggle('is-active', btn.getAttribute('data-main-module') === activeMainModule);
+    });
+    document.querySelectorAll('.main-module').forEach(function (mod) {
+      var on = mod.id === 'module-' + activeMainModule;
+      mod.classList.toggle('is-active', on);
+      mod.hidden = !on;
+    });
+    if (activeMainModule === 'routes') {
+      var rid = $('editId').value;
+      if (rid) selectRouteTarget(rid, false);
+      else if (!$('routeBookingId').value) $('routeBookingId').value = ROUTE_DRAFT_ID;
+      renderRouteTargetPanel();
+    }
+    if (activeMainModule === 'detail') renderGisTabSummary();
+    setTimeout(function () { map.invalidateSize(); }, 80);
+  }
+
+  function renderGisTabSummary() {
+    var coordEl = $('gisCoordDisplay');
+    var summaryEl = $('gisRouteSummary');
+    var distEl = $('gisDistance');
+    var timeEl = $('gisTravelTime');
+    var depEl = $('gisDeparture');
+    var statEl = $('gisRouteStatus');
+    var typeEl = $('gisBookingType');
+    var countEl = $('gisPointCount');
+    var startEl = $('gisStartAddr');
+    var endEl = $('gisEndAddr');
+    if (coordEl) {
+      var lat = $('lat').value;
+      var lng = $('lng').value;
+      coordEl.textContent = (lat && lng)
+        ? ('Lat: ' + Number(lat).toFixed(5) + ' · Lng: ' + Number(lng).toFixed(5))
+        : 'Nincs beállított koordináta.';
+    }
+    var id = $('editId').value;
+    var stored = id ? bookings.find(function (x) { return x.id === id; }) : null;
+    var pts = stored ? getBookingRoutePoints(stored) : [];
+    if (typeEl) {
+      typeEl.textContent = stored ? bookingRouteTypeLabel(stored, pts) : '—';
+    }
+    if (countEl) {
+      countEl.textContent = 'Pontok: ' + (pts.length ? String(pts.length) : '0');
+    }
+    if (startEl) {
+      startEl.textContent = stored && stored.start_address
+        ? formatEndpointAddress(stored.start_address) : '—';
+    }
+    if (endEl) {
+      endEl.textContent = stored && stored.end_address
+        ? formatEndpointAddress(stored.end_address) : '—';
+    }
+    var routeLookupId = id || ROUTE_DRAFT_ID;
+    var r = getRouteForBooking(routeLookupId);
+    var hasGeom = !!(r && r.geometry);
+    var linked = $('geometryType').value === 'ROUTE' && $('routeGeometry').value.trim();
+    if (distEl) distEl.textContent = (r && r.distanceKm != null) ? (r.distanceKm + ' km') : '—';
+    if (timeEl) timeEl.textContent = (r && r.travelMinutes != null) ? formatTravelMinutes(r.travelMinutes) : '—';
+    if (depEl) {
+      depEl.textContent = (r && r.suggestedDeparture)
+        ? String(r.suggestedDeparture).replace('T', ' ')
+        : '—';
+    }
+    if (statEl) {
+      if (!id && !getRouteForBooking(ROUTE_DRAFT_ID)) statEl.textContent = 'Új árajánlatkérés';
+      else if (!id && r && hasGeom) statEl.textContent = linked ? 'Visszaírva' : 'Számítva, nincs visszaírva';
+      else if (!r || !hasGeom) statEl.textContent = 'Nincs számított útvonal';
+      else if (linked) statEl.textContent = 'Visszaírva';
+      else statEl.textContent = 'Számítva, nincs visszaírva';
+    }
+    if (summaryEl) {
+      if (!r || !hasGeom) {
+        summaryEl.hidden = true;
+        summaryEl.innerHTML = '';
+      } else if (!linked) {
+        summaryEl.hidden = false;
+        summaryEl.textContent = 'Útvonal kiszámítva. A visszaírás csak gombnyomásra történik.';
+      } else {
+        summaryEl.hidden = false;
+        summaryEl.textContent = 'Útvonal adatok visszaírva. Mentés szükséges a tároláshoz.';
+      }
+    }
+    var gisExportBtn = $('btnGisExportGeoJson');
+    if (gisExportBtn) {
+      gisExportBtn.disabled = !(stored && lineStringFromBookingRouteForExport(stored));
+    }
+  }
+
+  function attachCalcRouteToBooking(silentModuleSwitch) {
+    var targetId = getRouteTargetBookingId();
+    var r = getRouteForBooking(targetId);
+    if (!r || !r.geometry) {
+      alert('Nincs számított útvonal. Előbb számíts útvonalat.');
+      return false;
+    }
+    $('geometryType').value = 'ROUTE';
+    updateGeometryTypeUi();
+    $('routeGeometry').value = JSON.stringify(r.geometry);
+    renderGisTabSummary();
+    if (!silentModuleSwitch) {
+      setMainModule('detail');
+      setFormTab('gis');
+    }
+    return true;
+  }
+
+  function renderRouteTargetPanel() {
+    var id = $('routeBookingId').value;
+    var b = id && id !== ROUTE_DRAFT_ID
+      ? bookings.find(function (x) { return x.id === id; })
+      : null;
+    if (!b && (id === ROUTE_DRAFT_ID || !$('editId').value)) {
+      b = buildBookingFromFormForRoute();
+    }
+    var panel = $('routeTargetLabel');
+    if (!panel) return;
+    if (!b) {
+      panel.innerHTML = 'Nincs kiválasztott célfoglalás.';
+      return;
+    }
+    var idLabel = ($('editId').value && id !== ROUTE_DRAFT_ID)
+      ? escapeHtml(b.id)
+      : 'Új árajánlatkérés';
+    panel.innerHTML =
+      '<div class="rt-id">' + idLabel + '</div>' +
+      '<div>' + escapeHtml(b.city || '—') + '</div>' +
+      '<div>' + escapeHtml(formatAddressDisplay(b)) + '</div>' +
+      '<div>' + escapeHtml(String(b.headcount || 0)) + ' fő</div>' +
+      '<div>' + escapeHtml((b.date ? formatHuDate(b.date) + ' ' : '') + formatTimeShort(b.timeStart || '00:00')) + '</div>';
+  }
+
+  function initMainNavUi() {
+    document.querySelectorAll('.main-nav-btn[data-main-module]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        setMainModule(btn.getAttribute('data-main-module'));
+      });
+    });
+    document.querySelectorAll('.form-tab[data-form-tab]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        setFormTab(btn.getAttribute('data-form-tab'));
+      });
+    });
+    var openRoute = $('btnOpenRouteModule');
+    var openRouteGis = $('btnGisOpenRouteModule');
+    if (openRoute) openRoute.addEventListener('click', openRoutePlanning);
+    if (openRouteGis) openRouteGis.addEventListener('click', openRoutePlanning);
+    var attachBtn = $('btnAttachCalcRoute');
+    var writeBackBtn = $('btnWriteBackRoute');
+    if (attachBtn) attachBtn.addEventListener('click', attachCalcRouteToBookingAndBack);
+    if (writeBackBtn) writeBackBtn.addEventListener('click', attachCalcRouteToBookingAndBack);
+    var gisExportBtn = $('btnGisExportGeoJson');
+    if (gisExportBtn) gisExportBtn.addEventListener('click', exportBookingGisGeoJson);
+    var backRoute = $('btnBackToBookingFromRoute');
+    if (backRoute) backRoute.addEventListener('click', backToBookingFromRoute);
+    initLifecycleClicks();
+    if ($('street')) {
+      $('street').addEventListener('input', function () {
+        syncHiddenAddress();
+        scheduleStreetSuggest();
+        scheduleGeocode();
+      });
+    }
+    if ($('houseNumber')) {
+      $('houseNumber').addEventListener('input', function () {
+        syncHiddenAddress();
+        scheduleGeocode();
+      });
+    }
+  }
+
+  function getEditingBookingDraft() {
+    var base = getCurrentBookingBase();
+    return {
+      id: $('editId').value || null,
+      date: $('date').value,
+      timeStart: $('timeStart').value,
+      timeEnd: $('timeEnd').value,
+      status: normalizeStatus($('status').value),
+      headcount: readHeadcountForSave(base),
+      vehicle: ($('vehicle').value.trim() || base.vehicle || DEFAULT_PENDING),
+      driver: ($('driver').value.trim() || base.driver || DEFAULT_PENDING)
+    };
+  }
+
+  function getVehicleSlotState(vehicleId, draft) {
+    if (!draft.date || !draft.timeStart || !draft.timeEnd) return 'SZABAD';
+    var conflicts = bookings.filter(function (b) {
+      return b.id !== draft.id && bookingsConflictOnSlot(draft, b) &&
+        vehicleUsedByBooking(b) && normalizeResourceToken(b.vehicle) === normalizeResourceToken(vehicleId);
+    });
+    if (conflicts.some(function (b) { return normalizeStatus(b.status) === 'MEGRENDELVE'; })) {
+      return 'FOGLALT';
+    }
+    if (conflicts.some(function (b) {
+      return normalizeStatus(b.status) === 'ARAJANLATKERES';
+    })) {
+      return 'FELTETELES';
+    }
+    return 'SZABAD';
+  }
+
+  function getDriverSlotState(driver, draft) {
+    if (!draft.date || !draft.timeStart || !draft.timeEnd) return 'SZABAD';
+    var conflicts = bookings.filter(function (b) {
+      return b.id !== draft.id && bookingsConflictOnSlot(draft, b) &&
+        driverUsedByBooking(b) && driverMatchesValue(driver, b.driver);
+    });
+    if (conflicts.some(function (b) { return normalizeStatus(b.status) === 'MEGRENDELVE'; })) {
+      return 'FOGLALT';
+    }
+    if (conflicts.some(function (b) {
+      return normalizeStatus(b.status) === 'ARAJANLATKERES';
+    })) {
+      return 'FELTETELES';
+    }
+    return 'SZABAD';
+  }
+
+  function getResourceConflictWarning(draft) {
+    if (!draft || !vehicleUsedByBooking(draft)) return '';
+    var st = normalizeStatus(draft.status);
+    if (st !== 'ARAJANLATKERES') return '';
+    var vid = String(draft.vehicle).trim();
+    var blocker = bookings.find(function (b) {
+      return b.id !== draft.id && normalizeStatus(b.status) === 'MEGRENDELVE' &&
+        String(b.vehicle).trim() === vid && bookingsConflictOnSlot(draft, b);
+    });
+    if (blocker) {
+      return '⚠ A korábban jelölt jármű (' + vid + ') már foglalt.';
+    }
+    return '';
+  }
+
+  function shouldShowResourceChips() {
+    return FLEET_VEHICLES.length > 0 || FLEET_DRIVERS.length > 0;
+  }
+
+  function normalizeResourceToken(val) {
+    return String(val || '').trim().toUpperCase();
+  }
+
+  function bindVehicleChipClicks() {
+    var listEl = $('vehicleSuggestList');
+    if (!listEl) return;
+    listEl.querySelectorAll('[data-pick-vehicle]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        if (btn.disabled) return;
+        var vid = btn.getAttribute('data-pick-vehicle');
+        $('vehicle').value = vid;
+        var editId = $('editId').value;
+        if (editId) {
+          var idx = bookings.findIndex(function (b) { return b.id === editId; });
+          if (idx >= 0) bookings[idx].vehicle = vid;
+        }
+        renderResourceSuggestions();
+        renderBookingDetailHeader();
+      });
+    });
+  }
+
+  function bindDriverChipClicks() {
+    var listEl = $('driverSuggestList');
+    if (!listEl) return;
+    listEl.querySelectorAll('[data-pick-driver]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        if (btn.disabled) return;
+        var drv = btn.getAttribute('data-pick-driver');
+        $('driver').value = drv;
+        var editId = $('editId').value;
+        if (editId) {
+          var idx = bookings.findIndex(function (b) { return b.id === editId; });
+          if (idx >= 0) bookings[idx].driver = drv;
+        }
+        renderResourceSuggestions();
+        renderBookingDetailHeader();
+      });
+    });
+  }
+
+  function renderVehicleAvailability(draft) {
+    var listEl = $('vehicleSuggestList');
+    if (!listEl) return;
+    var currentVeh = normalizeResourceToken(draft.vehicle);
+    var vehicleRows = FLEET_VEHICLES.map(function (vid) {
+      var slotState = getVehicleSlotState(vid, draft);
+      var pres = getVehiclePresentation(vid, draft);
+      return { id: vid, state: slotState, pres: pres };
+    }).sort(function (a, b) {
+      var order = { SZABAD: 0, FELTETELES: 1, FOGLALT: 2 };
+      var pa = a.pres.uiClass === 'st-szabad' ? 0 : (a.pres.uiClass === 'st-feltet' ? 1 : 2);
+      var pb = b.pres.uiClass === 'st-szabad' ? 0 : (b.pres.uiClass === 'st-feltet' ? 1 : 2);
+      if (pa !== pb) return pa - pb;
+      return (order[a.state] || 9) - (order[b.state] || 9) || a.id.localeCompare(b.id);
+    });
+
+    listEl.innerHTML = vehicleRows.length
+      ? vehicleRows.map(function (row) {
+        var picked = currentVeh === normalizeResourceToken(row.id) ? ' is-picked' : '';
+        var disabled = row.pres.disabled ? ' disabled' : '';
+        return '<button type="button" class="suggest-chip ' + row.pres.uiClass + picked + '"' +
+          ' data-pick-vehicle="' + escapeHtml(row.id) + '"' + disabled + '>' +
+          escapeHtml(row.id) + ' · ' + escapeHtml(row.pres.label) + '</button>';
+      }).join('')
+      : '<span class="hint">Járműlista nem elérhető.</span>';
+    bindVehicleChipClicks();
+  }
+
+  function renderDriverAvailability(draft) {
+    var listEl = $('driverSuggestList');
+    if (!listEl) return;
+    var currentDrv = String(draft.driver || '').trim();
+    var currentDrvNorm = normalizeResourceToken(currentDrv);
+    var driverRows = (FLEET_DRIVERS.length ? FLEET_DRIVERS : []).map(function (drv) {
+      return { driver: drv, state: getDriverSlotState(drv, draft), label: drv.name || drv.id };
+    }).sort(function (a, b) {
+      var order = { SZABAD: 0, FELTETELES: 1, FOGLALT: 2 };
+      return (order[a.state] || 9) - (order[b.state] || 9) || a.label.localeCompare(b.label, 'hu');
+    });
+
+    listEl.innerHTML = driverRows.length
+      ? driverRows.map(function (row) {
+        var picked = (currentDrvNorm === normalizeResourceToken(row.driver.id) ||
+          currentDrv === row.label ||
+          currentDrvNorm === normalizeResourceToken(row.driver.name)) ? ' is-picked' : '';
+        var disabled = row.state === 'FOGLALT' ? ' disabled' : '';
+        return '<button type="button" class="suggest-chip ' + RESOURCE_STATE_CLASS[row.state] + picked + '"' +
+          ' data-pick-driver="' + escapeHtml(row.label) + '"' + disabled + '>' +
+          escapeHtml(row.label) + ' · ' + escapeHtml(RESOURCE_STATE_LABEL[row.state]) + '</button>';
+      }).join('')
+      : '<span class="hint">Sofőrlista nem elérhető (config.json).</span>';
+    bindDriverChipClicks();
+  }
+
+  function renderResources() {
+    renderResourceSuggestions();
+  }
+
+  function renderResourceSuggestions() {
+    var draft = getEditingBookingDraft();
+    var showSuggest = shouldShowResourceChips();
+    var vehBlock = $('vehicleSuggestBlock');
+    var drvBlock = $('driverSuggestBlock');
+    if (vehBlock) vehBlock.hidden = !showSuggest;
+    if (drvBlock) drvBlock.hidden = !showSuggest;
+
+    var warnEl = $('resourceConflictWarn');
+    var warn = getResourceConflictWarning(draft);
+    if (warnEl) {
+      warnEl.textContent = warn;
+      warnEl.hidden = !warn;
+    }
+
+    if (!showSuggest) {
+      if ($('vehicleSuggestList')) $('vehicleSuggestList').innerHTML = '';
+      if ($('driverSuggestList')) $('driverSuggestList').innerHTML = '';
+      return;
+    }
+
+    renderVehicleAvailability(draft);
+    renderDriverAvailability(draft);
+  }
+
+  function todayIso() {
+    var d = new Date();
+    return isoFromDate(d);
+  }
+
+  function isoFromDate(d) {
+    var y = d.getFullYear();
+    var m = String(d.getMonth() + 1).padStart(2, '0');
+    var day = String(d.getDate()).padStart(2, '0');
+    return y + '-' + m + '-' + day;
+  }
+
+  function addDaysIso(baseIso, days) {
+    var p = baseIso.split('-');
+    var d = new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10));
+    d.setDate(d.getDate() + days);
+    return isoFromDate(d);
+  }
+
+  function escapeHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function formatHuDate(iso) {
+    if (!iso) return '—';
+    var p = iso.split('-');
+    if (p.length !== 3) return iso;
+    return p[0] + '.' + p[1] + '.' + p[2];
+  }
+
+  function formatShortDate(iso) {
+    if (!iso) return '—';
+    var p = iso.split('-');
+    if (p.length !== 3) return iso;
+    return p[1] + '.' + p[2];
+  }
+
+  function statusShortLabel(status) {
+    var s = normalizeStatus(status);
+    return STATUS_SHORT[s] || s.slice(0, 3);
+  }
+
+  function showVehicleLabel(vehicle) {
+    var v = String(vehicle || '').trim();
+    return v && v.toUpperCase() !== DEFAULT_PENDING;
+  }
+
+  function isCompactLabelZoom() {
+    return map.getZoom() < LABEL_ZOOM_FULL;
+  }
+
+  function markerLabelHtml(b, compact) {
+    var dateLine = '<div class="ml-date">' + escapeHtml(formatShortDate(b.date)) + '</div>';
+    var peopleLine = '<div class="ml-people">' + escapeHtml(String(b.headcount)) + ' fő</div>';
+    if (compact) {
+      return '<div class="map-label-inner">' + dateLine + peopleLine + '</div>';
+    }
+    var timeLine = '<div class="ml-time">' + escapeHtml(formatTimeShort(b.timeStart)) + '-' +
+      escapeHtml(formatTimeShort(b.timeEnd)) + '</div>';
+    var statusLine = '<div class="ml-status">' + escapeHtml(statusShortLabel(b.status)) + '</div>';
+    var vehLine = showVehicleLabel(b.vehicle)
+      ? '<div class="ml-veh">' + escapeHtml(b.vehicle) + '</div>'
+      : '';
+    return '<div class="map-label-inner">' + dateLine + timeLine + peopleLine + statusLine + vehLine + '</div>';
+  }
+
+  function refreshMarkerLabels() {
+    if (mapViewMode === 'load') return;
+    var compact = isCompactLabelZoom();
+    markerEntries.forEach(function (entry) {
+      entry.marker.setTooltipContent(markerLabelHtml(entry.booking, compact));
+    });
+  }
+
+  function loadLevelClass(headcount) {
+    if (!headcount || headcount <= 0) return 'load-0';
+    if (headcount <= 50) return 'load-1';
+    if (headcount <= 100) return 'load-2';
+    return 'load-3';
+  }
+
+  function loadDayColor(headcount) {
+    if (!headcount || headcount <= 0) return '#6b7280';
+    if (headcount <= 50) return '#22c55e';
+    if (headcount <= 100) return '#eab308';
+    return '#ef4444';
+  }
+
+  function dayStatsMap(source) {
+    var mapData = {};
+    (source || []).forEach(function (b) {
+      if (!b.date) return;
+      if (!mapData[b.date]) mapData[b.date] = { count: 0, headcount: 0 };
+      mapData[b.date].count += 1;
+      mapData[b.date].headcount += b.headcount || 0;
+    });
+    return mapData;
+  }
+
+  function aggregateByDate(list) {
+    var groups = {};
+    list.forEach(function (b) {
+      if (!b.date || b.lat == null || b.lng == null) return;
+      if (!groups[b.date]) {
+        groups[b.date] = { date: b.date, count: 0, headcount: 0, latSum: 0, lngSum: 0, items: [] };
+      }
+      var g = groups[b.date];
+      g.count += 1;
+      g.headcount += b.headcount || 0;
+      g.latSum += b.lat;
+      g.lngSum += b.lng;
+      g.items.push(b);
+    });
+    return Object.keys(groups).map(function (d) {
+      var g = groups[d];
+      return {
+        date: d,
+        count: g.count,
+        headcount: g.headcount,
+        lat: g.latSum / g.count,
+        lng: g.lngSum / g.count,
+        items: g.items
+      };
+    });
+  }
+
+  function loadMarkerRadius(headcount) {
+    return Math.max(12, Math.min(42, 10 + (headcount || 0) / 3));
+  }
+
+  function loadLabelHtml(group) {
+    return '<div class="map-label-inner">' +
+      '<div class="ml-date">' + escapeHtml(formatHuDate(group.date)) + '</div>' +
+      '<div class="ml-people">' + escapeHtml(String(group.count)) + ' foglalás</div>' +
+      '<div class="ml-people">' + escapeHtml(String(group.headcount)) + ' fő</div>' +
+      '</div>';
+  }
+
+  function loadPopupHtml(group) {
+    var lines = group.items.map(function (b) {
+      return escapeHtml((b.placeName || b.address) + ' · ' + b.headcount + ' fő');
+    }).join('<br>');
+    return '<div><strong>' + escapeHtml(formatHuDate(group.date)) + '</strong><br>' +
+      group.count + ' foglalás · ' + group.headcount + ' fő<hr style="margin:6px 0">' + lines + '</div>';
+  }
+
+  function parseRouteGeometryInput(raw) {
+    if (!raw) return null;
+    try {
+      var data = JSON.parse(raw);
+      if (data.type === 'LineString' && Array.isArray(data.coordinates)) return data;
+      if (data.geometry && data.geometry.type === 'LineString') return data.geometry;
+      if (data.type === 'Feature' && data.geometry) return data.geometry;
+    } catch (e) { /* ignore */ }
+    return null;
+  }
+
+  function parseCoordPair(pair) {
+    if (!pair || !Array.isArray(pair) || pair.length < 2) return null;
+    var a = parseFloat(pair[0]);
+    var b = parseFloat(pair[1]);
+    if (!isFinite(a) || !isFinite(b)) return null;
+    return { a: a, b: b };
+  }
+
+  function coordPairToLatLng(pair, formatHint) {
+    var p = parseCoordPair(pair);
+    if (!p) return null;
+    if (formatHint === 'lnglat') return { lat: p.b, lng: p.a };
+    if (formatHint === 'latlng') return { lat: p.a, lng: p.b };
+    if (p.a >= 16 && p.a <= 23 && p.b >= 45 && p.b <= 49) return { lat: p.b, lng: p.a };
+    if (p.b >= 16 && p.b <= 23 && p.a >= 45 && p.a <= 49) return { lat: p.a, lng: p.b };
+    return { lat: p.b, lng: p.a };
+  }
+
+  function coordsFromGeoJsonLineString(geom) {
+    if (!geom || geom.type !== 'LineString' || !Array.isArray(geom.coordinates)) return [];
+    return geom.coordinates.map(function (c) {
+      return coordPairToLatLng(c, 'lnglat');
+    }).filter(Boolean);
+  }
+
+  function coordsFromRoutePoints(raw) {
+    if (!raw || !Array.isArray(raw) || !raw.length) return [];
+    return raw.map(function (item) {
+      if (!item) return null;
+      if (Array.isArray(item)) return coordPairToLatLng(item, 'auto');
+      if (typeof item === 'object' && item.lat != null && item.lng != null) {
+        var lat = parseFloat(item.lat);
+        var lng = parseFloat(item.lng);
+        if (isFinite(lat) && isFinite(lng)) return { lat: lat, lng: lng };
+      }
+      return null;
+    }).filter(Boolean);
+  }
+
+  function getBookingRoutePoints(booking) {
+    if (!booking) return [];
+    if (booking.routePoints && Array.isArray(booking.routePoints) && booking.routePoints.length) {
+      var fromRoutePoints = coordsFromRoutePoints(booking.routePoints);
+      if (fromRoutePoints.length) return fromRoutePoints;
+    }
+    var fromGeometry = coordsFromGeoJsonLineString(booking.routeGeometry);
+    if (fromGeometry.length) return fromGeometry;
+    var fromDraft = coordsFromGeoJsonLineString(booking.routeDraft);
+    if (fromDraft.length) return fromDraft;
+    return [];
+  }
+
+  function routePointDivIcon(label, kind) {
+    var bg = kind === 'start' ? '#22c55e' : (kind === 'end' ? '#f97316' : '#a855f7');
+    return L.divIcon({
+      className: '',
+      html: '<div style="width:22px;height:22px;border-radius:50%;background:' + bg +
+        ';color:#fff;font-weight:900;font-size:10px;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.28)">' +
+        escapeHtml(String(label)) + '</div>',
+      iconSize: [22, 22],
+      iconAnchor: [11, 11]
+    });
+  }
+
+  function drawBookingRoutePoints(pts, layer, styleOpts) {
+    if (!pts || !pts.length) return null;
+    var opts = styleOpts || {};
+    if (pts.length >= 2) {
+      L.polyline(pts.map(function (p) { return [p.lat, p.lng]; }), {
+        color: opts.color || '#a855f7',
+        weight: opts.weight || 4,
+        opacity: 0.85,
+        dashArray: opts.dashArray || '6 4'
+      }).addTo(layer);
+      pts.forEach(function (p, i) {
+        var label = 'S';
+        var kind = 'start';
+        if (i === pts.length - 1 && i > 0) {
+          label = 'C';
+          kind = 'end';
+        } else if (i > 0) {
+          label = String(i);
+          kind = 'mid';
+        }
+        L.marker([p.lat, p.lng], { icon: routePointDivIcon(label, kind), zIndexOffset: 500 }).addTo(layer);
+      });
+    } else if (pts.length === 1) {
+      L.circleMarker([pts[0].lat, pts[0].lng], {
+        radius: 8,
+        color: opts.color || '#a855f7',
+        fillColor: opts.color || '#a855f7',
+        fillOpacity: 0.85,
+        weight: 2
+      }).addTo(layer);
+    }
+    return L.latLngBounds(pts.map(function (p) { return [p.lat, p.lng]; }));
+  }
+
+  function bookingRouteGeometry(b) {
+    var pts = getBookingRoutePoints(b);
+    if (pts.length < 2) return null;
+    return {
+      type: 'LineString',
+      coordinates: pts.map(function (p) { return [p.lng, p.lat]; })
+    };
+  }
+
+  function normalizeLineStringGeometry(geom) {
+    if (!geom || geom.type !== 'LineString' || !Array.isArray(geom.coordinates)) return null;
+    var coords = geom.coordinates.filter(function (c) {
+      return Array.isArray(c) && c.length >= 2 && isFinite(c[0]) && isFinite(c[1]);
+    });
+    if (coords.length < 2) return null;
+    return { type: 'LineString', coordinates: coords };
+  }
+
+  function lineStringFromBookingRouteForExport(booking) {
+    if (!booking) return null;
+    if (booking.routePoints && Array.isArray(booking.routePoints) && booking.routePoints.length) {
+      var fromRoutePoints = coordsFromRoutePoints(booking.routePoints);
+      if (fromRoutePoints.length >= 2) {
+        return {
+          type: 'LineString',
+          coordinates: fromRoutePoints.map(function (p) { return [p.lng, p.lat]; })
+        };
+      }
+    }
+    var fromGeometry = normalizeLineStringGeometry(booking.routeGeometry);
+    if (fromGeometry) return fromGeometry;
+    return normalizeLineStringGeometry(booking.routeDraft);
+  }
+
+  function bookingGisExportFilename(booking) {
+    var id = booking && (booking.projektAzonosito || booking.id);
+    if (!id) return 'booking_route.geojson';
+    return 'booking_' + String(id).replace(/[^\w.-]+/g, '_') + '.geojson';
+  }
+
+  /* TODO: GeoJSON később feladatként továbbítható a driver modulnak. */
+  function exportBookingGisGeoJson() {
+    var id = $('editId').value;
+    if (!id) return;
+    var booking = bookings.find(function (b) { return b.id === id; });
+    if (!booking) {
+      alert('A kijelölt foglalás nem található. Válasszon másik rekordot.');
+      return;
+    }
+    var geometry = lineStringFromBookingRouteForExport(booking);
+    if (!geometry) {
+      alert('Ehhez a foglaláshoz nincs exportálható útvonal.');
+      return;
+    }
+    var feature = {
+      type: 'Feature',
+      geometry: geometry,
+      properties: {
+        bookingId: booking.id,
+        projektAzonosito: booking.projektAzonosito || booking.id,
+        placeName: booking.placeName || '',
+        address: booking.address || '',
+        date: booking.date || '',
+        timeStart: booking.timeStart || '',
+        timeEnd: booking.timeEnd || '',
+        headcount: booking.headcount || 0,
+        status: booking.status || DEFAULT_STATUS,
+        booking_type: booking.booking_type || '',
+        source: booking.source || 'admin',
+        pointCount: geometry.coordinates.length
+      }
+    };
+    var blob = new Blob([JSON.stringify(feature, null, 2)], { type: 'application/geo+json' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = bookingGisExportFilename(booking);
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 500);
+  }
+
+  function isBackendRentId(id) {
+    return /^RENT-/.test(String(id || ''));
+  }
+
+  function setRentDataStatus(mode, message) {
+    rentDataSource = mode;
+    var el = $('rentDataStatus');
+    if (!el) return;
+    if (mode === 'loading') {
+      el.hidden = false;
+      el.textContent = message || 'Rent adatok betöltése…';
+      el.className = 'rent-data-status is-loading';
+    } else if (mode === 'server') {
+      el.hidden = false;
+      el.textContent = message || 'Szerveradatok';
+      el.className = 'rent-data-status is-ok';
+    } else if (mode === 'error') {
+      el.hidden = false;
+      el.textContent = message || 'A Rent adatok jelenleg nem tölthetők be a szerverről.';
+      el.className = 'rent-data-status is-error';
+    } else {
+      el.hidden = true;
+      el.textContent = '';
+      el.className = 'rent-data-status';
+    }
+  }
+
+  function restoreCalculatedRoutesFromBookings() {
+    calculatedRoutes = [];
+    bookings.forEach(function (b) {
+      if (b.adminCalculatedRoute) {
+        var r = normalizeRouteRecord(Object.assign({}, b.adminCalculatedRoute, { bookingId: b.id }), b);
+        calculatedRoutes.push(r);
+      }
+    });
+  }
+
+  function loadRentInquiriesFromApi() {
+    setRentDataStatus('loading');
+    return fetch('/api/rent/inquiries')
+      .then(function (resp) {
+        return resp.json().then(function (data) {
+          if (!resp.ok || !data || !data.ok || !Array.isArray(data.inquiries)) {
+            throw new Error((data && data.error) || ('HTTP ' + resp.status));
+          }
+          bookings = data.inquiries.map(normalizeBooking);
+          restoreCalculatedRoutesFromBookings();
+          setRentDataStatus('server');
+          return bookings;
+        });
+      })
+      .catch(function (err) {
+        console.error('GET /api/rent/inquiries failed:', err);
+        bookings = [];
+        calculatedRoutes = [];
+        setRentDataStatus('error');
+        throw err;
+      });
+  }
+
+  function reloadRentData() {
+    return loadRentInquiriesFromApi().then(function () {
+      render();
+    }).catch(function () {
+      render();
+    });
+  }
+
+  function patchRentInquiryApi(id, body) {
+    var patchBody = Object.assign({}, body);
+    console.log('[RENT PATCH BODY]', patchBody);
+    return fetch('/api/rent/inquiries/' + encodeURIComponent(id), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patchBody)
+    }).then(function (resp) {
+      return resp.json().then(function (data) {
+        if (!resp.ok || !data || !data.ok || !data.inquiry) {
+          console.error('[RENT PATCH FAIL]', resp.status, data, patchBody);
+          throw new Error((data && data.error) || ('HTTP ' + resp.status));
+        }
+        return data.inquiry;
+      }).catch(function (parseErr) {
+        if (parseErr && parseErr.message && parseErr.message.indexOf('HTTP') === 0) throw parseErr;
+        console.error('[RENT PATCH FAIL]', resp.status, 'Invalid JSON response', patchBody);
+        throw parseErr;
+      });
+    });
+  }
+
+  function postRentInquiryApi(body) {
+    return fetch('/api/rent/inquiries', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).then(function (resp) {
+      return resp.json().then(function (data) {
+        if (!resp.ok || !data || !data.ok || !data.inquiry) {
+          throw new Error((data && data.error) || ('HTTP ' + resp.status));
+        }
+        return data.inquiry;
+      });
+    });
+  }
+
+  function deleteRentInquiryApi(id) {
+    return fetch('/api/rent/inquiries/' + encodeURIComponent(id), {
+      method: 'DELETE'
+    }).then(function (resp) {
+      return resp.json().then(function (data) {
+        if (!resp.ok || !data || !data.ok) {
+          throw new Error((data && data.error) || ('HTTP ' + resp.status));
+        }
+        return data;
+      });
+    });
+  }
+
+  function showDeleteConfirm(id) {
+    if (!isBackendRentId(id)) return Promise.resolve(false);
+    pendingDeleteId = id;
+    var modal = $('rentDeleteModal');
+    if (!modal) return Promise.resolve(false);
+    modal.hidden = false;
+    return new Promise(function (resolve) {
+      function cleanup(result) {
+        modal.hidden = true;
+        pendingDeleteId = null;
+        $('rentDeleteConfirm').removeEventListener('click', onYes);
+        $('rentDeleteCancel').removeEventListener('click', onNo);
+        document.removeEventListener('keydown', onKey);
+      }
+      function onYes() { cleanup(true); resolve(true); }
+      function onNo() { cleanup(false); resolve(false); }
+      function onKey(ev) {
+        if (ev.key === 'Escape') onNo();
+      }
+      $('rentDeleteConfirm').addEventListener('click', onYes);
+      $('rentDeleteCancel').addEventListener('click', onNo);
+      document.addEventListener('keydown', onKey);
+    });
+  }
+
+  function removeBookingFromUi(id) {
+    bookings = bookings.filter(function (b) { return b.id !== id; });
+    calculatedRoutes = calculatedRoutes.filter(function (r) { return r.bookingId !== id; });
+    if ($('routeBookingId') && $('routeBookingId').value === id) {
+      $('routeBookingId').value = '';
+    }
+    markerLayer.clearLayers();
+    bookingRouteLayer.clearLayers();
+    clearRouteLayer();
+    markers = [];
+    markerEntries = [];
+    if (draftMarker) {
+      markerLayer.removeLayer(draftMarker);
+      draftMarker = null;
+    }
+    if ($('editId').value === id) {
+      clearForm();
+      if ($('routeResult')) $('routeResult').hidden = true;
+    }
+    render();
+  }
+
+  function deleteBookingById(id) {
+    if (!isBackendRentId(id)) return Promise.reject(new Error('invalid id'));
+    return deleteRentInquiryApi(id).then(function () {
+      removeBookingFromUi(id);
+    });
+  }
+
+  function setSaveButtonBusy(busy) {
+    var btn = $('btnSave');
+    if (!btn) return;
+    if (busy) {
+      if (!btn.dataset.defaultLabel) btn.dataset.defaultLabel = btn.textContent.trim() || 'Mentés';
+      btn.disabled = true;
+      btn.textContent = 'Mentés…';
+    } else {
+      btn.disabled = false;
+      btn.textContent = btn.dataset.defaultLabel || 'Mentés';
+    }
+  }
+
+  function saveBookingToServer(entry) {
+    setGeoStatus('Mentés…', 'warn');
+    var calc = calculatedRoutes.find(function (r) { return r.bookingId === entry.id; });
+    if (calc) entry.adminCalculatedRoute = calc;
+    var patchBody = prepareRentPatchBody(entry);
+    var promise = isBackendRentId(entry.id)
+      ? patchRentInquiryApi(entry.id, patchBody)
+      : postRentInquiryApi(patchBody);
+    return promise.then(function (saved) {
+      var norm = normalizeBooking(saved);
+      var idx = bookings.findIndex(function (x) { return x.id === norm.id; });
+      if (idx >= 0) bookings[idx] = norm;
+      else bookings.push(norm);
+      if (norm.adminCalculatedRoute) {
+        calculatedRoutes = calculatedRoutes.filter(function (r) { return r.bookingId !== norm.id; });
+        calculatedRoutes.push(normalizeRouteRecord(Object.assign({}, norm.adminCalculatedRoute, { bookingId: norm.id }), norm));
+      }
+      syncRouteMeta(norm);
+      setGeoStatus('Mentve a szerverre.', 'ok');
+      return norm;
+    });
+  }
+
+  function parseHeadcountValue(raw, fallback) {
+    if (raw == null) return fallback != null ? fallback : null;
+    var s = String(raw).trim();
+    if (s === '') return fallback != null ? fallback : null;
+    var n = parseInt(s, 10);
+    if (Number.isNaN(n) || n < 1) return fallback != null ? fallback : null;
+    return n;
+  }
+
+  function resolveBookingHeadcount(b) {
+    if (!b) return null;
+    var candidates = [b.headcount, b.passenger_count, b.passengerCount, b.letszam];
+    for (var i = 0; i < candidates.length; i++) {
+      var v = candidates[i];
+      if (v == null || v === '') continue;
+      var n = parseInt(v, 10);
+      if (!Number.isNaN(n) && n > 0) return n;
+    }
+    return null;
+  }
+
+  function getCurrentBookingBase() {
+    var id = $('editId') ? $('editId').value : '';
+    if (!id) return {};
+    var found = bookings.find(function (b) { return b.id === id; });
+    return found ? Object.assign({}, found) : {};
+  }
+
+  function readFormField(id) {
+    var el = $(id);
+    return el ? el.value : '';
+  }
+
+  function syncLastFormHeadcountFromInput() {
+    var hc = parseHeadcountValue(readFormField('headcount'), null);
+    if (hc != null) lastFormHeadcount = hc;
+  }
+
+  function readHeadcountForSave(base) {
+    var fromInput = parseHeadcountValue(readFormField('headcount'), null);
+    if (fromInput != null) return fromInput;
+    if (lastFormHeadcount != null && lastFormHeadcount > 0) return lastFormHeadcount;
+    return resolveBookingHeadcount(base);
+  }
+
+  function prepareRentPatchBody(entry) {
+    var body = Object.assign({}, entry);
+    delete body.adminCalculatedRoute;
+    var hc = resolveBookingHeadcount(body);
+    if (hc != null && hc > 0) body.headcount = hc;
+    if (!isPendingAssign(body.vehicle)) {
+      body.vehicle_id = body.vehicle;
+    }
+    if (!isPendingAssign(body.driver)) {
+      body.driver_id = body.driver;
+    }
+    return body;
+  }
+
+  function mergePreservedBookingFields(entry) {
+    if (!entry || !entry.id) return entry;
+    var existing = bookings.find(function (x) { return x.id === entry.id; });
+    if (!existing) return entry;
+    var merged = Object.assign({}, existing, entry);
+    if (entry.headcount != null && entry.headcount > 0) {
+      merged.headcount = entry.headcount;
+    } else {
+      var existingHc = resolveBookingHeadcount(existing);
+      if (existingHc != null && existingHc > 0) merged.headcount = existingHc;
+    }
+    if (isPendingAssign(merged.vehicle) && !isPendingAssign(existing.vehicle)) {
+      merged.vehicle = existing.vehicle;
+      merged.vehicle_id = existing.vehicle_id || existing.vehicle;
+    } else if (!isPendingAssign(merged.vehicle)) {
+      merged.vehicle_id = merged.vehicle;
+    }
+    if (isPendingAssign(merged.driver) && !isPendingAssign(existing.driver)) {
+      merged.driver = existing.driver;
+      merged.driver_id = existing.driver_id || existing.driver;
+    } else if (!isPendingAssign(merged.driver)) {
+      merged.driver_id = merged.driver;
+    }
+    if ((merged.lat == null || merged.lng == null) && existing.lat != null && existing.lng != null) {
+      merged.lat = existing.lat;
+      merged.lng = existing.lng;
+    }
+    if (!merged.routePoints && existing.routePoints) merged.routePoints = existing.routePoints;
+    if (!merged.routeGeometry && existing.routeGeometry) merged.routeGeometry = existing.routeGeometry;
+    if (!merged.routeDraft && existing.routeDraft) merged.routeDraft = existing.routeDraft;
+    if (existing.start_address && !merged.start_address) merged.start_address = existing.start_address;
+    if (existing.end_address && !merged.end_address) merged.end_address = existing.end_address;
+    if (!merged.phone && existing.phone) merged.phone = existing.phone;
+    if (!merged.email && existing.email) merged.email = existing.email;
+    return merged;
+  }
+
+  function updateGeometryTypeUi() {
+    var isRoute = $('geometryType').value === 'ROUTE';
+    $('routeGeometryField').hidden = !isRoute;
+  }
+
+  function syncRouteGeometryFromCalc() {
+    var id = $('editId').value;
+    if (!id) return;
+    var calc = calculatedRoutes.find(function (r) { return r.bookingId === id; });
+    if (calc && calc.geometry) {
+      $('routeGeometry').value = JSON.stringify(calc.geometry);
+    }
+  }
+
+  function formatTimeShort(t) {
+    if (!t) return '';
+    return t.slice(0, 5);
+  }
+
+  function formatHuDateTime(isoDate, timeStr) {
+    return formatHuDate(isoDate) + ' ' + formatTimeShort(timeStr);
+  }
+
+  function formatTravelMinutes(mins) {
+    var m = Math.max(0, Math.round(mins));
+    var h = Math.floor(m / 60);
+    var r = m % 60;
+    if (h <= 0) return r + ' perc';
+    if (r <= 0) return h + ' óra';
+    return h + ' óra ' + r + ' perc';
+  }
+
+  function migrateLegacyStatus(s) {
+    var v = String(s || '').toUpperCase();
+    if (v === 'ERDEKLODES' || v === 'AJANLAT') return 'ARAJANLATKERES';
+    if (v === 'VEGLEGES') return 'MEGRENDELVE';
+    return v;
+  }
+
+  function normalizeStatus(s) {
+    var v = migrateLegacyStatus(s || DEFAULT_STATUS);
+    return STATUS_COLORS[v] ? v : DEFAULT_STATUS;
+  }
+
+  function statusTagClass(status) {
+    return 'tag-st-' + normalizeStatus(status).toLowerCase();
+  }
+
+  function statusColor(status) {
+    return STATUS_COLORS[normalizeStatus(status)] || STATUS_COLORS.ARAJANLATKERES;
+  }
+
+  function normalizeBooking(b) {
+    if (!b) return b;
+    var normalized = Object.assign({}, b);
+    var hc = resolveBookingHeadcount(normalized);
+    if (hc != null) normalized.headcount = hc;
+    if (!normalized.vehicle || isPendingAssign(normalized.vehicle)) {
+      if (normalized.vehicle_id && !isPendingAssign(normalized.vehicle_id)) {
+        normalized.vehicle = normalized.vehicle_id;
+      } else if (!normalized.vehicle) {
+        normalized.vehicle = DEFAULT_PENDING;
+      }
+    }
+    if (!normalized.driver || isPendingAssign(normalized.driver)) {
+      if (normalized.driver_id && !isPendingAssign(normalized.driver_id)) {
+        normalized.driver = normalized.driver_id;
+      } else if (!normalized.driver) {
+        normalized.driver = DEFAULT_PENDING;
+      }
+    }
+    normalized.status = normalizeStatus(normalized.status);
+    normalized.geometryType = (normalized.geometryType === 'ROUTE') ? 'ROUTE' : DEFAULT_GEOMETRY_TYPE;
+    if (!normalized.city) normalized.city = '';
+    if (!normalized.bookingType || !BOOKING_TYPE_LABEL[normalized.bookingType]) normalized.bookingType = DEFAULT_BOOKING_TYPE;
+    if (!normalized.placeName) {
+      normalized.placeName = normalized.city || normalized.address || normalized.name || normalized.ordererName || 'Árajánlatkérés';
+    }
+    return normalized;
+  }
+
+  function normalizeRouteRecord(r, booking) {
+    if (!r) return r;
+    if (booking) {
+      r.status = normalizeStatus(r.status || booking.status);
+      r.vehicle = r.vehicle || booking.vehicle || DEFAULT_PENDING;
+      r.driver = r.driver || booking.driver || DEFAULT_PENDING;
+      r.date = r.date || booking.date;
+      r.startTime = r.startTime || booking.timeStart;
+      r.endTime = r.endTime || booking.timeEnd;
+    }
+    return r;
+  }
+
+  function syncRouteMeta(booking) {
+    calculatedRoutes.forEach(function (r) {
+      if (r.bookingId === booking.id) {
+        r.status = booking.status;
+        r.vehicle = booking.vehicle;
+        r.driver = booking.driver;
+        r.date = booking.date;
+        r.startTime = booking.timeStart;
+        r.endTime = booking.timeEnd;
+      }
+    });
+  }
+
+  function getRouteForBooking(bookingId) {
+    if (!bookingId) return null;
+    var r = calculatedRoutes.find(function (x) { return x.bookingId === bookingId; });
+    if (!r) return null;
+    var booking = bookings.find(function (b) { return b.id === bookingId; });
+    if (!booking && bookingId === ROUTE_DRAFT_ID) {
+      booking = buildBookingFromFormForRoute();
+    }
+    return normalizeRouteRecord(r, booking);
+  }
+
+  function nextId() {
+    var year = new Date().getFullYear();
+    var n = bookings.length + 1;
+    bookings.forEach(function (b) {
+      var m = String(b.id || '').match(/FOG-\d{4}-(\d+)/);
+      if (m) n = Math.max(n, parseInt(m[1], 10) + 1);
+    });
+    return 'FOG-' + year + '-' + String(n).padStart(4, '0');
+  }
+
+  function loadStorage() {
+    function parse(raw) {
+      if (!raw) return null;
+      try {
+        var data = JSON.parse(raw);
+        return {
+          bookings: (data.bookings || []).map(normalizeBooking),
+          calculatedRoutes: (Array.isArray(data.calculatedRoutes) ? data.calculatedRoutes : []).map(function (r) {
+            var booking = (data.bookings || []).find(function (b) { return b.id === r.bookingId; });
+            return normalizeRouteRecord(r, booking ? normalizeBooking(booking) : null);
+          })
+        };
+      } catch (e) {
+        return null;
+      }
+    }
+    var cur = parse(localStorage.getItem(STORAGE_KEY));
+    if (cur) return cur;
+    var legacy = parse(localStorage.getItem(STORAGE_KEY_LEGACY));
+    if (legacy) return legacy;
+    return { bookings: [], calculatedRoutes: [] };
+  }
+
+  function saveStorage() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      version: MODULE_VERSION,
+      updatedAt: new Date().toISOString(),
+      bookings: bookings,
+      calculatedRoutes: calculatedRoutes.filter(function (r) { return r.bookingId !== ROUTE_DRAFT_ID; })
+    }));
+  }
+
+  function setGeoStatus(text, cls) {
+    var el = $('geoStatus');
+    el.textContent = text || '';
+    el.className = 'geo-status' + (cls ? ' ' + cls : '');
+  }
+
+  function showDraftMarker(lat, lng, label) {
+    if (draftMarker) markerLayer.removeLayer(draftMarker);
+    draftMarker = L.circleMarker([lat, lng], {
+      radius: 10, color: '#f97316', fillColor: '#fb923c',
+      fillOpacity: 0.85, weight: 2, dashArray: '4 4'
+    }).addTo(markerLayer);
+    if (label) draftMarker.bindTooltip(label, { permanent: false, direction: 'top' });
+    map.setView([lat, lng], Math.max(map.getZoom(), 14), { animate: true });
+  }
+
+  function geocodeAddress(query) {
+    var q = String(query || '').trim();
+    if (q.length < 3) return Promise.resolve(null);
+    var seq = ++geocodeSeq;
+    setGeoStatus('Geokódolás…', 'warn');
+    var url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=hu&q=' + encodeURIComponent(q);
+    return fetch(url, { headers: { Accept: 'application/json' } })
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(function (rows) {
+        if (seq !== geocodeSeq) return null;
+        if (!rows || !rows.length) {
+          setGeoStatus('Nem található cím – kattints a térképre.', 'err');
+          return null;
+        }
+        var hit = rows[0];
+        var lat = parseFloat(hit.lat);
+        var lng = parseFloat(hit.lon);
+        if (!isFinite(lat) || !isFinite(lng)) return null;
+        $('lat').value = String(lat);
+        $('lng').value = String(lng);
+        showDraftMarker(lat, lng, $('placeName').value.trim() || hit.display_name);
+        setGeoStatus('Koordináta: ' + lat.toFixed(5) + ', ' + lng.toFixed(5), 'ok');
+        renderGisTabSummary();
+        return { lat: lat, lng: lng, displayName: hit.display_name };
+      })
+      .catch(function () {
+        if (seq !== geocodeSeq) return null;
+        setGeoStatus('Geokódolás sikertelen.', 'err');
+        return null;
+      });
+  }
+
+  function geocodeSilent(query) {
+    var q = String(query || '').trim();
+    if (q.length < 3) return Promise.resolve(null);
+    var url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=hu&q=' + encodeURIComponent(q);
+    return fetch(url, { headers: { Accept: 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : []; })
+      .then(function (rows) {
+        if (!rows || !rows.length) return null;
+        return { lat: parseFloat(rows[0].lat), lng: parseFloat(rows[0].lon), displayName: rows[0].display_name };
+      })
+      .catch(function () { return null; });
+  }
+
+  function scheduleGeocode() {
+    clearTimeout(geocodeTimer);
+    geocodeTimer = setTimeout(function () {
+      var q = buildGeocodeQuery();
+      if (q) {
+        geocodeAddress(q);
+        return;
+      }
+      var place = $('placeName').value.trim();
+      if (place) geocodeAddress(place);
+    }, 700);
+  }
+
+  function readForm() {
+    syncHiddenAddress();
+    var base = getCurrentBookingBase();
+    var id = readFormField('editId') || nextId();
+    var orderer = readFormField('ordererName').trim();
+    var vehicleRaw = readFormField('vehicle').trim();
+    var driverRaw = readFormField('driver').trim();
+    var headcount = readHeadcountForSave(base);
+    var vehicle = vehicleRaw !== '' ? vehicleRaw : (base.vehicle || DEFAULT_PENDING);
+    var driver = driverRaw !== '' ? driverRaw : (base.driver || DEFAULT_PENDING);
+    var phoneRaw = readFormField('phone').trim();
+    var emailRaw = readFormField('email').trim();
+    var latRaw = readFormField('lat');
+    var lngRaw = readFormField('lng');
+    var formValues = {
+      id: id,
+      placeName: readFormField('placeName').trim(),
+      city: readFormField('city').trim(),
+      street: readFormField('street').trim(),
+      houseNumber: readFormField('houseNumber').trim(),
+      locationNote: readFormField('locationNote').trim(),
+      address: buildAddressForStorage(),
+      date: readFormField('date'),
+      timeStart: readFormField('timeStart'),
+      timeEnd: readFormField('timeEnd'),
+      headcount: headcount,
+      status: normalizeStatus(readFormField('status')),
+      bookingType: readFormField('bookingType') === 'MENETRENDI_JARAT' ? 'MENETRENDI_JARAT' : DEFAULT_BOOKING_TYPE,
+      vehicle: vehicle,
+      driver: driver,
+      geometryType: readFormField('geometryType') === 'ROUTE' ? 'ROUTE' : DEFAULT_GEOMETRY_TYPE,
+      routeGeometry: parseRouteGeometryInput(readFormField('routeGeometry').trim()) || base.routeGeometry || null,
+      price: parseInt(readFormField('price'), 10) || base.price || 0,
+      ordererName: orderer || base.ordererName || base.name || base.customer_name || '',
+      name: orderer || base.name || base.customer_name || base.ordererName || '',
+      customer_name: orderer || base.customer_name || base.name || base.ordererName || '',
+      companyName: readFormField('companyName').trim(),
+      taxId: readFormField('taxId').trim(),
+      contact: readFormField('contact').trim(),
+      phone: phoneRaw || base.phone || '',
+      email: emailRaw || base.email || '',
+      note: readFormField('note').trim(),
+      lat: latRaw ? parseFloat(latRaw) : (base.lat != null ? base.lat : null),
+      lng: lngRaw ? parseFloat(lngRaw) : (base.lng != null ? base.lng : null)
+    };
+    if (!isPendingAssign(vehicle)) formValues.vehicle_id = vehicle;
+    if (!isPendingAssign(driver)) formValues.driver_id = driver;
+    return normalizeBooking(Object.assign({}, base, formValues));
+  }
+
+  function fillForm(b) {
+    b = normalizeBooking(b);
+    $('editId').value = b.id;
+    $('placeName').value = b.placeName || '';
+    $('city').value = b.city || '';
+    fillAddressFields(b);
+    $('date').value = b.date || '';
+    $('timeStart').value = b.timeStart || '';
+    $('timeEnd').value = b.timeEnd || '';
+    var hc = resolveBookingHeadcount(b);
+    $('headcount').value = hc != null ? String(hc) : '';
+    lastFormHeadcount = hc;
+    $('status').value = b.status || DEFAULT_STATUS;
+    $('bookingType').value = b.bookingType === 'MENETRENDI_JARAT' ? 'MENETRENDI_JARAT' : DEFAULT_BOOKING_TYPE;
+    $('vehicle').value = !isPendingAssign(b.vehicle) ? b.vehicle
+      : (b.vehicle_id && !isPendingAssign(b.vehicle_id) ? b.vehicle_id : DEFAULT_PENDING);
+    $('driver').value = !isPendingAssign(b.driver) ? b.driver
+      : (b.driver_id && !isPendingAssign(b.driver_id) ? b.driver_id : DEFAULT_PENDING);
+    $('geometryType').value = b.geometryType || DEFAULT_GEOMETRY_TYPE;
+    $('routeGeometry').value = b.routeGeometry ? JSON.stringify(b.routeGeometry) : '';
+    updateGeometryTypeUi();
+    $('price').value = b.price != null ? b.price : '';
+    $('ordererName').value = b.ordererName || b.name || b.customer_name || '';
+    $('companyName').value = b.companyName || '';
+    $('taxId').value = b.taxId || '';
+    $('contact').value = b.contact || '';
+    $('phone').value = b.phone || '';
+    $('email').value = b.email || '';
+    $('note').value = b.note || '';
+    $('lat').value = b.lat != null ? b.lat : '';
+    $('lng').value = b.lng != null ? b.lng : '';
+    $('btnDelete').hidden = !isBackendRentId(b.id);
+    $('btnDelete').title = '';
+    if (b.lat != null && b.lng != null) {
+      var pts = getBookingRoutePoints(b);
+      if (pts.length >= 2) {
+        map.fitBounds(L.latLngBounds(pts.map(function (p) { return [p.lat, p.lng]; })), { padding: [36, 36], animate: true });
+      } else {
+        showDraftMarker(b.lat, b.lng, b.placeName || b.address);
+        map.setView([b.lat, b.lng], 15, { animate: true });
+      }
+      setGeoStatus('Koordináta: ' + Number(b.lat).toFixed(5) + ', ' + Number(b.lng).toFixed(5), 'ok');
+    }
+    selectRouteTarget(b.id, false);
+    setFormTab('basic');
+    renderLifecycleBar();
+    renderResourceSuggestions();
+    renderGisTabSummary();
+    renderBookingDetailHeader();
+    populateRouteBookingSelect();
+    renderBasicRouteSavedBadge(b);
+  }
+
+  function clearForm() {
+    $('editId').value = '';
+    $('placeName').value = '';
+    $('city').value = '';
+    $('street').value = '';
+    $('houseNumber').value = '';
+    $('locationNote').value = '';
+    if ($('legacyAddressHint')) {
+      $('legacyAddressHint').hidden = true;
+      $('legacyAddressHint').textContent = '';
+    }
+    syncHiddenAddress();
+    $('date').value = todayIso();
+    $('timeStart').value = '11:00';
+    $('timeEnd').value = '18:00';
+    $('headcount').value = '';
+    lastFormHeadcount = null;
+    $('status').value = DEFAULT_STATUS;
+    $('bookingType').value = DEFAULT_BOOKING_TYPE;
+    $('vehicle').value = DEFAULT_PENDING;
+    $('driver').value = DEFAULT_PENDING;
+    $('geometryType').value = DEFAULT_GEOMETRY_TYPE;
+    $('routeGeometry').value = '';
+    updateGeometryTypeUi();
+    $('price').value = '';
+    $('ordererName').value = '';
+    $('companyName').value = '';
+    $('taxId').value = '';
+    $('contact').value = '';
+    $('phone').value = '';
+    $('email').value = '';
+    $('note').value = '';
+    $('lat').value = '';
+    $('lng').value = '';
+    $('btnDelete').hidden = true;
+    calculatedRoutes = calculatedRoutes.filter(function (r) { return r.bookingId !== ROUTE_DRAFT_ID; });
+    formDraftSnapshot = null;
+    setGeoStatus('');
+    var routeBadge = $('routeSavedBadge');
+    if (routeBadge) routeBadge.hidden = true;
+    if (draftMarker) {
+      markerLayer.removeLayer(draftMarker);
+      draftMarker = null;
+    }
+    renderResourceSuggestions();
+    renderLifecycleBar();
+    renderGisTabSummary();
+    renderBookingDetailHeader();
+    populateRouteBookingSelect();
+  }
+
+  function popupHtml(b) {
+    var lat = b.lat;
+    var lng = b.lng;
+    var gmaps = 'https://www.google.com/maps/dir/?api=1&destination=' + lat + ',' + lng;
+    var waze = 'https://waze.com/ul?ll=' + lat + ',' + lng + '&navigate=yes';
+    return '<div>' +
+      '<div class="popup-date">' + escapeHtml(formatHuDate(b.date)) + '</div>' +
+      '<div class="popup-time">' + escapeHtml(formatTimeShort(b.timeStart)) + '-' + escapeHtml(formatTimeShort(b.timeEnd)) + '</div>' +
+      '<div class="popup-people">' + escapeHtml(String(b.headcount)) + ' fő</div>' +
+      '<div class="popup-meta">Állapot: ' + escapeHtml(statusLabel(b.status)) + '</div>' +
+      '<div class="popup-meta">Jármű: ' + escapeHtml(b.vehicle || DEFAULT_PENDING) + '</div>' +
+      '<div class="popup-meta">Sofőr: ' + escapeHtml(b.driver || DEFAULT_PENDING) + '</div>' +
+      '<div class="popup-place">' + escapeHtml(b.placeName || b.address) + '</div>' +
+      '<div class="popup-nav">' +
+      '<button type="button" class="nav-route" data-route-booking="' + escapeHtml(b.id) + '">Útvonal ide</button>' +
+      '<a class="nav-gmaps" href="' + gmaps + '" target="_blank" rel="noopener">Google Maps</a>' +
+      '<a class="nav-waze" href="' + waze + '" target="_blank" rel="noopener">Waze</a>' +
+      '</div></div>';
+  }
+
+  function bindPopupActions() {
+    document.querySelectorAll('[data-route-booking]').forEach(function (btn) {
+      btn.onclick = function (ev) {
+        ev.preventDefault();
+        var id = btn.getAttribute('data-route-booking');
+        selectRouteTarget(id, true);
+        map.closePopup();
+      };
+    });
+  }
+
+  map.on('popupopen', bindPopupActions);
+  map.on('zoomend', refreshMarkerLabels);
+
+  function markerRadius(n) {
+    var p = Number(n || 0);
+    return Math.max(8, Math.min(28, 8 + p / 3));
+  }
+
+  function bookingHasMapAnchor(b) {
+    if (!b) return false;
+    if (b.lat != null && b.lng != null && isFinite(Number(b.lat)) && isFinite(Number(b.lng))) return true;
+    return getBookingRoutePoints(b).length > 0;
+  }
+
+  function getFiltered() {
+    var day = $('filterDay').value;
+    var from = $('filterFrom').value;
+    var to = $('filterTo').value;
+    var place = $('filterPlace').value.trim().toLowerCase();
+    var search = $('filterSearch').value.trim().toLowerCase();
+
+    return bookings.filter(function (b) {
+      if (day) {
+        if (b.date !== day) return false;
+      } else {
+        if (from && b.date < from) return false;
+        if (to && b.date > to) return false;
+      }
+      if (place) {
+        var hay = ((b.placeName || '') + ' ' + (b.address || '')).toLowerCase();
+        if (hay.indexOf(place) < 0) return false;
+      }
+      if (search) {
+        var blob = [
+          b.id, b.placeName, b.city, b.street, b.houseNumber, b.locationNote, b.address, b.ordererName, b.companyName,
+          b.taxId, b.contact, b.phone, b.email, b.note, b.vehicle, b.driver, b.status
+        ].join(' ').toLowerCase();
+        if (blob.indexOf(search) < 0) return false;
+      }
+      return bookingHasMapAnchor(b);
+    }).sort(function (a, b) {
+      return (a.date + ' ' + a.timeStart).localeCompare(b.date + ' ' + b.timeStart);
+    });
+  }
+
+  function renderMarkers(list) {
+    markerLayer.clearLayers();
+    bookingRouteLayer.clearLayers();
+    markers = [];
+    markerEntries = [];
+    draftMarker = null;
+
+    if (mapViewMode === 'load') {
+      aggregateByDate(list).forEach(function (g) {
+        var color = loadDayColor(g.headcount);
+        var m = L.circleMarker([g.lat, g.lng], {
+          radius: loadMarkerRadius(g.headcount),
+          color: color, fillColor: color, fillOpacity: 0.82, weight: 2
+        }).addTo(markerLayer);
+        m.bindTooltip(loadLabelHtml(g), {
+          permanent: true, direction: 'right', className: 'map-label', offset: [10, 0], opacity: 1
+        });
+        m.bindPopup(loadPopupHtml(g), { maxWidth: 320 });
+        m.on('click', function () { setFilterDayOnly(g.date); });
+        markers.push(m);
+      });
+      return;
+    }
+
+    var compact = isCompactLabelZoom();
+    list.forEach(function (b) {
+      var pts = getBookingRoutePoints(b);
+      var markerLat = null;
+      var markerLng = null;
+      if (pts.length >= 1) {
+        markerLat = pts[0].lat;
+        markerLng = pts[0].lng;
+      } else if (b.lat != null && b.lng != null) {
+        markerLat = b.lat;
+        markerLng = b.lng;
+      }
+      if (markerLat == null || markerLng == null) return;
+
+      if (pts.length >= 2) {
+        drawBookingRoutePoints(pts, bookingRouteLayer);
+      } else if (pts.length === 1) {
+        drawBookingRoutePoints(pts, bookingRouteLayer);
+      }
+
+      var color = statusColor(b.status);
+      var m = L.circleMarker([markerLat, markerLng], {
+        radius: markerRadius(b.headcount),
+        color: color, fillColor: color, fillOpacity: 0.78, weight: 2
+      }).addTo(markerLayer);
+      m.bindTooltip(markerLabelHtml(b, compact), {
+        permanent: true, direction: 'right', className: 'map-label', offset: [10, 0], opacity: 1
+      });
+      m.bindPopup(popupHtml(b), { maxWidth: 300 });
+      m.on('click', function () { openBookingForm(b.id); });
+      markers.push(m);
+      markerEntries.push({ marker: m, booking: b });
+    });
+  }
+
+  function renderList(list) {
+    var root = $('bookingList');
+    if (!list.length) {
+      if (rentDataSource === 'error') {
+        root.innerHTML = '<div class="empty">A Rent adatok jelenleg nem tölthetők be a szerverről. <button type="button" class="btn sm" id="btnReloadRent">Újrapróbálás</button></div>';
+        var reloadBtn = $('btnReloadRent');
+        if (reloadBtn) reloadBtn.addEventListener('click', reloadRentData);
+        return;
+      }
+      if (rentDataSource === 'server' && !bookings.length) {
+        root.innerHTML = '<div class="empty">Nincs még Rent árajánlatkérés.</div>';
+        return;
+      }
+      root.innerHTML = '<div class="empty">Nincs megjeleníthető foglalás a szűrők alapján.</div>';
+      return;
+    }
+    var activeId = $('editId').value;
+    root.innerHTML = list.map(function (b) {
+      var cls = b.id === activeId ? ' is-active' : '';
+      return '<div class="list-item' + cls + '" data-id="' + escapeHtml(b.id) + '">' +
+        '<div class="list-title">' + escapeHtml((b.city ? b.city + ' · ' : '') + (b.placeName || b.address)) + '</div>' +
+        '<div class="list-meta">' + escapeHtml(formatHuDate(b.date)) + ' · ' +
+        escapeHtml(formatTimeShort(b.timeStart)) + '-' + escapeHtml(formatTimeShort(b.timeEnd)) + '</div>' +
+        '<div class="list-tags">' +
+        '<span class="tag ' + statusTagClass(b.status) + '">' + escapeHtml(statusLabel(b.status)) + '</span>' +
+        '<span class="tag tag-people">' + escapeHtml(String(b.headcount)) + ' fő</span>' +
+        '<span class="tag">' + escapeHtml(BOOKING_TYPE_LABEL[b.bookingType] || BOOKING_TYPE_LABEL[DEFAULT_BOOKING_TYPE]) + '</span>' +
+        '<span class="tag tag-veh">' + escapeHtml(b.vehicle || DEFAULT_PENDING) + '</span>' +
+        '<span class="tag tag-drv">' + escapeHtml(b.driver || DEFAULT_PENDING) + '</span>' +
+        '</div>' +
+        '<div class="list-meta">' + escapeHtml(formatAddressDisplay(b)) + '</div>' +
+        (isBackendRentId(b.id)
+          ? ('<div class="list-item-actions"><button type="button" class="btn danger sm list-del-btn" data-del-id="' + escapeHtml(b.id) + '">🗑 Törlés</button></div>')
+          : '') +
+        '</div>';
+    }).join('');
+
+    root.querySelectorAll('.list-item').forEach(function (el) {
+      el.addEventListener('click', function () {
+        openBookingForm(el.getAttribute('data-id'));
+      });
+    });
+    root.querySelectorAll('.list-del-btn').forEach(function (btn) {
+      btn.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        var delId = btn.getAttribute('data-del-id');
+        showDeleteConfirm(delId).then(function (confirmed) {
+          if (!confirmed) return;
+          deleteBookingById(delId).catch(function (err) {
+            console.error('DELETE rent inquiry failed:', err);
+            alert('A törlés nem sikerült. Próbálja újra.');
+          });
+        });
+      });
+    });
+  }
+
+  function renderStats(list) {
+    $('statCount').textContent = String(list.length);
+    $('statPeople').textContent = String(list.reduce(function (s, b) { return s + (b.headcount || 0); }, 0));
+    var byDay = {};
+    list.forEach(function (b) { byDay[b.date] = (byDay[b.date] || 0) + (b.headcount || 0); });
+    var days = Object.keys(byDay);
+    $('statDays').textContent = String(days.length);
+    var peakDay = '—', peakVal = 0;
+    days.forEach(function (d) {
+      if (byDay[d] > peakVal) { peakVal = byDay[d]; peakDay = formatHuDate(d) + ' (' + peakVal + ')'; }
+    });
+    $('statPeak').textContent = peakDay;
+  }
+
+  function populateRouteBookingSelect() {
+    var sel = $('routeBookingId');
+    if (!sel) return;
+    var prev = sel.value;
+    var opts = bookings.filter(function (b) { return b.lat != null && b.lng != null; })
+      .sort(function (a, b) { return (a.date + a.timeStart).localeCompare(b.date + b.timeStart); });
+    var draftOpt = (!$('editId').value && $('lat').value && $('lng').value)
+      ? ('<option value="' + ROUTE_DRAFT_ID + '">Aktuális adatlap (új árajánlatkérés)</option>')
+      : '';
+    sel.innerHTML = '<option value="">— válassz foglalást —</option>' + draftOpt +
+      opts.map(function (b) {
+        return '<option value="' + escapeHtml(b.id) + '">' +
+          escapeHtml(formatHuDate(b.date) + ' ' + formatTimeShort(b.timeStart) + ' · ' + (b.placeName || b.address)) +
+          '</option>';
+      }).join('');
+    var editId = $('editId').value;
+    if (editId && opts.some(function (b) { return b.id === editId; })) sel.value = editId;
+    else if (prev === ROUTE_DRAFT_ID && draftOpt) sel.value = ROUTE_DRAFT_ID;
+    else if (prev && opts.some(function (b) { return b.id === prev; })) sel.value = prev;
+    else if (!editId && draftOpt && $('routeBookingId').value === ROUTE_DRAFT_ID) sel.value = ROUTE_DRAFT_ID;
+    updateRouteTargetLabel();
+  }
+
+  function updateRouteExportButton() {
+    var id = $('routeBookingId').value || getRouteTargetBookingId();
+    var r = getRouteForBooking(id);
+    $('btnExportGeoJson').disabled = !(r && r.geometry);
+  }
+
+  function showStoredRouteForBooking(bookingId) {
+    var r = getRouteForBooking(bookingId);
+    if (r && r.geometry && r.fromLat != null) {
+      drawRoute(r.geometry, r.fromLat, r.fromLng, r.toLat, r.toLng);
+    }
+    updateRouteExportButton();
+  }
+
+  function updateRouteTargetLabel() {
+    renderRouteTargetPanel();
+    showStoredRouteForBooking($('routeBookingId').value);
+  }
+
+  function selectRouteTarget(id, openRouteView) {
+    $('routeBookingId').value = id || '';
+    updateRouteTargetLabel();
+    if (openRouteView) setMainModule('routes');
+  }
+
+  window.selectRouteTarget = selectRouteTarget;
+
+  function parseLocalDateTime(isoDate, timeStr) {
+    var p = (timeStr || '00:00').split(':');
+    return new Date(
+      parseInt(isoDate.split('-')[0], 10),
+      parseInt(isoDate.split('-')[1], 10) - 1,
+      parseInt(isoDate.split('-')[2], 10),
+      parseInt(p[0], 10) || 0,
+      parseInt(p[1], 10) || 0,
+      0
+    );
+  }
+
+  function formatIsoTime(d) {
+    return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  }
+
+  function clearRouteLayer() {
+    routeLayer.clearLayers();
+  }
+
+  function drawRoute(geometry, fromLat, fromLng, toLat, toLng) {
+    clearRouteLayer();
+    if (geometry) {
+      var line = L.geoJSON({ type: 'Feature', geometry: geometry }, {
+        style: { color: '#38bdf8', weight: 5, opacity: 0.9 }
+      }).addTo(routeLayer);
+      L.circleMarker([fromLat, fromLng], {
+        radius: 8, color: '#22c55e', fillColor: '#22c55e', fillOpacity: 0.9, weight: 2
+      }).bindTooltip('Indulás', { direction: 'top' }).addTo(routeLayer);
+      L.circleMarker([toLat, toLng], {
+        radius: 8, color: '#f97316', fillColor: '#f97316', fillOpacity: 0.9, weight: 2
+      }).bindTooltip('Cél', { direction: 'top' }).addTo(routeLayer);
+      map.fitBounds(line.getBounds().pad(0.12));
+    }
+  }
+
+  function showRouteResult(html) {
+    var el = $('routeResult');
+    el.innerHTML = html;
+    el.hidden = false;
+  }
+
+  function calcRoute() {
+    var booking = getRouteTargetBooking();
+    if (!booking || booking.lat == null || booking.lng == null) {
+      alert('A célfoglalásnak koordinátája szükséges az útvonal számításához.');
+      return;
+    }
+    var bookingId = booking.id || ROUTE_DRAFT_ID;
+    var speedKmh = parseFloat($('routeSpeed').value) || DEFAULT_SPEED_KMH;
+    if (speedKmh < 5) speedKmh = DEFAULT_SPEED_KMH;
+
+    var customFrom = $('routeCustomFrom').value.trim();
+    var depotId = $('routeDepot').value;
+    var depot = DEPOTS.find(function (d) { return d.id === depotId; }) || DEPOTS[0];
+
+    function runWithOrigin(origin) {
+      var fromLat = origin.lat;
+      var fromLng = origin.lng;
+      var fromName = origin.name;
+      var toLat = booking.lat;
+      var toLng = booking.lng;
+      var url = 'https://router.project-osrm.org/route/v1/driving/' +
+        fromLng + ',' + fromLat + ';' + toLng + ',' + toLat +
+        '?overview=full&geometries=geojson';
+
+      showRouteResult('<strong>Útvonal számítása…</strong>');
+      $('btnCalcRoute').disabled = true;
+
+      fetch(url)
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          $('btnCalcRoute').disabled = false;
+          if (!data || data.code !== 'Ok' || !data.routes || !data.routes.length) {
+            showRouteResult('<span style="color:#f87171">OSRM útvonal nem elérhető. Próbáld újra később.</span>');
+            return;
+          }
+          var route = data.routes[0];
+          var distanceKm = route.distance / 1000;
+          var travelMinutes = (distanceKm / speedKmh) * 60;
+          var arrival = parseLocalDateTime(booking.date, booking.timeStart);
+          var departure = new Date(arrival.getTime() - travelMinutes * 60000);
+          var suggestedDeparture = formatIsoTime(departure);
+          var targetArrival = formatTimeShort(booking.timeStart);
+
+          var record = normalizeRouteRecord({
+            bookingId: bookingId,
+            status: booking.status,
+            vehicle: booking.vehicle,
+            driver: booking.driver,
+            date: booking.date,
+            startTime: booking.timeStart,
+            endTime: booking.timeEnd,
+            fromName: fromName,
+            fromLat: fromLat,
+            fromLng: fromLng,
+            toLat: toLat,
+            toLng: toLng,
+            distanceKm: Math.round(distanceKm * 10) / 10,
+            speedKmh: speedKmh,
+            travelMinutes: Math.round(travelMinutes),
+            suggestedDeparture: booking.date + 'T' + suggestedDeparture,
+            targetArrival: booking.date + 'T' + targetArrival,
+            geometry: route.geometry,
+            calculatedAt: new Date().toISOString()
+          }, booking);
+
+          calculatedRoutes = calculatedRoutes.filter(function (r) { return r.bookingId !== bookingId; });
+          calculatedRoutes.push(record);
+          if (bookingId !== ROUTE_DRAFT_ID && isBackendRentId(bookingId) && !isPatchingRoute) {
+            isPatchingRoute = true;
+            patchRentInquiryApi(bookingId, { adminCalculatedRoute: record })
+              .then(function (saved) {
+                var idx = bookings.findIndex(function (x) { return x.id === bookingId; });
+                if (idx >= 0) bookings[idx] = normalizeBooking(saved);
+                restoreCalculatedRoutesFromBookings();
+              })
+              .catch(function (err) {
+                console.error('adminCalculatedRoute PATCH failed:', err);
+              })
+              .finally(function () {
+                isPatchingRoute = false;
+              });
+          }
+          drawRoute(route.geometry, fromLat, fromLng, toLat, toLng);
+          updateRouteExportButton();
+          renderRouteTargetPanel();
+          if ($('editId').value === bookingId || (! $('editId').value && bookingId === ROUTE_DRAFT_ID)) {
+            renderGisTabSummary();
+          }
+
+          showRouteResult(
+            '<div><strong>Távolság:</strong> ' + record.distanceKm.toFixed(1).replace('.', ',') + ' km</div>' +
+            '<div><strong>Átlagsebesség:</strong> ' + speedKmh + ' km/h</div>' +
+            '<div><strong>Menetidő:</strong> ' + formatTravelMinutes(travelMinutes) + '</div>' +
+            '<div><strong>Indulás:</strong> ' + formatHuDateTime(booking.date, suggestedDeparture) + '</div>' +
+            '<div><strong>Érkezés:</strong> ' + formatHuDateTime(booking.date, targetArrival) + '</div>' +
+            '<div style="margin-top:6px;color:var(--muted);font-size:12px">Indulási pont: ' + escapeHtml(fromName) + '</div>'
+          );
+        })
+        .catch(function () {
+          $('btnCalcRoute').disabled = false;
+          showRouteResult('<span style="color:#f87171">Hálózati hiba az OSRM lekérésnél.</span>');
+        });
+    }
+
+    if (customFrom) {
+      geocodeSilent(customFrom).then(function (hit) {
+        if (!hit) {
+          alert('Az egyedi kiindulási cím geokódolása sikertelen.');
+          return;
+        }
+        runWithOrigin({ lat: hit.lat, lng: hit.lng, name: customFrom });
+      });
+      return;
+    }
+    runWithOrigin({ lat: depot.lat, lng: depot.lng, name: depot.name + ' (' + depot.id + ')' });
+  }
+
+  function renderCalendar() {
+    var y = calendarMonth.getFullYear();
+    var m = calendarMonth.getMonth();
+    var monthNames = ['január', 'február', 'március', 'április', 'május', 'június',
+      'július', 'augusztus', 'szeptember', 'október', 'november', 'december'];
+    $('calTitle').textContent = y + '. ' + monthNames[m];
+    var stats = dayStatsMap(bookings);
+    var first = new Date(y, m, 1);
+    var startPad = (first.getDay() + 6) % 7;
+    var daysInMonth = new Date(y, m + 1, 0).getDate();
+    var headers = ['H', 'K', 'Sze', 'Cs', 'P', 'Szo', 'V'];
+    var html = headers.map(function (h) { return '<div class="cal-head">' + h + '</div>'; }).join('');
+    var totalCells = Math.ceil((startPad + daysInMonth) / 7) * 7;
+    for (var i = 0; i < totalCells; i += 1) {
+      var dayNum = i - startPad + 1;
+      if (dayNum < 1 || dayNum > daysInMonth) {
+        html += '<div class="cal-day is-out"></div>';
+        continue;
+      }
+      var iso = y + '-' + String(m + 1).padStart(2, '0') + '-' + String(dayNum).padStart(2, '0');
+      var st = stats[iso] || { count: 0, headcount: 0 };
+      var cls = loadLevelClass(st.headcount);
+      var sel = $('filterDay').value === iso ? ' is-selected' : '';
+      html += '<div class="cal-day ' + cls + sel + '" data-day="' + iso + '">' +
+        '<div class="cal-day-num">' + dayNum + '</div>' +
+        (st.count ? '<div class="cal-day-meta">' + st.count + ' f. · ' + st.headcount + ' fő</div>' : '') +
+        '</div>';
+    }
+    $('calendarGrid').innerHTML = html;
+    $('calendarGrid').querySelectorAll('.cal-day[data-day]').forEach(function (el) {
+      el.addEventListener('click', function () {
+        setFilterDayOnly(el.getAttribute('data-day'));
+        setMainModule('bookings');
+        renderCalendar();
+      });
+    });
+  }
+
+  function vehicleWorkloadStatus(assigned) {
+    if (!assigned.length) return { label: 'Szabad', cls: 'veh-st-free' };
+    return { label: 'Foglalt', cls: 'veh-st-booked' };
+  }
+
+  function setMapViewMode(mode) {
+    mapViewMode = mode === 'load' ? 'load' : 'normal';
+    $('viewNormal').classList.toggle('is-active', mapViewMode === 'normal');
+    $('viewLoad').classList.toggle('is-active', mapViewMode === 'load');
+    render();
+  }
+
+  function exportBookingsGeoJson() {
+    var features = bookings.filter(function (b) { return b.lat != null && b.lng != null; }).map(function (b) {
+      return {
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [b.lng, b.lat] },
+        properties: {
+          bookingId: b.id,
+          status: b.status || DEFAULT_STATUS,
+          date: b.date,
+          timeStart: b.timeStart,
+          timeEnd: b.timeEnd,
+          headcount: b.headcount,
+          vehicle: b.vehicle || DEFAULT_PENDING,
+          driver: b.driver || DEFAULT_PENDING,
+          placeName: b.placeName || '',
+          address: b.address || '',
+          companyName: b.companyName || '',
+          phone: b.phone || '',
+          email: b.email || ''
+        }
+      };
+    });
+    var stamp = todayIso().replace(/-/g, '');
+    var blob = new Blob([JSON.stringify({ type: 'FeatureCollection', features: features }, null, 2)], {
+      type: 'application/geo+json'
+    });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'bookings_' + stamp + '.geojson';
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 500);
+  }
+
+  function render() {
+    var list = getFiltered();
+    renderMarkers(list);
+    renderList(list);
+    renderStats(list);
+    renderCalendar();
+    renderResourceSuggestions();
+    populateRouteBookingSelect();
+    renderLifecycleBar();
+    renderGisTabSummary();
+    renderBookingDetailHeader();
+  }
+
+  function saveBooking() {
+    if (isSavingBooking) {
+      console.debug('[RENT SAVE] already in progress, ignored');
+      return;
+    }
+
+    var b = readForm();
+    if (!b.placeName && !b.address) { alert('A helyszín neve vagy a cím megadása kötelező.'); return; }
+    if (!b.date || !b.timeStart || !b.timeEnd) { alert('A dátum és időpontok megadása kötelező.'); return; }
+    if (b.timeEnd <= b.timeStart) { alert('A befejezés időpontja későbbi legyen, mint a kezdés.'); return; }
+    if (!b.headcount || b.headcount < 1) { alert('Érvényes létszám szükséges.'); return; }
+
+    var st = normalizeStatus(b.status);
+    if (st === 'MEGRENDELVE') {
+      if (isPendingAssign(b.vehicle)) {
+        alert('Megrendelt foglaláshoz kötelező a jármű hozzárendelése.');
+        return;
+      }
+      if (isPendingAssign(b.driver)) {
+        alert('Megrendelt foglaláshoz kötelező a sofőr hozzárendelése.');
+        return;
+      }
+      var vehState = getVehicleSlotState(String(b.vehicle).trim(), b);
+      if (vehState === 'FOGLALT') {
+        alert('A kiválasztott jármű ebben az időszakban már megrendelve / foglalt.');
+        return;
+      }
+    }
+
+    var conflictWarn = getResourceConflictWarning(b);
+    if (conflictWarn && st === 'ARAJANLATKERES') {
+      if (!confirm(conflictWarn + '\n\nBiztosan mented így?')) return;
+    }
+
+    function persist(entry) {
+      if (isSavingBooking) {
+        console.debug('[RENT SAVE] already in progress, ignored');
+        return;
+      }
+      isSavingBooking = true;
+      setSaveButtonBusy(true);
+      entry = mergePreservedBookingFields(entry);
+      entry.updatedAt = new Date().toISOString();
+      if (!entry.createdAt) entry.createdAt = entry.updatedAt;
+      var draftRoute = calculatedRoutes.find(function (r) { return r.bookingId === ROUTE_DRAFT_ID; });
+      if (draftRoute) {
+        draftRoute.bookingId = entry.id;
+        if (entry.geometryType === 'ROUTE' && !entry.routeGeometry) {
+          entry.routeGeometry = draftRoute.geometry;
+        }
+      }
+      if (entry.geometryType === 'ROUTE' && !entry.routeGeometry) {
+        var calc = calculatedRoutes.find(function (r) { return r.bookingId === entry.id; });
+        if (calc && calc.geometry) entry.routeGeometry = calc.geometry;
+      }
+      saveBookingToServer(entry).then(function (saved) {
+        completeBookingSaveSuccess(saved);
+      }).catch(function (err) {
+        console.error('Rent admin save failed:', err);
+        alert('A mentés nem sikerült. Az adatok nem kerültek a szerverre.');
+      }).finally(function () {
+        isSavingBooking = false;
+        setSaveButtonBusy(false);
+      });
+    }
+
+    if (b.lat != null && b.lng != null) { persist(b); return; }
+    var q = [b.city, b.street || b.address, b.houseNumber].filter(Boolean).join(', ');
+    if (!q) q = b.placeName && b.address ? b.placeName + ', ' + b.address : (b.address || b.placeName);
+    geocodeAddress(q).then(function (hit) {
+      if (!hit) {
+        alert('Nem sikerült geokódolni. Kattints a térképre, majd ments újra.');
+        return;
+      }
+      b.lat = hit.lat;
+      b.lng = hit.lng;
+      persist(b);
+    });
+  }
+
+  function deleteBooking() {
+    var id = $('editId').value;
+    if (!id || !isBackendRentId(id)) return;
+    showDeleteConfirm(id).then(function (confirmed) {
+      if (!confirmed) return;
+      deleteBookingById(id).catch(function (err) {
+        console.error('DELETE rent inquiry failed:', err);
+        alert('A törlés nem sikerült. Próbálja újra.');
+      });
+    });
+  }
+
+  function exportRouteGeoJson() {
+    var bookingId = $('routeBookingId').value;
+    var route = getRouteForBooking(bookingId);
+    var booking = bookings.find(function (b) { return b.id === bookingId; });
+    if (!route || !route.geometry) {
+      alert('Nincs számolt útvonal ehhez a foglaláshoz. Előbb számíts útvonalat.');
+      return;
+    }
+    var feature = {
+      type: 'Feature',
+      geometry: route.geometry,
+      properties: {
+        bookingId: route.bookingId,
+        date: route.date || (booking && booking.date),
+        startTime: route.startTime || (booking && booking.timeStart),
+        endTime: route.endTime || (booking && booking.timeEnd),
+        status: route.status || (booking && booking.status) || DEFAULT_STATUS,
+        vehicle: route.vehicle || (booking && booking.vehicle) || DEFAULT_PENDING,
+        driver: route.driver || (booking && booking.driver) || DEFAULT_PENDING,
+        distanceKm: route.distanceKm,
+        travelMinutes: route.travelMinutes
+      }
+    };
+    var safeId = String(route.bookingId).replace(/[^\w.-]+/g, '_');
+    var blob = new Blob([JSON.stringify(feature, null, 2)], { type: 'application/geo+json' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'route_' + safeId + '.geojson';
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 500);
+  }
+
+  function exportJson() {
+    var blob = new Blob([JSON.stringify({
+      module: 'Foglalasi_terkep',
+      version: MODULE_VERSION,
+      exportedAt: new Date().toISOString(),
+      bookings: bookings.map(normalizeBooking),
+      calculatedRoutes: calculatedRoutes
+    }, null, 2)], { type: 'application/json' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'foglalasi_terkep_v5_' + todayIso() + '.json';
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 500);
+  }
+
+  function seedDemoIfEmpty() {
+    /* kikapcsolva – backend az egyetlen adatforrás, demó rekord nem jöhet létre */
+  }
+
+  function initDepotSelect() {
+    $('routeDepot').innerHTML = DEPOTS.map(function (d) {
+      return '<option value="' + escapeHtml(d.id) + '">' + escapeHtml(d.name) + '</option>';
+    }).join('');
+  }
+
+  function setFilterDayOnly(iso) {
+    $('filterDay').value = iso;
+    $('filterFrom').value = '';
+    $('filterTo').value = '';
+    render();
+  }
+
+  function setFilterRange(days) {
+    var start = todayIso();
+    var end = addDaysIso(start, days);
+    $('filterDay').value = '';
+    $('filterFrom').value = start;
+    $('filterTo').value = end;
+    render();
+  }
+
+  map.on('click', function (e) {
+    if (!$('street').value.trim() && !$('placeName').value.trim() && !$('city').value.trim() && !$('editId').value) return;
+    $('lat').value = String(e.latlng.lat);
+    $('lng').value = String(e.latlng.lng);
+    showDraftMarker(e.latlng.lat, e.latlng.lng, $('placeName').value.trim() || 'Kiválasztott pont');
+    setGeoStatus('Manuális pont: ' + e.latlng.lat.toFixed(5) + ', ' + e.latlng.lng.toFixed(5), 'ok');
+    renderGisTabSummary();
+  });
+
+  $('placeName').addEventListener('input', scheduleGeocode);
+  $('city').addEventListener('input', function () {
+    scheduleGeocode();
+    scheduleStreetSuggest();
+  });
+  ['date', 'timeStart', 'timeEnd', 'status', 'vehicle', 'driver', 'city', 'headcount'].forEach(function (id) {
+    $(id).addEventListener('input', function () {
+      if (id === 'headcount') syncLastFormHeadcountFromInput();
+      if (id === 'status') renderLifecycleBar();
+      renderResourceSuggestions();
+      renderBookingDetailHeader();
+      if (id === 'lat' || id === 'lng') renderGisTabSummary();
+    });
+    $(id).addEventListener('change', function () {
+      if (id === 'headcount') syncLastFormHeadcountFromInput();
+      if (id === 'status') renderLifecycleBar();
+      renderResourceSuggestions();
+      renderBookingDetailHeader();
+    });
+  });
+  ['ordererName', 'companyName'].forEach(function (id) {
+    $(id).addEventListener('input', renderBookingDetailHeader);
+    $(id).addEventListener('change', renderBookingDetailHeader);
+  });
+  $('routeGeometry').addEventListener('input', renderGisTabSummary);
+  $('geometryType').addEventListener('change', function () {
+    updateGeometryTypeUi();
+    renderGisTabSummary();
+  });
+  if ($('status')) {
+    $('status').addEventListener('change', function () {
+      renderLifecycleBar();
+      renderBookingDetailHeader();
+      renderResourceSuggestions();
+    });
+  }
+  $('btnNew').addEventListener('click', function () {
+    clearForm();
+    setFormTab('basic');
+    setMainModule('detail');
+  });
+  $('btnClear').addEventListener('click', clearForm);
+  $('btnSave').addEventListener('click', saveBooking);
+  $('btnDelete').addEventListener('click', deleteBooking);
+  $('btnExport').addEventListener('click', exportJson);
+  $('btnExportBookingsGeo').addEventListener('click', exportBookingsGeoJson);
+  $('btnCalcRoute').addEventListener('click', calcRoute);
+  $('viewNormal').addEventListener('click', function () { setMapViewMode('normal'); });
+  $('viewLoad').addEventListener('click', function () { setMapViewMode('load'); });
+  $('calPrev').addEventListener('click', function () {
+    calendarMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1);
+    renderCalendar();
+  });
+  $('calNext').addEventListener('click', function () {
+    calendarMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1);
+    renderCalendar();
+  });
+  $('btnExportGeoJson').addEventListener('click', exportRouteGeoJson);
+  $('routeBookingId').addEventListener('change', updateRouteTargetLabel);
+
+  ['filterDay', 'filterFrom', 'filterTo', 'filterPlace', 'filterSearch'].forEach(function (id) {
+    $(id).addEventListener('input', function () {
+      if (id === 'filterDay' && $(id).value) {
+        $('filterFrom').value = '';
+        $('filterTo').value = '';
+      }
+      if ((id === 'filterFrom' || id === 'filterTo') && ($(id).value)) {
+        $('filterDay').value = '';
+      }
+      render();
+    });
+    $(id).addEventListener('change', function () {
+      if (id === 'filterDay' && $(id).value) {
+        $('filterFrom').value = '';
+        $('filterTo').value = '';
+      }
+      if ((id === 'filterFrom' || id === 'filterTo') && ($(id).value)) {
+        $('filterDay').value = '';
+      }
+      render();
+    });
+  });
+
+  $('filterToday').addEventListener('click', function () { setFilterDayOnly(todayIso()); });
+  $('filterTomorrow').addEventListener('click', function () { setFilterDayOnly(addDaysIso(todayIso(), 1)); });
+  $('filter5').addEventListener('click', function () { setFilterRange(5); });
+  $('filter7').addEventListener('click', function () { setFilterRange(7); });
+  $('filter30').addEventListener('click', function () { setFilterRange(30); });
+  $('filterReset').addEventListener('click', function () {
+    $('filterDay').value = '';
+    $('filterFrom').value = '';
+    $('filterTo').value = '';
+    $('filterPlace').value = '';
+    $('filterSearch').value = '';
+    render();
+  });
+
+  $('btnMapFullscreen').addEventListener('click', function () {
+    document.body.classList.toggle('map-fullscreen');
+    setTimeout(function () { map.invalidateSize(); }, 120);
+  });
+
+  window.addEventListener('resize', function () {
+    map.invalidateSize();
+  });
+
+  window.addEventListener('storage', function () {
+    /* legacy localStorage sync kikapcsolva – backend az aktív adatforrás */
+  });
+
+  initDepotSelect();
+  initMainNavUi();
+
+  function clearRentDateFilters() {
+    $('filterDay').value = '';
+    $('filterFrom').value = '';
+    $('filterTo').value = '';
+  }
+
+  function bootApplication() {
+    if (appBooted) return;
+    appBooted = true;
+    loadFleetConfig().finally(function () {
+      renderResourceSuggestions();
+      loadRentInquiriesFromApi().then(function () {
+        bookings = bookings.map(normalizeBooking);
+        updateGeometryTypeUi();
+        setFormTab('basic');
+        setMainModule('detail');
+        clearRentDateFilters();
+        clearForm();
+        render();
+      }).catch(function () {
+        updateGeometryTypeUi();
+        setFormTab('basic');
+        setMainModule('detail');
+        clearRentDateFilters();
+        clearForm();
+        render();
+      });
+    });
+  }
+
+  initAdminLogin();
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js').catch(function () { /* PWA előkészítés */ });
+  }
+})();
+  </script>
+</body>
+</html>

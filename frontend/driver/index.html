@@ -115,6 +115,16 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
+            text-align: center;
+            line-height: 1.15;
+            overflow: hidden;
+        }
+        .fab.fab-bookings {
+            font-size: 7.5px;
+            font-weight: 800;
+            letter-spacing: 0;
+            white-space: nowrap;
+            padding: 0 3px;
         }
         .fab:active { transform: scale(0.96); }
         .fab.on,
@@ -1113,13 +1123,13 @@
         <button type="button" id="kvn-notify-center" class="notify-center hit" hidden aria-live="polite" aria-label="Értesítések megnyitása">
             <span class="notify-center-icon" aria-hidden="true">🔔</span><span id="kvn-notify-center-text">—</span>
         </button>
-        <div id="kvn-notify-stack" aria-live="polite"></div>
+        <div id="kvn-notify-stack" class="hit" aria-live="polite"></div>
         <div class="fab-stack bl hit">
-            <button type="button" class="fab hit has-badge" data-sheet="sheet-bookings" aria-label="Foglalások" id="fab-bookings">FOGLALÁS</button>
-            <button type="button" class="fab hit" data-sheet="sheet-shift" aria-label="Műszak">MŰSZAK</button>
+            <button type="button" class="fab fab-bookings hit has-badge" data-sheet="sheet-bookings" aria-label="Foglalások" id="fab-bookings">FOGLALÁS</button>
             <button type="button" class="fab hit" data-sheet="sheet-tasks" aria-label="Feladatok">FELADAT</button>
         </div>
         <div class="fab-stack br hit">
+            <button type="button" class="fab hit" data-sheet="sheet-shift" aria-label="Műszak">MŰSZAK</button>
             <button type="button" class="fab hit" data-sheet="sheet-trip" aria-label="Járat">JÁRAT</button>
         </div>
 
@@ -1188,48 +1198,41 @@
             <h2 class="sheet-title">Műszak</h2>
 
             <div class="train-panel">
-                <div class="setup-card shift-login-prep">
-                    <h3 class="setup-subtitle">Belépés (előkészítés)</h3>
-                    <label for="field-driver-select">Sofőr</label>
-                    <select id="field-driver-select" class="field">
-                        <option value="">— válassz sofőrt —</option>
-                    </select>
-                    <label for="field-vehicle-select">Jármű</label>
-                    <select id="field-vehicle-select" class="field">
-                        <option value="">— válassz járművet —</option>
-                    </select>
-                    <label for="field-driver-pin">PIN</label>
-                    <input type="password" id="field-driver-pin" class="field" placeholder="pl. 0423 (később)" maxlength="8" autocomplete="off" inputmode="numeric" />
-                    <p class="setup-meta">PIN csak előkészítés – nem kötelező, nem validál.</p>
-                </div>
-                <div class="setup-card">
+                <div class="setup-card shift-start-card">
                     <input type="hidden" id="field-vehicle-id" />
                     <input type="hidden" id="field-vehicle-name" />
                     <input type="hidden" id="field-driver-id" />
                     <input type="hidden" id="field-driver-name" />
-                    <label for="field-schedule">Menetrend</label>
+                    <label for="field-vehicle-select">Jármű</label>
+                    <select id="field-vehicle-select" class="field">
+                        <option value="">— válassz járművet —</option>
+                    </select>
+                    <label for="field-driver-select">Sofőr</label>
+                    <select id="field-driver-select" class="field">
+                        <option value="">— válassz sofőrt —</option>
+                    </select>
+                    <label for="field-driver-pin">PIN</label>
+                    <input type="password" id="field-driver-pin" class="field" placeholder="PIN kód" maxlength="8" autocomplete="off" inputmode="numeric" />
+                    <label for="field-schedule">Útvonal</label>
                     <select id="field-schedule" class="field"></select>
-                    <p class="setup-meta">
-                        Város: <strong id="meta-city">Tata</strong>
-                        · Fedélzeten: <strong id="meta-passengers">0</strong> fő
-                    </p>
+                    <button type="button" class="big-action orange hit" id="btn-muszak-toggle">MŰSZAK INDÍTÁSA</button>
+                </div>
+                <div class="setup-card shift-tools-card" hidden aria-hidden="true">
+                    <p class="setup-meta">Város: <strong id="meta-city">Tata</strong> · Fedélzeten: <strong id="meta-passengers">0</strong> fő</p>
                     <div class="capacity-panel" id="vehicle-capacity-panel" aria-live="polite">
                         <p class="cap-line">Jármű: <strong id="cap-vehicle-name">—</strong></p>
                         <p class="cap-line">Foglalás: <strong id="cap-booked">0</strong> fő</p>
                         <p class="cap-line">Szabad hely: <strong id="cap-free">56</strong> fő</p>
                     </div>
-                    <label for="export-shift-select" class="export-shift-lbl">GeoJSON export műszak</label>
-                    <select id="export-shift-select" class="field"></select>
+                    <select id="export-shift-select" class="field" hidden></select>
                     <div class="shift-status-lines" aria-live="polite">
                         <p>Aktív műszak:<strong id="panel-active-shift">—</strong></p>
                         <p>Aktív járat:<strong id="panel-active-trip">—</strong></p>
                     </div>
-                    <button type="button" class="big-action orange hit" id="btn-muszak-toggle">MŰSZAK INDÍTÁSA</button>
-                    <button type="button" class="big-action hit" id="btn-pwa-install" hidden style="margin-top:10px;background:rgba(26,35,126,0.85);border:1px solid rgba(129,140,248,0.5);">📲 App telepítése</button>
-                    <p class="setup-meta" style="margin-top:8px;">PWA: iPhone → Megosztás → Főképernyő · Android → Telepítés</p>
+                    <button type="button" class="big-action hit" id="btn-pwa-install" hidden>📲 App telepítése</button>
                 </div>
 
-                <div class="setup-card vehicle-log-card">
+                <div class="setup-card vehicle-log-card" hidden aria-hidden="true">
                     <h3 class="vehicle-log-title">🔧 Járműnapló</h3>
                     <p class="setup-meta">A bejegyzés megjelenik az admin <strong>Szerviz</strong> fülön. Backend: <strong id="vehicle-log-api">—</strong></p>
                     <label for="field-log-category">Kategória</label>
@@ -1245,14 +1248,14 @@
                     <button type="button" class="big-action vehicle-log hit" id="btn-send-vehicle-log">BEJEGYZÉS KÜLDÉSE</button>
                 </div>
 
-                <div class="small-actions">
+                <div class="small-actions" hidden aria-hidden="true">
                     <button type="button" class="small-action hit" id="btn-export-json">JSON</button>
-                    <button type="button" class="small-action hit" id="btn-export-geojson">GeoJSON</button>
+                    <button type="button" class="small-action hit" id="btn-export-geojson">GeoJSON mentés</button>
                     <button type="button" class="small-action hit" id="btn-copy-log">Másolás</button>
                     <button type="button" class="small-action hit" id="btn-poi-audio-test">POI Hang Teszt</button>
                 </div>
-                <div class="log-box" id="train-log" aria-live="polite"></div>
-                <div class="driver-diagnostics" id="driver-diagnostics" aria-live="polite">
+                <div class="log-box" id="train-log" aria-live="polite" hidden></div>
+                <div class="driver-diagnostics" id="driver-diagnostics" aria-live="polite" hidden>
                     <p class="diag-row">GPS: <strong id="diag-gps">NINCS GPS</strong></p>
                     <p class="diag-row">GPS pont: <strong id="diag-gps-time">—</strong></p>
                     <p class="diag-row">GPS kora: <strong id="diag-gps-age">—</strong></p>
@@ -1325,6 +1328,10 @@
                         <button type="button" class="hit" data-quick-pass="2">+2</button>
                         <button type="button" class="hit" data-quick-pass="3">+3</button>
                         <button type="button" class="big-action green hit full-row" id="btn-passenger-open" style="min-height:56px">Utas · billentyűzet</button>
+                    </div>
+                    <div class="small-actions trip-geo-actions">
+                        <button type="button" class="small-action hit" id="btn-trip-export-geojson">GeoJSON mentés</button>
+                        <button type="button" class="small-action hit" id="btn-upload-route-admin">GeoJSON küldés adminnak</button>
                     </div>
                     <div class="num-pad" id="passenger-pad">
                         <button type="button" class="num-key hit" data-num="1">1</button>
@@ -1399,7 +1406,20 @@
     var STORAGE_TRIP_END_DISMISSED = 'kvnTripEndDismissed';
     var STORAGE_POI_CATALOG = 'kvnPoiCatalog';
     var SCHEDULE_ES_VALUE = '__eseti__';
-    var SCHEDULE_ES_LABEL = 'Eseti menet';
+    var SCHEDULE_ES_LABEL = 'Egyedi';
+    var configRoutesList = [];
+    var ROUTE_DISPLAY_TO_SCHEDULE = {
+        'Tata-1': 'Tata1', 'Tata-2': 'Tata2', 'Tata-3': 'Tata3',
+        Teszt01: 'Teszt01', Eger: 'Eger', 'Győr': 'Gyor', Gyor: 'Gyor',
+        'Pápa': 'Papa', Papa: 'Papa', 'Székesfehérvár': 'Szfv', Szfv: 'Szfv',
+        'Vác': 'Vac', Vac: 'Vac', Egyedi: '__eseti__'
+    };
+    var SCHEDULE_TO_DISPLAY = {
+        Tata1: 'Tata-1', Tata2: 'Tata-2', Tata3: 'Tata-3',
+        Teszt01: 'Teszt01', Eger: 'Eger', Gyor: 'Győr', Papa: 'Pápa',
+        Szfv: 'Székesfehérvár', Vac: 'Vác', __eseti__: 'Egyedi'
+    };
+    var shiftHeartbeatTimer = null;
     var DEFAULT_MIN_TRIP_MINUTES = 35;
     var POSITION_SEND_MS = 10000;
     var AUTO_TRACK_MS = POSITION_SEND_MS;
@@ -1442,7 +1462,13 @@
     var knownBoardingIds = {};
     var unreadBookingIds = { scheduled: {}, boarding: {} };
     var seenBookingIds = { scheduled: {}, boarding: {} };
+    var bookingsPollCity = '';
     var bookingsPollReady = false;
+    var notifyPushCount = 0;
+    var bookingsFetchSeq = 0;
+    var notifyAudioCtx = null;
+    var driverBoardingLocal = {};
+    var highlightedBookingId = null;
     var boardingDeclineOpenId = null;
     var taskAlertCurrent = null;
     var lastShownTaskId = null;
@@ -1482,6 +1508,8 @@
     var TEST_RADIUS_METERS = 50;
     // TODO: Teszt üzemmód vége után visszaállni a POI Radius attribútum használatára (distance <= poi.radius).
     var activeCityId = 'tata';
+    /** Utolsó jármű, amire vehicle.local alapján várost állítottunk (menetrend felülírás ellen) */
+    var lastVehicleLocalAppliedId = '';
     var autoTrackTimer = null;
     var gpsLockedOn = true;
 
@@ -1577,19 +1605,47 @@
         } catch (e) {}
     }
 
-    function openBookingsSheet(tab) {
-        if (tab) setActiveDriverBookTab(tab);
-        openSheet('sheet-bookings');
+    function scrollToHighlightedBookingRow() {
+        if (!highlightedBookingId || !elDriverBookingsList) return;
+        var sel = activeDriverBookTab === 'boarding'
+            ? '[data-board-id="' + highlightedBookingId + '"]'
+            : '[data-res-id="' + highlightedBookingId + '"]';
+        var row = elDriverBookingsList.querySelector(sel);
+        if (row && row.scrollIntoView) {
+            row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
     }
 
-    function openSheet(id) {
+    function openBookingsSheet(tab, recordId) {
+        console.log('TRACE_2A openBookingsSheet', {
+            recordId: recordId,
+            tab: tab,
+            activeDriverBookTab: activeDriverBookTab
+        });
+        if (tab) setActiveDriverBookTab(tab);
+        highlightedBookingId = recordId || null;
+        renderDriverBookings(lastDriverBookings);
+        openSheet('sheet-bookings', { skipMarkSeen: !!recordId });
+        setTimeout(scrollToHighlightedBookingRow, 300);
+    }
+
+    function openSheet(id, opts) {
+        opts = opts || {};
         document.querySelectorAll('.sheet').forEach(function (s) {
             s.classList.toggle('open', s.id === id);
         });
         scrim.classList.add('open');
         scrim.setAttribute('aria-hidden', 'false');
         if (id === 'sheet-bookings') {
-            markAllBookingsSeenInSheet();
+            console.log('DEBUG', {
+                activeDriverBookTab: activeDriverBookTab,
+                scheduledLength: lastDriverBookings && lastDriverBookings.scheduled && lastDriverBookings.scheduled.length,
+                boardingLength: lastDriverBookings && lastDriverBookings.boarding && lastDriverBookings.boarding.length
+            });
+            renderDriverBookings(lastDriverBookings);
+            if (!opts.skipMarkSeen) {
+                markAllBookingsSeenInSheet();
+            }
         }
         setTimeout(invalidateMap, 280);
     }
@@ -1812,21 +1868,45 @@
         return ROUTE_BY_SCHEDULE[slug] || null;
     }
 
+    function scheduleDisplayFromInternal(slug) {
+        var s = normalizeScheduleSlug(slug);
+        if (s === SCHEDULE_ES_VALUE) return SCHEDULE_ES_LABEL;
+        return SCHEDULE_TO_DISPLAY[s] || s;
+    }
+
+    function scheduleInternalFromDisplay(display) {
+        var d = String(display || '').trim();
+        if (!d || d === SCHEDULE_ES_LABEL || d === SCHEDULE_ES_VALUE) return SCHEDULE_ES_VALUE;
+        return ROUTE_DISPLAY_TO_SCHEDULE[d] || normalizeScheduleSlug(d);
+    }
+
+    function getScheduleDisplaySlug() {
+        var sel = document.getElementById('field-schedule');
+        if (sel && sel.value) return String(sel.value).trim();
+        try {
+            var saved = sessionStorage.getItem(STORAGE_SCHEDULE) || '';
+            if (saved === SCHEDULE_ES_VALUE) return SCHEDULE_ES_LABEL;
+            return scheduleDisplayFromInternal(saved) || 'Tata-1';
+        } catch (e) {
+            return 'Tata-1';
+        }
+    }
+
     function refreshScheduleSelect(preferredSchedule) {
         var sel = document.getElementById('field-schedule');
         if (!sel) return;
         var saved = '';
         try { saved = sessionStorage.getItem(STORAGE_SCHEDULE) || ''; } catch (e) {}
-        saved = normalizeScheduleSlug(saved);
-        var html = ROUTE_CATALOG.map(function (r) {
-            return '<option value="' + r.scheduleId + '">' + r.label + '</option>';
+        var routes = configRoutesList.length
+            ? configRoutesList.slice()
+            : ROUTE_CATALOG.map(function (r) { return scheduleDisplayFromInternal(r.scheduleId); }).concat([SCHEDULE_ES_LABEL]);
+        var html = routes.map(function (r) {
+            return '<option value="' + String(r).replace(/"/g, '&quot;') + '">' + r + '</option>';
         }).join('');
-        html += '<option value="' + SCHEDULE_ES_VALUE + '">' + SCHEDULE_ES_LABEL + '</option>';
         sel.innerHTML = html;
-        var valid = ROUTE_CATALOG.map(function (r) { return r.scheduleId; }).concat([SCHEDULE_ES_VALUE]);
-        var pick = normalizeScheduleSlug(preferredSchedule || saved);
-        if (pick && valid.indexOf(pick) >= 0) sel.value = pick;
-        else sel.value = defaultScheduleForCity(activeCityId);
+        var pickDisplay = scheduleDisplayFromInternal(normalizeScheduleSlug(preferredSchedule || saved));
+        if (pickDisplay && routes.indexOf(pickDisplay) >= 0) sel.value = pickDisplay;
+        else if (routes.length) sel.value = routes[0];
         saveScheduleSelection();
     }
 
@@ -1943,7 +2023,7 @@
         var loadP = Promise.resolve();
         if (api && api.loadCityByFile) {
             if (!opts.silent) toast('Betöltés: ' + route.label);
-            loadP = api.loadCityByFile(route.routeFile, route.cityLabel).then(function () {
+            loadP = api.loadCityByFile(route.routeFile, route.cityLabel, route.cityId).then(function () {
                 if (!opts.silent) toast(route.label + ' betöltve');
             }).catch(function () {
                 if (!opts.silent) toast('Útvonal betöltése sikertelen');
@@ -1951,15 +2031,13 @@
         }
         return loadP.then(function () {
             return loadPoiCatalog(route.cityId);
+        }).then(function () {
+            fetchDriverBookings();
         });
     }
 
     function getScheduleSlug() {
-        var sel = document.getElementById('field-schedule');
-        if (sel && sel.value) return String(sel.value).trim();
-        try { return sessionStorage.getItem(STORAGE_SCHEDULE) || cityScheduleKey() + '1'; } catch (e) {
-            return cityScheduleKey() + '1';
-        }
+        return scheduleInternalFromDisplay(getScheduleDisplaySlug());
     }
 
     function isEsetiSchedule() {
@@ -2969,11 +3047,35 @@
         } catch (e2) {}
     }
 
-    function playBookingBeep() {
+    function resetBookingsPollState() {
+        bookingsPollReady = false;
+        knownReservationIds = {};
+        knownBoardingIds = {};
+    }
+
+    function getNotifyAudioCtx() {
         try {
             var Ctx = window.AudioContext || window.webkitAudioContext;
-            if (!Ctx) return;
-            var ctx = new Ctx();
+            if (!Ctx) return null;
+            if (!notifyAudioCtx) notifyAudioCtx = new Ctx();
+            return notifyAudioCtx;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function unlockNotifyAudio() {
+        var ctx = getNotifyAudioCtx();
+        if (ctx && ctx.state === 'suspended' && ctx.resume) {
+            ctx.resume().catch(function () {});
+        }
+    }
+
+    function playBookingBeep() {
+        try {
+            var ctx = getNotifyAudioCtx();
+            if (!ctx) return;
+            unlockNotifyAudio();
             var osc = ctx.createOscillator();
             var gain = ctx.createGain();
             osc.connect(gain);
@@ -2989,9 +3091,9 @@
 
     function playBoardingBeep() {
         try {
-            var Ctx = window.AudioContext || window.webkitAudioContext;
-            if (!Ctx) return;
-            var ctx = new Ctx();
+            var ctx = getNotifyAudioCtx();
+            if (!ctx) return;
+            unlockNotifyAudio();
             [440, 660].forEach(function (freq, i) {
                 var osc = ctx.createOscillator();
                 var gain = ctx.createGain();
@@ -3009,8 +3111,22 @@
         } catch (e) {}
     }
 
+    /** Foglalás API city= — kizárólag field-schedule / menetrend alapján (nem GPS, nem activeCityId). */
+    function resolveBookingsCityLabel() {
+        if (isEsetiSchedule()) {
+            var esetiCity = CITIES.find(function (x) { return x.id === activeCityId; });
+            return esetiCity ? esetiCity.label : 'Tata';
+        }
+        var slug = normalizeScheduleSlug(getScheduleSlug());
+        var route = ROUTE_BY_SCHEDULE[slug];
+        if (!route) return 'Tata';
+        var cityEntry = CITIES.find(function (x) { return x.id === route.cityId; });
+        return cityEntry ? cityEntry.label : 'Tata';
+    }
+
     function getBookingsApiUrl() {
-        return API_BASE + '/api/driver/bookings?city=' + encodeURIComponent(getCityLabel()) + '&limit=100';
+        return API_BASE + '/api/driver/bookings?city=' + encodeURIComponent(resolveBookingsCityLabel())
+            + '&limit=100&_ts=' + Date.now();
     }
 
     function submitDriverVehicleLog() {
@@ -3103,12 +3219,21 @@
 
     function pushNotifyCard(opts) {
         if (!elNotifyStack || !opts) return;
+        notifyPushCount += 1;
+        var schedLen = (lastDriverBookings.scheduled || []).length;
+        var boardLen = (lastDriverBookings.boarding || []).length;
+        console.log('[NOTIFY] pushNotifyCard #' + notifyPushCount, {
+            kind: opts.kind || 'booking',
+            kicker: opts.kicker || '',
+            scheduledLength: schedLen,
+            boardingLength: boardLen
+        });
         while (elNotifyStack.children.length >= MAX_NOTIFY_CARDS) {
             elNotifyStack.removeChild(elNotifyStack.firstChild);
         }
         var dismissMs = opts.dismissMs || NOTIFY_BOOKING_MS;
         var card = document.createElement('div');
-        card.className = 'notify-card notify-' + (opts.kind || 'booking');
+        card.className = 'notify-card hit notify-' + (opts.kind || 'booking');
         card.setAttribute('role', 'button');
         card.setAttribute('tabindex', '0');
         card.setAttribute('aria-label', (opts.kicker || 'Értesítés') + ': ' + (opts.lines && opts.lines[0] ? opts.lines[0].text : ''));
@@ -3124,19 +3249,45 @@
             linesHtml +
             '<p class="notify-hint">Koppints a megnyitáshoz</p>';
         var openTab = opts.tab || 'scheduled';
-        card.addEventListener('click', function () {
-            openBookingsSheet(openTab);
+        var openRecordId = opts.recordId || null;
+        function openFromNotifyCard(ev) {
+            console.log('TRACE_2A openFromNotifyCard', {
+                recordId: openRecordId,
+                tab: openTab,
+                activeDriverBookTab: activeDriverBookTab
+            });
+            if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+            openBookingsSheet(openTab, openRecordId);
             dismissNotifyCard(card);
-        });
+        }
+        function onNotifyCardPointer(ev) {
+            console.log('TRACE_2A popup_click', {
+                recordId: openRecordId,
+                tab: openTab,
+                activeDriverBookTab: activeDriverBookTab
+            });
+            openFromNotifyCard(ev);
+        }
+        card.addEventListener('click', onNotifyCardPointer);
+        card.addEventListener('touchend', onNotifyCardPointer, { passive: false });
         card.addEventListener('keydown', function (ev) {
             if (ev.key === 'Enter' || ev.key === ' ') {
-                ev.preventDefault();
-                openBookingsSheet(openTab);
-                dismissNotifyCard(card);
+                onNotifyCardPointer(ev);
             }
         });
         elNotifyStack.appendChild(card);
-        requestAnimationFrame(function () { card.classList.add('show'); });
+        requestAnimationFrame(function () {
+            requestAnimationFrame(function () {
+                card.classList.add('show');
+                if ((opts.kind || 'booking') === 'boarding') {
+                    console.log('DEBUG', {
+                        activeDriverBookTab: activeDriverBookTab,
+                        scheduledLength: lastDriverBookings && lastDriverBookings.scheduled && lastDriverBookings.scheduled.length,
+                        boardingLength: lastDriverBookings && lastDriverBookings.boarding && lastDriverBookings.boarding.length
+                    });
+                }
+            });
+        });
         setTimeout(function () { dismissNotifyCard(card); }, dismissMs);
     }
 
@@ -3215,6 +3366,8 @@
     }
 
     function initNotifyCenterUi() {
+        document.addEventListener('click', unlockNotifyAudio, { passive: true });
+        document.addEventListener('touchstart', unlockNotifyAudio, { passive: true });
         if (!elNotifyCenter) return;
         elNotifyCenter.addEventListener('click', function () {
             var schedUnread = 0;
@@ -3242,6 +3395,18 @@
         data = data || { scheduled: [], boarding: [], custom: [] };
         var sched = data.scheduled || [];
         var board = data.boarding || [];
+        var city = resolveBookingsCityLabel();
+        if (bookingsPollCity !== city) {
+            bookingsPollCity = city;
+            resetBookingsPollState();
+        }
+
+        console.log('[NOTIFY] handleNewBookingsNotifications', {
+            scheduledLength: sched.length,
+            boardingLength: board.length,
+            city: city,
+            pollReady: bookingsPollReady
+        });
 
         if (!bookingsPollReady) {
             sched.forEach(function (r) {
@@ -3255,8 +3420,10 @@
                 seenBookingIds.boarding[r.id] = true;
             });
             bookingsPollReady = true;
+            console.log('[NOTIFY] baseline poll — no popup, pushCount=', notifyPushCount);
             updateBookingsFabBadge();
             updateNotifyCenterSummary();
+            renderDriverBookings(data);
             return;
         }
 
@@ -3269,6 +3436,7 @@
                 kind: 'booking',
                 kicker: 'ÚJ FOGLALÁS',
                 tab: 'scheduled',
+                recordId: row.id,
                 dismissMs: NOTIFY_BOOKING_MS,
                 lines: [
                     { text: '🚏 ' + (row.stop_name || '—') },
@@ -3296,13 +3464,16 @@
                 kind: 'boarding',
                 kicker: 'FELSZÁLLÁSI JELZÉS',
                 tab: 'boarding',
+                recordId: row.id,
                 dismissMs: NOTIFY_BOARDING_MS,
                 lines: notifyLines
             });
         });
 
+        console.log('[NOTIFY] poll done pushNotifyCard total=', notifyPushCount);
         updateBookingsFabBadge();
         updateNotifyCenterSummary();
+        renderDriverBookings(data);
     }
 
     function setActiveDriverBookTab(tab) {
@@ -3326,7 +3497,8 @@
         return items.map(function (row) {
             var unread = isBookingUnread('scheduled', row.id);
             var seen = seenBookingIds.scheduled[row.id];
-            var rowCls = 'book-row' + (unread ? ' is-unread' : (seen ? ' is-seen' : ''));
+            var hi = highlightedBookingId && highlightedBookingId === row.id;
+            var rowCls = 'book-row' + (hi || unread ? ' is-unread' : (seen ? ' is-seen' : ''));
             var stCls = unread ? 'book-row-status is-new' : 'book-row-status is-seen-lbl';
             var stTxt = unread ? 'ÚJ' : 'LÁTOTT';
             return '<div class="' + rowCls + '" data-res-id="' + escapeBookHtml(row.id) + '">' +
@@ -3337,34 +3509,64 @@
         }).join('');
     }
 
+    function mergeDriverBoardingForList(apiRows) {
+        var byId = {};
+        (apiRows || []).forEach(function (r) {
+            if (!r || !r.id) return;
+            byId[r.id] = r;
+            if (r.driver_response) driverBoardingLocal[r.id] = r;
+        });
+        Object.keys(driverBoardingLocal).forEach(function (id) {
+            if (!byId[id]) byId[id] = driverBoardingLocal[id];
+        });
+        return Object.keys(byId).map(function (k) { return byId[k]; }).sort(function (a, b) {
+            var ta = a.created_at ? new Date(a.created_at).getTime() : 0;
+            var tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+            return tb - ta;
+        });
+    }
+
+    function boardingResponseLabel(response) {
+        var map = {
+            can_stop: 'Elfogadva',
+            full: 'Teltház',
+            not_on_route: 'Nem érintem az útvonalat',
+            unsafe: 'Elutasítva',
+            other: 'Elutasítva'
+        };
+        return map[response] || '';
+    }
+
     function buildDriverBoardingHtml(items) {
+        console.log('BOARDING_RENDER', (items || []).length, items);
+        items = mergeDriverBoardingForList(items);
         if (!items || !items.length) return '<p class="tasks-empty">Nincs felszállási jelzés.</p>';
         return items.map(function (row) {
             var id = escapeBookHtml(row.id);
             var unread = isBookingUnread('boarding', row.id);
             var seen = seenBookingIds.boarding[row.id];
+            var response = row.driver_response || null;
             var when = boardingIsRecent(row.created_at) ? 'MOST' : 'JELZÉS';
-            var rowCls = 'book-board-row' + (boardingIsRecent(row.created_at) && unread ? ' is-now' : '') + (seen && !unread ? ' is-seen' : '');
-            var showDecline = boardingDeclineOpenId === row.id;
+            var hi = highlightedBookingId && highlightedBookingId === row.id;
+            var rowCls = 'book-board-row'
+                + (hi ? ' is-unread' : '')
+                + (boardingIsRecent(row.created_at) && unread && !response ? ' is-now' : '')
+                + ((seen || response) && !unread ? ' is-seen' : '');
+            var statusLbl = response ? boardingResponseLabel(response) : (unread ? 'ÚJ' : 'LÁTOTT');
             var actionsHtml;
-            if (showDecline) {
-                actionsHtml =
-                    '<p class="book-board-decline-lbl">Miért nem állsz meg?</p>' +
-                    '<div class="book-board-decline-grid">' +
-                    '<button type="button" data-board-respond="full" data-board-id="' + id + '">Tele van</button>' +
-                    '<button type="button" data-board-respond="unsafe" data-board-id="' + id + '">Nem biztonságos</button>' +
-                    '<button type="button" data-board-respond="not_on_route" data-board-id="' + id + '">Nem érintett útvonal</button>' +
-                    '<button type="button" data-board-respond="other" data-board-id="' + id + '">Egyéb</button>' +
-                    '</div>';
+            if (response) {
+                actionsHtml = '<span class="book-row-status is-seen-lbl">' + escapeBookHtml(statusLbl) + '</span>';
             } else {
                 actionsHtml =
-                    '<div class="book-board-actions">' +
-                    '<button type="button" data-board-respond="can_stop" data-board-id="' + id + '">Megállok</button>' +
-                    '<button type="button" data-board-decline-open data-board-id="' + id + '">Nem állok meg</button>' +
+                    '<div class="book-board-decline-grid">' +
+                    '<button type="button" data-board-respond="can_stop" data-board-id="' + id + '">Megállok · felveszem</button>' +
+                    '<button type="button" data-board-respond="full" data-board-id="' + id + '">Tele van</button>' +
+                    '<button type="button" data-board-respond="unsafe" data-board-id="' + id + '">Nem biztonságos</button>' +
+                    '<button type="button" data-board-respond="not_on_route" data-board-id="' + id + '">Nem érintem az útvonalat</button>' +
                     '</div>';
             }
             return '<div class="' + rowCls + '" data-board-id="' + id + '">' +
-                '<div class="book-board-kicker">' + when + ' · FELSZÁLLÁSI JELZÉS' + (unread ? ' · ÚJ' : '') + '</div>' +
+                '<div class="book-board-kicker">' + when + ' · FELSZÁLLÁSI JELZÉS · ' + escapeBookHtml(statusLbl) + '</div>' +
                 '<div class="book-row-stop">' + escapeBookHtml(row.stop_name || '—') + '</div>' +
                 '<div class="book-row-meta">' + escapeBookHtml(String(row.passenger_count || 1)) + ' fő · ' + escapeBookHtml(row.phone || '—') + '</div>' +
                 actionsHtml +
@@ -3373,15 +3575,30 @@
     }
 
     function renderDriverBookings(data) {
-        data = data || lastDriverBookings;
+        console.log('TRACE_2A renderDriverBookings', {
+            recordId: highlightedBookingId,
+            tab: activeDriverBookTab,
+            activeDriverBookTab: activeDriverBookTab
+        });
+        if (data) {
+            lastDriverBookings = {
+                scheduled: data.scheduled || [],
+                boarding: data.boarding || [],
+                custom: data.custom || []
+            };
+        }
+        data = lastDriverBookings || { scheduled: [], boarding: [], custom: [] };
+        var schedN = (data.scheduled || []).length;
+        var boardN = mergeDriverBoardingForList(data.boarding || []).length;
+        console.log('[RENDER] driver bookings sched=', schedN, 'board=', boardN, 'tab=', activeDriverBookTab, 'city=', resolveBookingsCityLabel());
         updateDriverBookTabCounts(data);
         updateBookingsFabBadge();
         updateNotifyCenterSummary();
         if (!elDriverBookingsList) return;
         if (activeDriverBookTab === 'boarding') {
-            elDriverBookingsList.innerHTML = buildDriverBoardingHtml(data.boarding);
+            elDriverBookingsList.innerHTML = buildDriverBoardingHtml(data.boarding || []);
         } else {
-            elDriverBookingsList.innerHTML = buildDriverScheduledHtml(data.scheduled);
+            elDriverBookingsList.innerHTML = buildDriverScheduledHtml(data.scheduled || []);
         }
     }
 
@@ -3407,12 +3624,24 @@
                 if (!r.ok) throw new Error('HTTP ' + r.status);
                 return r.json();
             })
-            .then(function () {
+            .then(function (res) {
                 boardingDeclineOpenId = null;
                 seenBookingIds.boarding[boardId] = true;
                 delete unreadBookingIds.boarding[boardId];
+                var updated = res && res.boarding ? res.boarding : null;
+                if (updated && updated.id) {
+                    driverBoardingLocal[updated.id] = updated;
+                } else {
+                    var prev = (lastDriverBookings.boarding || []).find(function (r) { return r.id === boardId; })
+                        || driverBoardingLocal[boardId];
+                    driverBoardingLocal[boardId] = Object.assign({}, prev || { id: boardId }, {
+                        driver_response: response,
+                        status: 'responded'
+                    });
+                }
                 updateBookingsFabBadge();
                 updateNotifyCenterSummary();
+                renderDriverBookings(lastDriverBookings);
                 toast('Válasz rögzítve');
                 return fetchDriverBookings();
             })
@@ -3447,17 +3676,57 @@
         }
     }
 
+    function checkAdminShiftKick() {
+        var shiftId = getShift();
+        if (!shiftId) return Promise.resolve();
+        return fetch(API_BASE + '/api/driver/shift-kick?shift=' + encodeURIComponent(shiftId), {
+            method: 'GET',
+            headers: { Accept: 'application/json' },
+            cache: 'no-store'
+        })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (data) {
+                if (!data || !data.kicked) return;
+                fetch(API_BASE + '/api/driver/shift-kick?shift=' + encodeURIComponent(shiftId), {
+                    method: 'DELETE',
+                    headers: { Accept: 'application/json' }
+                }).catch(function () {});
+                stopShiftHeartbeat();
+                sessionStorage.removeItem(STORAGE_SHIFT);
+                if (elNotifyStack) elNotifyStack.innerHTML = '';
+                resetBookingsPollState();
+                bookingsPollCity = '';
+                unreadBookingIds = { scheduled: {}, boarding: {} };
+                updateBookingsFabBadge();
+                updateNotifyCenterSummary();
+                updateMetaDisplay();
+                toast('Admin kiléptetett a műszakból');
+            })
+            .catch(function () {});
+    }
+
     function fetchDriverBookings() {
+        checkAdminShiftKick();
+        var seq = ++bookingsFetchSeq;
+        console.log('[BOOKINGS] schedule=', getScheduleSlug(), '→ city=', resolveBookingsCityLabel());
         var url = getBookingsApiUrl();
         console.log('[API] loading bookings', url);
-        return fetch(url, { method: 'GET', headers: { Accept: 'application/json' }, cache: 'no-store' })
+        return fetch(url, {
+            method: 'GET',
+            headers: {
+                Accept: 'application/json',
+                'Cache-Control': 'no-cache',
+                Pragma: 'no-cache'
+            },
+            cache: 'no-store'
+        })
             .then(function (r) {
                 if (!r.ok) throw new Error('HTTP ' + r.status);
                 return r.json();
             })
             .then(function (data) {
-                console.log('[API] connected');
-                console.log('[API] backend connected');
+                if (seq !== bookingsFetchSeq) return;
+                console.log('[API] bookings ok sched=', (data.scheduled || []).length, 'board=', (data.boarding || []).length);
                 lastDriverBookings = {
                     scheduled: (data && data.scheduled) ? data.scheduled : [],
                     boarding: (data && data.boarding) ? data.boarding : [],
@@ -3466,8 +3735,14 @@
                 handleNewBookingsNotifications(lastDriverBookings);
                 renderDriverBookings(lastDriverBookings);
                 updateCapacityDisplay();
+                var schedN = (lastDriverBookings.scheduled || []).length;
+                var boardN = (lastDriverBookings.boarding || []).length;
+                if (schedN === 0 && boardN === 0 && elNotifyStack) {
+                    elNotifyStack.innerHTML = '';
+                }
             })
             .catch(function (err) {
+                if (seq !== bookingsFetchSeq) return;
                 console.log('[API] failed', err.message || err);
                 console.warn('[BOOKINGS] fetch error', err.message || err);
             });
@@ -3956,6 +4231,7 @@
         syncLoginFromSelects();
         var vSel = document.getElementById('field-vehicle-select');
         var dSel = document.getElementById('field-driver-select');
+        var pinEl = document.getElementById('field-driver-pin');
         if (!getVehicleId()) {
             toast('Válassz járművet');
             if (vSel) vSel.focus();
@@ -3964,6 +4240,18 @@
         if (!getDriverId()) {
             toast('Válassz sofőrt');
             if (dSel) dSel.focus();
+            return false;
+        }
+        var pin = pinEl ? String(pinEl.value || '').trim() : '';
+        if (!pin) {
+            toast('Add meg a PIN kódot');
+            if (pinEl) pinEl.focus();
+            return false;
+        }
+        var dRec = driversList.find(function (d) { return d.driver_id === getDriverId(); });
+        if (!dRec || String(dRec.pin || '') !== pin) {
+            toast('Hibás PIN');
+            if (pinEl) pinEl.focus();
             return false;
         }
         return true;
@@ -4166,7 +4454,15 @@
         if (!vehicleRec || !vehicleRec.local) return;
         if (cityGpsManualLock) return;
         var cityId = cityIdFromLocalName(vehicleRec.local);
-        if (!cityId || cityId === activeCityId) return;
+        if (!cityId) return;
+        var vId = String(vehicleRec.vehicle_id || vehicleRec.id || '').trim();
+        var route = getActiveRouteMeta();
+        if (route && route.cityId === cityId) {
+            lastVehicleLocalAppliedId = vId;
+            return;
+        }
+        if (vId && vId === lastVehicleLocalAppliedId) return;
+        lastVehicleLocalAppliedId = vId;
         setActiveCity(cityId, { silent: true });
     }
 
@@ -4290,6 +4586,31 @@
             });
     }
 
+    function loadConfigFromApi() {
+        return fetch(API_BASE + '/api/config', { headers: { Accept: 'application/json' }, cache: 'no-store' })
+            .then(function (r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            })
+            .then(function (data) {
+                if (data && data.route_map) {
+                    Object.keys(data.route_map).forEach(function (k) {
+                        ROUTE_DISPLAY_TO_SCHEDULE[k] = data.route_map[k];
+                    });
+                }
+                configRoutesList = (data && data.routes) ? data.routes.slice() : [];
+                if (data && data.vehicles) receiveVehiclesList(data.vehicles);
+                if (data && data.drivers) receiveDriversList(data.drivers, true);
+                refreshScheduleSelect();
+                refreshShiftLoginSelects();
+                syncLoginFromSelects();
+            })
+            .catch(function (err) {
+                console.warn('[kvn] config load:', err.message || err);
+                return loadMasterDataFromApi();
+            });
+    }
+
     function loadMasterDataFromApi() {
         return Promise.all([loadVehiclesFromApi(), loadDriversFromApi()]).then(function () {
             refreshShiftLoginSelects();
@@ -4300,11 +4621,12 @@
     function receiveVehiclesList(list) {
         if (!Array.isArray(list)) return false;
         vehiclesList = list.map(function (v) {
+            var city = v.city != null ? String(v.city).trim() : '';
             return {
                 vehicle_id: String(v.vehicle_id || v.id || '').trim(),
-                vehicle_name: String(v.vehicle_name || v.name || '').trim(),
+                vehicle_name: String(v.vehicle_name || v.name || v.id || '').trim(),
                 capacity: Math.max(1, parseInt(v.capacity, 10) || 56),
-                local: v.local != null ? String(v.local).trim() : ''
+                local: v.local != null ? String(v.local).trim() : city
             };
         }).filter(function (v) { return v.vehicle_id; });
         try {
@@ -4315,16 +4637,21 @@
         return true;
     }
 
-    function receiveDriversList(list) {
+    function receiveDriversList(list, keepPin) {
         if (!Array.isArray(list)) return false;
         driversList = list.map(function (d) {
-            return {
+            var row = {
                 driver_id: String(d.driver_id || d.id || '').trim(),
                 driver_name: String(d.driver_name || d.name || '').trim()
             };
+            if (keepPin && d.pin != null) row.pin = String(d.pin).trim();
+            return row;
         }).filter(function (d) { return d.driver_id; });
         try {
-            localStorage.setItem(STORAGE_DRIVERS_LIST, JSON.stringify(driversList));
+            var storeSafe = driversList.map(function (d) {
+                return { driver_id: d.driver_id, driver_name: d.driver_name };
+            });
+            localStorage.setItem(STORAGE_DRIVERS_LIST, JSON.stringify(storeSafe));
         } catch (e) {}
         refreshCatalogDatalists();
         return true;
@@ -4332,7 +4659,12 @@
 
     function getCityLabel() {
         var c = CITIES.find(function (x) { return x.id === activeCityId; });
-        return c ? c.label : activeCityId;
+        if (c) return c.label;
+        var byFile = CITIES.find(function (x) { return x.file === activeCityId; });
+        if (byFile) return byFile.label;
+        var route = getActiveRouteMeta();
+        if (route && route.cityLabel) return route.cityLabel;
+        return activeCityId || 'Tata';
     }
 
     function getShift() {
@@ -4903,11 +5235,28 @@
         return 'shift_' + safe + '_' + new Date().toISOString().replace(/[:.]/g, '-');
     }
 
-    function startShift() {
-        if (isShiftActive()) return;
-        saveScheduleSelection();
-        if (!validateShiftStartFields()) return;
-        var shiftId = generateShiftId();
+    function stopShiftHeartbeat() {
+        if (shiftHeartbeatTimer) {
+            clearInterval(shiftHeartbeatTimer);
+            shiftHeartbeatTimer = null;
+        }
+    }
+
+    function startShiftHeartbeat() {
+        stopShiftHeartbeat();
+        shiftHeartbeatTimer = setInterval(function () {
+            if (!isShiftActive()) return;
+            var sid = getShift();
+            if (!sid) return;
+            fetch(API_BASE + '/api/shifts/heartbeat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                body: JSON.stringify({ shift_id: sid })
+            }).catch(function () {});
+        }, 60000);
+    }
+
+    function finalizeShiftStart(shiftId) {
         sessionStorage.setItem(STORAGE_SHIFT, shiftId);
         setCurrentJarat('', false);
         resetPassengersCurrent();
@@ -4922,7 +5271,54 @@
         updateMetaDisplay();
         toast('Műszak elindítva');
         requestWakeLock();
+        startShiftHeartbeat();
         startGpsWatch({ silent: true, captureFirstTrack: true });
+    }
+
+    function startShift() {
+        if (isShiftActive()) return;
+        saveScheduleSelection();
+        if (!validateShiftStartFields()) return;
+        var shiftId = generateShiftId();
+        var pinEl = document.getElementById('field-driver-pin');
+        var pin = pinEl ? String(pinEl.value || '').trim() : '';
+        var routeDisplay = getScheduleDisplaySlug();
+        fetch(API_BASE + '/api/shifts/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+            body: JSON.stringify({
+                shift_id: shiftId,
+                vehicle_id: getVehicleId(),
+                driver_id: getDriverId(),
+                driver_name: getDriverName(),
+                pin: pin,
+                route: routeDisplay,
+                city: resolveBookingsCityLabel()
+            })
+        })
+            .then(function (r) {
+                return r.json().then(function (data) {
+                    if (!r.ok) {
+                        var err = new Error((data && data.error) || ('HTTP ' + r.status));
+                        err.status = r.status;
+                        err.payload = data;
+                        throw err;
+                    }
+                    return data;
+                });
+            })
+            .then(function () {
+                finalizeShiftStart(shiftId);
+            })
+            .catch(function (err) {
+                if (err.status === 409) {
+                    toast('A kiválasztott jármű már használatban van.');
+                } else if (err.message === 'Hibás PIN') {
+                    toast('Hibás PIN');
+                } else {
+                    toast('Műszak indítás sikertelen: ' + (err.message || err));
+                }
+            });
     }
 
     function endShift() {
@@ -4932,6 +5328,12 @@
             return;
         }
         var shiftId = getShift();
+        fetch(API_BASE + '/api/shifts/end', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+            body: JSON.stringify({ shift_id: shiftId })
+        }).catch(function () {});
+        stopShiftHeartbeat();
         var rec = buildShiftEnd(shiftId);
         pushEvent(rec, { silent: true });
         sessionStorage.removeItem(STORAGE_SHIFT);
@@ -5518,6 +5920,84 @@
         return vid + '_' + y + mo + da + '_' + hh + mm + '_trip.geojson';
     }
 
+    function exportGeoJsonForActiveShift() {
+        var shiftId = getShift();
+        if (!shiftId) {
+            toast('Nincs aktív műszak');
+            return;
+        }
+        if (!trackEventsForGeoJson(shiftId).length) {
+            toast('Nincs GPS pont ebben a műszakban');
+            return;
+        }
+        var safeShift = shiftId.replace(/[^\w-]+/g, '_').slice(0, 40);
+        downloadText(
+            'kisvonat_' + safeShift + '_' + new Date().toISOString().slice(0, 10) + '.geojson',
+            recordsToGeoJson(shiftId),
+            'application/geo+json;charset=utf-8'
+        );
+    }
+
+    function countGeoJsonTrackPoints(geoText) {
+        try {
+            var geo = typeof geoText === 'string' ? JSON.parse(geoText) : geoText;
+            if (!geo || !Array.isArray(geo.features)) return 0;
+            var n = 0;
+            geo.features.forEach(function (f) {
+                var g = f && f.geometry;
+                if (!g) return;
+                if (g.type === 'Point') n += 1;
+                else if (g.type === 'LineString' && g.coordinates) n += g.coordinates.length;
+            });
+            return n;
+        } catch (e) {
+            return 0;
+        }
+    }
+
+    function uploadRouteToAdmin() {
+        if (!isBackendConfigured()) {
+            toast('Backend nincs beállítva');
+            return;
+        }
+        var shiftId = getShift();
+        if (!shiftId) {
+            toast('Nincs aktív műszak');
+            return;
+        }
+        var geoText = recordsToGeoJson(shiftId);
+        if (!trackEventsForGeoJson(shiftId).length) {
+            toast('Nincs GPS pont a küldéshez');
+            return;
+        }
+        var geo = JSON.parse(geoText);
+        fetch(API_BASE + '/api/upload-route', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+            body: JSON.stringify({
+                timestamp: new Date().toISOString(),
+                vehicle_id: getVehicleId(),
+                driver_id: getDriverId(),
+                driver_name: getDriverName(),
+                route: getScheduleDisplaySlug(),
+                gps_point_count: countGeoJsonTrackPoints(geo),
+                geojson: geo
+            })
+        })
+            .then(function (r) {
+                return r.json().then(function (data) {
+                    if (!r.ok) throw new Error((data && data.error) || ('HTTP ' + r.status));
+                    return data;
+                });
+            })
+            .then(function () {
+                toast('GeoJSON elküldve az adminnak');
+            })
+            .catch(function (err) {
+                toast('Küldés sikertelen: ' + (err.message || err));
+            });
+    }
+
     function uploadTripArchive(tripId, startIso, endIso) {
         if (!isBackendConfigured()) return Promise.resolve();
         var geo = buildTripArchiveGeoJson(tripId, startIso, endIso);
@@ -5594,36 +6074,34 @@
         } else {
             refreshScheduleSelect();
         }
-        updateMetaDisplay();
         var c = CITIES.find(function (x) { return x.id === cityId; });
         document.querySelectorAll('.city-btn').forEach(function (b) {
             b.classList.toggle('is-active', b.getAttribute('data-city') === cityId);
         });
-        var route = getActiveRouteMeta();
-        var api = engineApi();
-        if (api) {
-            if (!opts.silent) toast('Betöltés: ' + (route ? route.label : (c ? c.label : cityId)));
-            var loadP;
-            if (route && api.loadCityByFile) {
-                loadP = api.loadCityByFile(route.routeFile, route.cityLabel);
-            } else if (api.loadCity) {
-                loadP = api.loadCity(cityId);
-            } else {
-                loadP = Promise.resolve();
-            }
-            loadP.then(function () {
-                if (!opts.silent) toast((route ? route.label : (c ? c.label : cityId)) + ' betöltve');
-            }).catch(function () {
-                if (!opts.silent) toast('Útvonal betöltése sikertelen');
-            });
-        }
-        loadPoiCatalog(cityId);
-        bookingsPollReady = false;
-        knownReservationIds = {};
-        knownBoardingIds = {};
+        bookingsPollCity = '';
+        resetBookingsPollState();
+        driverBoardingLocal = {};
         unreadBookingIds = { scheduled: {}, boarding: {} };
         seenBookingIds = { scheduled: {}, boarding: {} };
-        fetchDriverBookings();
+        if (elNotifyStack) elNotifyStack.innerHTML = '';
+        updateMetaDisplay();
+        if (isEsetiSchedule()) {
+            var api = engineApi();
+            var loadP = Promise.resolve();
+            if (api && api.loadCity) {
+                if (!opts.silent) toast('Betöltés: ' + (c ? c.label : cityId));
+                loadP = api.loadCity(cityId).then(function () {
+                    if (!opts.silent && c) toast(c.label + ' betöltve');
+                }).catch(function () {
+                    if (!opts.silent) toast('Útvonal betöltése sikertelen');
+                });
+            }
+            return loadP.then(function () {
+                loadPoiCatalog(cityId);
+                fetchDriverBookings();
+            });
+        }
+        return applyScheduleRouteSelection(opts);
     }
 
     function buildCityGrid() {
@@ -5731,7 +6209,10 @@
         if (!cityGpsManualLock && !isGpsNarrationRoute()) {
             var detectedCity = detectCityFromGps(lat, lng);
             if (detectedCity && detectedCity !== activeCityId) {
-                setActiveCity(detectedCity, { silent: true });
+                var schedRoute = getActiveRouteMeta();
+                if (!(schedRoute && schedRoute.cityId !== detectedCity)) {
+                    setActiveCity(detectedCity, { silent: true });
+                }
             }
         }
         updateDriverDiagnostics();
@@ -5922,7 +6403,13 @@
 
     document.querySelectorAll('[data-sheet]').forEach(function (btn) {
         btn.addEventListener('click', function () {
-            openSheet(btn.getAttribute('data-sheet'));
+            var sheetId = btn.getAttribute('data-sheet');
+            if (sheetId === 'sheet-bookings') {
+                var boardN = (lastDriverBookings.boarding || []).length;
+                openBookingsSheet(boardN > 0 ? 'boarding' : 'scheduled');
+                return;
+            }
+            openSheet(sheetId);
         }, { passive: true });
     });
     document.querySelectorAll('[data-close-sheet]').forEach(function (b) {
@@ -5993,24 +6480,11 @@
         downloadText('kisvonat_navigator_' + new Date().toISOString().slice(0, 10) + '.json', recordsToJson(), 'application/json;charset=utf-8');
     }, { passive: true });
 
-    document.getElementById('btn-export-geojson').addEventListener('click', function () {
-        var sel = document.getElementById('export-shift-select');
-        var shiftId = sel && sel.value ? sel.value : getShift();
-        if (!shiftId) {
-            toast('Válassz műszakot az exporthoz');
-            return;
-        }
-        if (!trackEventsForGeoJson(shiftId).length) {
-            toast('Nincs GPS pont ebben a műszakban');
-            return;
-        }
-        var safeShift = shiftId.replace(/[^\w-]+/g, '_').slice(0, 40);
-        downloadText(
-            'kisvonat_' + safeShift + '_' + new Date().toISOString().slice(0, 10) + '.geojson',
-            recordsToGeoJson(shiftId),
-            'application/geo+json;charset=utf-8'
-        );
-    }, { passive: true });
+    document.getElementById('btn-export-geojson').addEventListener('click', exportGeoJsonForActiveShift, { passive: true });
+    var btnTripExportGeo = document.getElementById('btn-trip-export-geojson');
+    if (btnTripExportGeo) btnTripExportGeo.addEventListener('click', exportGeoJsonForActiveShift, { passive: true });
+    var btnUploadRouteAdmin = document.getElementById('btn-upload-route-admin');
+    if (btnUploadRouteAdmin) btnUploadRouteAdmin.addEventListener('click', uploadRouteToAdmin, { passive: true });
 
     document.getElementById('btn-copy-log').addEventListener('click', function () {
         var text = recordsToJson();
@@ -6035,12 +6509,17 @@
     window.addEventListener('message', function (e) {
         if (!e.data || typeof e.data.type !== 'string') return;
         if (e.data.type === 'kvn:routeLoaded' && e.data.city) {
-            activeCityId = e.data.city.id || activeCityId;
+            var rid = e.data.city.id || '';
+            var knownCity = CITIES.find(function (c) { return c.id === rid || c.file === rid; });
+            if (knownCity) activeCityId = knownCity.id;
             try { localStorage.setItem(STORAGE_CITY, activeCityId); } catch (e0) {}
             updateMetaDisplay();
             document.querySelectorAll('.city-btn').forEach(function (b) {
                 b.classList.toggle('is-active', b.getAttribute('data-city') === activeCityId);
             });
+            bookingsPollCity = '';
+            resetBookingsPollState();
+            fetchDriverBookings();
         }
         if (e.data.type === 'kvn:routeError') {
             toast('Tata útvonal nem tölthető');
@@ -6135,7 +6614,8 @@
     } catch (eC) {}
 
     loadCatalogs();
-    loadMasterDataFromApi();
+    loadConfigFromApi();
+    if (isShiftActive()) startShiftHeartbeat();
     loadEvents();
     loadDestinations();
 
@@ -6203,6 +6683,11 @@
     setInterval(fetchDriverBookings, BOOKINGS_REFRESH_MS);
     document.addEventListener('click', onDriverBookingsPanelClick);
     initNotifyCenterUi();
+
+    if (elNotifyStack) {
+        elNotifyStack.style.pointerEvents = 'auto';
+        elNotifyStack.style.zIndex = '10050';
+    }
 
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('./service-worker.js', { scope: './' })

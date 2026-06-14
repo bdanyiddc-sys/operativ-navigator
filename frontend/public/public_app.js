@@ -159,6 +159,35 @@
         return v && v.active ? v.nextDeparture : null;
     }
 
+    function parseScheduleMinutes(timeStr) {
+        var m = String(timeStr || '').match(/^(\d{1,2}):(\d{2})$/);
+        if (!m) return null;
+        return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+    }
+
+    function getNextDepartureInfo() {
+        var sched = state.schedule || [];
+        if (!sched.length) {
+            return { text: 'Nincs több indulás ma', kind: 'none' };
+        }
+        var now = new Date();
+        var nowMins = now.getHours() * 60 + now.getMinutes();
+        var sorted = sched.slice().sort(function (a, b) {
+            return (parseScheduleMinutes(a.time) || 0) - (parseScheduleMinutes(b.time) || 0);
+        });
+        var i;
+        for (i = 0; i < sorted.length; i++) {
+            var tm = parseScheduleMinutes(sorted[i].time);
+            if (tm != null && tm > nowMins) {
+                return { text: sorted[i].time, kind: 'today' };
+            }
+        }
+        if (sorted[0] && sorted[0].time) {
+            return { text: 'holnap ' + sorted[0].time, kind: 'tomorrow' };
+        }
+        return { text: 'Nincs több indulás ma', kind: 'none' };
+    }
+
     function getStopNextDeparture(stop) {
         if (stop && stop.departures && stop.departures.length) return stop.departures[0];
         return nextDepartureFromVehicle() || '—';
@@ -383,6 +412,27 @@
             });
     }
 
+    var TRIP_SLUG_TO_ROUTE = {
+        Tata1: 'Tata-1', Tata2: 'Tata-2', Tata3: 'Tata-3',
+        Teszt01: 'Teszt01', Eger: 'Eger', Gyor: 'Győr', Papa: 'Pápa',
+        Szfv: 'Székesfehérvár', Vac: 'Vác', __eseti__: 'Egyedi'
+    };
+
+    function routeNameFromVehicle(v) {
+        if (!v) return state.cityLabel || 'Járat';
+        var trip = v.trip ? String(v.trip).trim() : '';
+        if (trip.indexOf('ES_') === 0) return 'Egyedi';
+        if (trip) {
+            var parts = trip.split('_');
+            if (parts.length >= 2) {
+                var slug = parts[1];
+                return TRIP_SLUG_TO_ROUTE[slug] || slug;
+            }
+        }
+        if (v.city) return String(v.city);
+        return state.cityLabel || 'Járat';
+    }
+
     function trainMarkerHtml(v) {
         var cap = v.capacity || 56;
         var free = v.freeSeats != null ? v.freeSeats : '—';
@@ -398,29 +448,49 @@
             '</div></div>';
     }
 
+    function trainPopupHtml(v) {
+        var cap = v.capacity || 56;
+        var free = v.freeSeats != null ? v.freeSeats : '—';
+        var routeName = routeNameFromVehicle(v);
+        return '<div class="train-popup">' +
+            '<p class="tp-title">🚂 ' + escapeHtml(routeName) + ' járat</p>' +
+            '<p class="tp-row"><span class="tp-lbl">Jármű</span> ' + escapeHtml(v.id) + '</p>' +
+            '<p class="tp-seats">Szabad: <strong class="tp-free-strong">' + escapeHtml(String(free)) + '</strong> / ' + escapeHtml(String(cap)) + ' fő</p>' +
+            '</div>';
+    }
+
+    function dedupeVehiclesForMap(vehicles) {
+        var byId = {};
+        (vehicles || []).forEach(function (v) {
+            if (!v || !v.id) return;
+            var prev = byId[v.id];
+            if (!prev) {
+                byId[v.id] = v;
+                return;
+            }
+            var ts = v.lastGps || '';
+            var prevTs = prev.lastGps || '';
+            if (String(ts) >= String(prevTs)) byId[v.id] = v;
+        });
+        return Object.keys(byId).map(function (k) { return byId[k]; });
+    }
+
     function renderVehicles() {
         vehicleLayer.clearLayers();
-        state.vehicles.forEach(function (v) {
+        var mapVehicles = dedupeVehiclesForMap(state.vehicles);
+        mapVehicles.forEach(function (v) {
             if (!v.live || v.lat == null || v.lng == null) return;
             var icon = L.divIcon({
                 className: 'train-marker-root',
                 html: trainMarkerHtml(v),
-                iconSize: [132, 56],
-                iconAnchor: [28, 28]
+                iconSize: [198, 84],
+                iconAnchor: [42, 42]
             });
             var marker = L.marker([v.lat, v.lng], { icon: icon, zIndexOffset: 350 });
-            var cap = v.capacity || 56;
-            var liveTag = v.live ? 'Élő GPS' : 'Bemutató pozíció';
-            marker.bindPopup(
-                '<div class="train-popup">' +
-                '<p class="tp-title">🚂 ' + escapeHtml(v.id) + '</p>' +
-                '<p class="tp-meta">' + escapeHtml(liveTag) + '</p>' +
-                '<p class="tp-seats">Szabad: <strong class="tp-free-strong">' + escapeHtml(String(v.freeSeats)) + '</strong> / ' + escapeHtml(String(cap)) + ' fő</p>' +
-                '</div>'
-            );
+            marker.bindPopup(trainPopupHtml(v));
             marker.addTo(vehicleLayer);
         });
-        state.activeVehicle = state.vehicles.find(function (v) { return v.active; }) || state.vehicles[0] || null;
+        state.activeVehicle = mapVehicles.find(function (v) { return v.active; }) || mapVehicles[0] || null;
         updateUi();
     }
 
@@ -731,20 +801,15 @@
     function updateStatusLine() {
         if (!elStatusLine) return;
         var v = state.activeVehicle;
-        var stop = getDisplayStop();
-        var dep = getStopNextDeparture(stop);
         var st = v && v.active ? seatStatus(v.freeSeats, v.capacity) : null;
         var emoji = seatEmoji(st);
-        var seats = seatsCountLabel(v);
         var seatCls = st && st.cls ? ' seat-' + st.cls : '';
         var freeNum = (v && v.active && v.freeSeats != null) ? String(v.freeSeats) : '—';
-        var trainLine = getTrainArrivalLine();
-        var line =
-            '🚂 ' + escapeHtml(state.cityLabel) +
-            ' • ' + escapeHtml(dep) +
-            ' • ' + emoji + ' <span class="seat-free-num' + seatCls + '">' + escapeHtml(freeNum) + '</span> / ' + escapeHtml(String(v && v.capacity ? v.capacity : 56)) + ' szabad';
-        if (trainLine) line += ' • 🚂 ' + escapeHtml(trainLine);
-        elStatusLine.innerHTML = line;
+        var nextDep = getNextDepartureInfo();
+        elStatusLine.innerHTML =
+            '<span class="status-city">🚂 ' + escapeHtml(state.cityLabel) + '</span>' +
+            '<span class="status-seats">' + emoji + ' <span class="seat-free-num' + seatCls + '">' + escapeHtml(freeNum) + '</span> szabad hely</span>' +
+            '<span class="status-next-dep">🕒 Következő indulás: ' + escapeHtml(nextDep.text) + '</span>';
     }
 
     function updateStopBar() {
@@ -771,7 +836,7 @@
         state.cityLabel = city.label;
         state.stops = (DATA.MOCK_STOPS[city.id] || []).slice();
         state.vehicles = [];
-        state.schedule = (DATA.MOCK_SCHEDULES[city.id] || []).slice();
+        state.schedule = ((DATA.getSchedulesCatalog() || {})[city.id] || []).slice();
         state.activeVehicle = state.vehicles.find(function (v) { return v.active; }) || state.vehicles[0] || null;
         state.selectedStopId = null;
         state.routeBoardMode = false;
@@ -809,6 +874,7 @@
             renderVehicles();
             renderStops();
             renderScheduleList();
+            updateStatusLine();
         });
     }
 
@@ -1003,9 +1069,11 @@
 
         DATA.loadPoiCatalog().then(function (pois) { state.pois = pois; });
 
-        var def = DATA.CITIES.find(function (c) { return c.default; }) || DATA.CITIES[0];
-        selectCity(def.id);
-        startVehiclePoll();
+        DATA.loadSchedulesCatalog().then(function () {
+            var def = DATA.CITIES.find(function (c) { return c.default; }) || DATA.CITIES[0];
+            selectCity(def.id);
+            startVehiclePoll();
+        });
     }
 
     if (document.readyState === 'loading') {

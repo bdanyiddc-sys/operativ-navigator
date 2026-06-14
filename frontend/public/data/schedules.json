@@ -1,0 +1,33 @@
+{
+  "tata": [
+    { "time": "10:00", "label": "Tata körjárat", "seats": "Van hely", "stopId": "stop_tata_ind" },
+    { "time": "11:00", "label": "Tata körjárat", "seats": "Van hely", "stopId": "stop_tata_ind" },
+    { "time": "12:00", "label": "Tata körjárat", "seats": "Kevés hely", "stopId": "stop_tata_ind" },
+    { "time": "13:00", "label": "Tata körjárat", "seats": "Van hely", "stopId": "stop_tata_ind" },
+    { "time": "14:00", "label": "Tata körjárat", "seats": "Van hely", "stopId": "stop_tata_ind" },
+    { "time": "15:00", "label": "Tata körjárat", "seats": "Van hely", "stopId": "stop_tata_ind" },
+    { "time": "16:00", "label": "Tata körjárat", "seats": "Telítve", "stopId": "stop_tata_ind" }
+  ],
+  "eger": [
+    { "time": "10:30", "label": "Eger városnéző", "seats": "Van hely", "stopId": "stop_dobo" },
+    { "time": "12:30", "label": "Eger városnéző", "seats": "Van hely", "stopId": "stop_dobo" },
+    { "time": "14:30", "label": "Eger városnéző", "seats": "Van hely", "stopId": "stop_dobo" }
+  ],
+  "gyor": [
+    { "time": "11:00", "label": "Győr körjárat", "seats": "Szabad", "stopId": "stop_gyor_kozpont" },
+    { "time": "13:00", "label": "Győr körjárat", "seats": "Szabad", "stopId": "stop_gyor_kozpont" },
+    { "time": "16:00", "label": "Győr körjárat", "seats": "Szabad", "stopId": "stop_gyor_kozpont" }
+  ],
+  "papa": [
+    { "time": "10:00", "label": "Pápa körjárat", "seats": "Hamarosan", "stopId": "stop_papa_kozpont" }
+  ],
+  "szfv": [
+    { "time": "11:00", "label": "Székesfehérvár körjárat", "seats": "Kevés hely", "stopId": "stop_szfv_varoshaza" },
+    { "time": "13:00", "label": "Székesfehérvár körjárat", "seats": "Kevés hely", "stopId": "stop_szfv_varoshaza" },
+    { "time": "15:30", "label": "Székesfehérvár körjárat", "seats": "Kevés hely", "stopId": "stop_szfv_varoshaza" }
+  ],
+  "vac": [
+    { "time": "10:00", "label": "Vác körjárat", "seats": "Hamarosan", "stopId": "stop_vac_allomas" },
+    { "time": "14:00", "label": "Vác körjárat", "seats": "Hamarosan", "stopId": "stop_vac_allomas" }
+  ]
+}

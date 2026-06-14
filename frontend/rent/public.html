@@ -1,0 +1,1634 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#ea580c" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <title>Kisvonat bérlés – árajánlatkérés</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --card: #fff;
+      --text: #0f172a;
+      --muted: #64748b;
+      --accent: #ea580c;
+      --accent2: #c2410c;
+      --line: #e2e8f0;
+      --ok: #16a34a;
+      --start: #16a34a;
+      --end: #dc2626;
+      --warn-bg: #fffbeb;
+      --warn-border: #fcd34d;
+      --touch: 44px;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      touch-action: manipulation;
+    }
+    .app {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      min-height: 100vh;
+      min-height: 100dvh;
+    }
+    .map-panel {
+      position: relative;
+      min-height: 100vh;
+      min-height: 100dvh;
+      background: #cbd5e1;
+    }
+    #map {
+      width: 100%;
+      height: 100%;
+      min-height: 100vh;
+      min-height: 100dvh;
+      touch-action: pan-x pan-y pinch-zoom;
+    }
+    #map.selection-active,
+    .leaflet-container.selection-active {
+      cursor: crosshair !important;
+    }
+    .leaflet-container.selection-active .leaflet-interactive {
+      cursor: crosshair !important;
+    }
+    .map-tools {
+      position: absolute;
+      top: 10px;
+      left: 58px;
+      right: 10px;
+      z-index: 800;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .mode-toggle {
+      display: flex !important;
+      gap: 6px;
+      flex-wrap: wrap;
+      flex-shrink: 0;
+      visibility: visible;
+    }
+    .map-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+    .map-actions .btn { font-size: 13px; padding: 8px 12px; min-height: 38px; }
+    .mode-toggle .btn { font-size: 13px; padding: 8px 12px; min-height: 38px; }
+    .map-tap-hint {
+      position: absolute;
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 801;
+      background: rgba(15, 23, 42, 0.82);
+      color: #fff;
+      font-size: 13px;
+      padding: 8px 14px;
+      border-radius: 20px;
+      pointer-events: none;
+      max-width: calc(100% - 24px);
+      text-align: center;
+      line-height: 1.35;
+    }
+    .addr-suggest {
+      list-style: none;
+      margin: -6px 0 12px;
+      padding: 0;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .addr-suggest:empty { display: none; }
+    .addr-suggest li {
+      padding: 10px 12px;
+      font-size: 13px;
+      line-height: 1.4;
+      border-bottom: 1px solid var(--line);
+      cursor: pointer;
+    }
+    .addr-suggest li:last-child { border-bottom: 0; }
+    .addr-suggest li:hover { background: #fff7ed; }
+    .side {
+      overflow-y: auto;
+      padding: 12px;
+      background: linear-gradient(160deg, #fff7ed 0%, var(--bg) 40%);
+      -webkit-overflow-scrolling: touch;
+    }
+    .brand { margin-bottom: 10px; }
+    .brand h1 { margin: 0; font-size: clamp(18px, 4vw, 24px); font-weight: 800; line-height: 1.2; }
+    .brand p { margin: 6px 0 0; color: var(--muted); font-size: 13px; line-height: 1.4; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px;
+      box-shadow: 0 6px 18px rgba(15, 23, 42, 0.05);
+    }
+    .form-section {
+      margin-bottom: 10px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--line);
+    }
+    .form-section:last-of-type { border-bottom: 0; margin-bottom: 0; padding-bottom: 0; }
+    .form-section-title {
+      margin: 0 0 8px;
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      border: 0;
+      background: transparent;
+      padding: 0;
+      font-family: inherit;
+      text-align: left;
+      width: 100%;
+    }
+    .form-section-body { display: block; }
+    .acc-chevron { display: none; font-size: 10px; color: var(--muted); }
+    .route-status-bar {
+      position: absolute;
+      bottom: 8px;
+      left: 8px;
+      right: 8px;
+      z-index: 801;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      background: rgba(15, 23, 42, 0.88);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 8px 12px;
+      border-radius: 10px;
+      pointer-events: none;
+    }
+    .route-status-bar[hidden] { display: none !important; }
+    .mobile-crosshair { display: none; pointer-events: none; }
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--muted);
+      margin-bottom: 5px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    input, textarea, select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 16px;
+      margin-bottom: 8px;
+      min-height: var(--touch);
+    }
+    input:focus, textarea:focus, select:focus {
+      outline: 2px solid rgba(234, 88, 12, 0.35);
+      border-color: var(--accent);
+    }
+    textarea { min-height: 64px; resize: vertical; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .grid2 input, .grid2 select { margin-bottom: 0; }
+    .grid2 .field { margin-bottom: 8px; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: var(--touch);
+      min-width: var(--touch);
+      border: 0;
+      border-radius: 12px;
+      padding: 12px 16px;
+      font-size: 15px;
+      font-weight: 800;
+      background: var(--accent);
+      color: #fff;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .btn:hover { background: var(--accent2); }
+    .btn:disabled { opacity: 0.55; cursor: wait; }
+    .btn.secondary { background: #475569; }
+    .btn.ghost {
+      background: rgba(255,255,255,0.95);
+      color: var(--text);
+      border: 1px solid var(--line);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+    .btn.is-active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .btn-block { width: 100%; }
+    .hint { font-size: 12px; color: var(--muted); line-height: 1.4; margin: 0 0 8px; }
+    .warn-box {
+      background: var(--warn-bg);
+      border: 1px solid var(--warn-border);
+      border-radius: 10px;
+      padding: 8px 10px;
+      font-size: 12px;
+      line-height: 1.4;
+      color: #78350f;
+      margin-bottom: 8px;
+    }
+    .geo { font-size: 12px; color: var(--muted); min-height: 16px; margin: -2px 0 6px; }
+    .geo.ok { color: var(--ok); }
+    .form-status {
+      font-size: 13px;
+      color: #dc2626;
+      min-height: 18px;
+      margin: 0 0 8px;
+      line-height: 1.4;
+    }
+    .form-status.ok { color: var(--ok); }
+    .form-status.err { color: #f87171; }
+    .acc-warn { color: #dc2626; font-weight: 900; margin-left: 4px; }
+    .form-section-label { flex: 1; text-align: left; }
+    .route-tools { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+    .success { display: none; text-align: center; padding: 28px 12px; }
+    .success.is-visible { display: block; }
+    .success h2 { margin: 0 0 10px; color: var(--ok); font-size: 20px; }
+    .success p { margin: 0; color: var(--muted); line-height: 1.55; font-size: 15px; }
+    .form-body.is-hidden { display: none; }
+    .route-pt-icon, .pt-start-icon, .pt-end-icon {
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      color: #fff;
+      font-weight: 900;
+      font-size: 11px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid #fff;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+    }
+    .route-pt-icon { background: #ea580c; font-size: 13px; }
+    .pt-start-icon { background: var(--start); }
+    .pt-end-icon { background: var(--end); }
+    @media (max-width: 900px) {
+      .app { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+      .map-panel {
+        order: 1;
+        min-height: 55dvh;
+        height: 55dvh;
+      }
+      #map {
+        min-height: 55dvh;
+        height: 55dvh;
+      }
+      body.mode-single .map-panel,
+      body.mode-single #map {
+        min-height: 55dvh;
+        height: 55dvh;
+      }
+      body.mode-route .map-panel,
+      body.mode-route #map {
+        min-height: 70dvh;
+        height: 70dvh;
+      }
+      .side { order: 2; min-height: auto; }
+      .map-tools { top: 8px; left: 52px; right: 8px; }
+      .form-section { margin-bottom: 8px; padding-bottom: 0; border-bottom: 0; }
+      .form-section-title {
+        margin: 0;
+        padding: 12px;
+        background: #f8fafc;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        min-height: var(--touch);
+      }
+      .form-section.is-open .form-section-title {
+        border-radius: 10px 10px 0 0;
+        border-bottom: 0;
+        margin-bottom: 0;
+      }
+      .form-section-body {
+        display: none;
+        padding: 10px 2px 4px;
+        border: 1px solid var(--line);
+        border-top: 0;
+        border-radius: 0 0 10px 10px;
+        background: #fff;
+      }
+      .form-section.is-open .form-section-body { display: block; }
+      .acc-chevron { display: inline; }
+      .form-section.is-open .acc-chevron::before { content: '▾'; }
+      .form-section:not(.is-open) .acc-chevron::before { content: '▸'; }
+      .mobile-crosshair.is-visible {
+        display: block;
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 32px;
+        height: 32px;
+        margin: -16px 0 0 -16px;
+        z-index: 799;
+      }
+      .mobile-crosshair.is-visible::before,
+      .mobile-crosshair.is-visible::after {
+        content: '';
+        position: absolute;
+        background: #ea580c;
+        border-radius: 1px;
+        box-shadow: 0 0 4px rgba(234, 88, 12, 0.6);
+      }
+      .mobile-crosshair.is-visible::before {
+        left: 50%;
+        top: 2px;
+        width: 2px;
+        height: 28px;
+        transform: translateX(-50%);
+      }
+      .mobile-crosshair.is-visible::after {
+        top: 50%;
+        left: 2px;
+        width: 28px;
+        height: 2px;
+        transform: translateY(-50%);
+      }
+    }
+    @media (min-width: 901px) {
+      .form-section-body { display: block !important; }
+      .form-section-title { cursor: default; pointer-events: none; }
+    }
+  </style>
+</head>
+<body class="mode-single">
+  <div class="app">
+    <div class="map-panel">
+      <div id="map" aria-label="Térkép – helyszín vagy útvonal"></div>
+      <div class="mobile-crosshair" id="mobileCrosshair" hidden aria-hidden="true"></div>
+      <div class="map-tap-hint" id="mapTapHint" hidden>Koppintson a térképre a helyszín kijelöléséhez.</div>
+      <div class="route-status-bar" id="routeStatusBar" hidden>
+        <span id="routeStatusPoints">Pontok: 0</span>
+        <span id="routeStatusText">Rajzolás folyamatban</span>
+      </div>
+      <div class="map-tools">
+        <div class="mode-toggle">
+          <button type="button" class="btn ghost is-active" id="modeSingle" data-mode="single_location">Helyszín kijelölése</button>
+          <button type="button" class="btn ghost" id="modeRoute" data-mode="custom_route">Útvonal megadása</button>
+        </div>
+        <div class="map-actions" id="mapActions" hidden>
+          <button type="button" class="btn ghost" id="btnUndoPoint" hidden>Visszavonás</button>
+          <button type="button" class="btn ghost" id="btnClearRoute" hidden>Törlés</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="side">
+      <div class="brand">
+        <h1>Kisvonat bérlés – árajánlatkérés</h1>
+        <p>Jelölje meg a helyszínt vagy az útvonalat, majd adja meg az elérhetőségét.</p>
+      </div>
+
+      <div class="card">
+        <div class="success" id="successBox">
+          <h2>Köszönjük érdeklődését.</h2>
+          <p>Munkatársunk hamarosan felveszi Önnel a kapcsolatot.</p>
+          <p class="hint" id="successRef" hidden></p>
+        </div>
+
+        <form id="inquiryForm" class="form-body" novalidate>
+          <div class="warn-box" id="routeWarn" hidden>
+            A megadott útvonal tájékoztató jellegű – a végleges útvonalat munkatársaink egyeztetik Önnel.
+          </div>
+
+          <p class="hint" id="modeHint">Kattintson a térképre a helyszín megjelöléséhez.</p>
+
+          <div class="form-section is-open" id="sectionLocation" data-accordion>
+            <button type="button" class="form-section-title" aria-expanded="true">Helyszín <span class="acc-chevron" aria-hidden="true"></span></button>
+            <div class="form-section-body">
+            <div id="fieldsSingle">
+              <label for="city">Város</label>
+              <input id="city" placeholder="pl. Eger" />
+
+              <div class="grid2">
+                <div class="field">
+                  <label for="street">Utca / tér</label>
+                  <input id="street" placeholder="pl. Dobó István tér" />
+                </div>
+                <div class="field">
+                  <label for="houseNumber">Házszám</label>
+                  <input id="houseNumber" placeholder="pl. 5" />
+                </div>
+              </div>
+
+              <label for="locationNote">Helyszín megnevezése (opcionális)</label>
+              <input id="locationNote" placeholder="pl. Hotel előtt" />
+              <ul class="addr-suggest" id="addrSuggest" aria-label="Cím javaslatok"></ul>
+            </div>
+            <input type="hidden" id="address" />
+            <p class="geo" id="geoStatus"></p>
+            </div>
+          </div>
+
+          <div class="form-section" id="sectionProgram" data-accordion>
+            <button type="button" class="form-section-title" aria-expanded="false">
+              <span class="form-section-label">Program</span><span class="acc-warn" id="warnProgram" hidden aria-hidden="true">⚠</span><span class="acc-chevron" aria-hidden="true"></span>
+            </button>
+            <div class="form-section-body">
+            <div class="grid2">
+              <div class="field">
+                <label for="date">Dátum</label>
+                <input id="date" type="date" required />
+              </div>
+              <div class="field">
+                <label for="headcount">Létszám</label>
+                <input id="headcount" type="number" min="1" required placeholder="pl. 52" inputmode="numeric" />
+              </div>
+            </div>
+            <div class="grid2">
+              <div class="field">
+                <label for="timeStart">Kezdés</label>
+                <input id="timeStart" type="time" required value="11:00" />
+              </div>
+              <div class="field">
+                <label for="timeEnd">Befejezés</label>
+                <input id="timeEnd" type="time" required value="18:00" />
+              </div>
+            </div>
+            </div>
+          </div>
+
+          <div class="form-section" id="sectionContact" data-accordion>
+            <button type="button" class="form-section-title" aria-expanded="false">
+              <span class="form-section-label">Kapcsolat</span><span class="acc-warn" id="warnContact" hidden aria-hidden="true">⚠</span><span class="acc-chevron" aria-hidden="true"></span>
+            </button>
+            <div class="form-section-body">
+            <div class="grid2">
+              <div class="field">
+                <label for="name">Név</label>
+                <input id="name" required autocomplete="name" />
+              </div>
+              <div class="field">
+                <label for="phone">Telefon</label>
+                <input id="phone" type="tel" required placeholder="+36 30 123 4567" autocomplete="tel" inputmode="tel" />
+              </div>
+            </div>
+            <label for="email">Email</label>
+            <input id="email" type="email" autocomplete="email" inputmode="email" />
+            <label for="note">Megjegyzés</label>
+            <textarea id="note" placeholder="Esküvő, városnézés, megállók…"></textarea>
+            </div>
+          </div>
+
+          <p class="hint" id="submitHint" hidden>Útvonal lezárva. Adja meg a program és kapcsolattartási adatokat.</p>
+          <p class="form-status" id="formStatus" role="alert"></p>
+          <button type="submit" class="btn btn-block" id="btnSubmit">Árajánlat kérése</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script src="booking_storage.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+(function () {
+  'use strict';
+
+  var HUNGARY_CENTER = [47.1625, 19.5033];
+  var HUNGARY_ZOOM = 7;
+  var PLACE_ZOOM = 15;
+  var DEBUG_GEOCODE = true;
+
+  function geoLog() {
+    if (!DEBUG_GEOCODE) return;
+    var args = ['[geocode]'].concat(Array.prototype.slice.call(arguments));
+    console.log.apply(console, args);
+  }
+
+  var bookingType = 'single_location';
+  var lat = null;
+  var lng = null;
+  var geoTimer = null;
+  var routePoints = [];
+  var isSubmitting = false;
+  var routeDraft = null;
+  var routeFinalized = false;
+  var savedLocationPoint = null;
+  var startAddress = null;
+  var endAddress = null;
+
+  var modeRouteBtn = document.getElementById('modeRoute');
+
+  var mapEl = document.getElementById('map');
+  var map = L.map('map', { zoomControl: true, tapTolerance: 20 }).setView(HUNGARY_CENTER, HUNGARY_ZOOM);
+  var leafletContainer = map.getContainer();
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap'
+  }).addTo(map);
+
+  var mapLayer = L.layerGroup().addTo(map);
+  var form = document.getElementById('inquiryForm');
+  var successBox = document.getElementById('successBox');
+  var geoStatus = document.getElementById('geoStatus');
+  var routeWarn = document.getElementById('routeWarn');
+  var modeHint = document.getElementById('modeHint');
+  var mapTapHint = document.getElementById('mapTapHint');
+  var mapActions = document.getElementById('mapActions');
+  var addrSuggest = document.getElementById('addrSuggest');
+  var mobileCrosshair = document.getElementById('mobileCrosshair');
+  var routeStatusBar = document.getElementById('routeStatusBar');
+  var lastWasMobile = isMobileView();
+
+  function updateBodyModeClass() {
+    document.body.classList.remove('mode-single', 'mode-route');
+    if (bookingType === 'single_location') {
+      document.body.classList.add('mode-single');
+    } else {
+      document.body.classList.add('mode-route');
+    }
+  }
+
+  function updateRouteStatusBar() {
+    if (!routeStatusBar) return;
+    if (bookingType !== 'custom_route' || !isMobileView()) {
+      routeStatusBar.hidden = true;
+      return;
+    }
+    routeStatusBar.hidden = false;
+    document.getElementById('routeStatusPoints').textContent = 'Pontok: ' + routePoints.length;
+    document.getElementById('routeStatusText').textContent = routeFinalized ? 'Útvonal lezárva' : 'Rajzolás folyamatban';
+  }
+
+  function initAccordion() {
+    document.querySelectorAll('[data-accordion]').forEach(function (sec) {
+      var btn = sec.querySelector('.form-section-title');
+      if (!btn) return;
+      btn.addEventListener('click', function () {
+        if (!isMobileView()) return;
+        var open = sec.classList.toggle('is-open');
+        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      });
+    });
+  }
+
+  function syncAccordionForViewport() {
+    document.querySelectorAll('[data-accordion]').forEach(function (sec, i) {
+      var btn = sec.querySelector('.form-section-title');
+      if (!isMobileView()) {
+        sec.classList.add('is-open');
+        if (btn) btn.setAttribute('aria-expanded', 'true');
+      } else if (btn) {
+        btn.setAttribute('aria-expanded', sec.classList.contains('is-open') ? 'true' : 'false');
+      }
+    });
+  }
+
+  function openAccordion(sectionId) {
+    var sec = document.getElementById(sectionId);
+    if (!sec) return;
+    sec.classList.add('is-open');
+    var btn = sec.querySelector('.form-section-title');
+    if (btn) btn.setAttribute('aria-expanded', 'true');
+  }
+
+  function focusAndScrollTo(el) {
+    if (!el) return;
+    if (isMobileView()) {
+      var sec = el.closest('[data-accordion]');
+      if (sec && sec.id) openAccordion(sec.id);
+    }
+    window.setTimeout(function () {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      try { el.focus({ preventScroll: true }); } catch (e) { el.focus(); }
+    }, isMobileView() ? 150 : 0);
+  }
+
+  function setFormStatus(text, ok) {
+    var el = document.getElementById('formStatus');
+    if (!el) return;
+    el.textContent = text || '';
+    el.className = 'form-status' + (ok === true ? ' ok' : (ok === false && text ? ' err' : ''));
+  }
+
+  function isValidPhone(value) {
+    var raw = String(value || '').trim();
+    if (!raw) return false;
+    var cleaned = raw.replace(/[\s\-().]/g, '');
+    if (!/^\+?\d+$/.test(cleaned)) return false;
+    if (cleaned.indexOf('+36') === 0) {
+      var afterPlus = cleaned.slice(3);
+      return afterPlus.length >= 8 && /^\d+$/.test(afterPlus);
+    }
+    if (cleaned.indexOf('06') === 0) {
+      var afterZero = cleaned.slice(2);
+      return afterZero.length >= 8 && /^\d+$/.test(afterZero);
+    }
+    var digitsOnly = cleaned.replace(/\D/g, '');
+    return digitsOnly.length >= 9;
+  }
+
+  function isProgramIncomplete() {
+    var date = document.getElementById('date').value;
+    var headcount = document.getElementById('headcount').value.trim();
+    return !date || !headcount || parseInt(headcount, 10) < 1;
+  }
+
+  function isContactIncomplete() {
+    return !document.getElementById('name').value.trim() || !document.getElementById('phone').value.trim();
+  }
+
+  function updateAccordionWarnings() {
+    var warnProgram = document.getElementById('warnProgram');
+    var warnContact = document.getElementById('warnContact');
+    if (warnProgram) warnProgram.hidden = !isProgramIncomplete();
+    if (warnContact) {
+      var phoneVal = document.getElementById('phone').value.trim();
+      var showContactWarn = isContactIncomplete() || (phoneVal && !isValidPhone(phoneVal));
+      warnContact.hidden = !showContactWarn;
+    }
+  }
+
+  function updateSubmitHint() {
+    var el = document.getElementById('submitHint');
+    if (!el) return;
+    el.hidden = !(bookingType === 'custom_route' && routeFinalized);
+  }
+
+  function validatePhone() {
+    var phoneEl = document.getElementById('phone');
+    var val = phoneEl.value.trim();
+    if (!val) {
+      return { ok: false, field: phoneEl, sectionId: 'sectionContact', message: 'Kérjük, töltse ki a kötelező adatokat.' };
+    }
+    if (!isValidPhone(val)) {
+      return { ok: false, field: phoneEl, sectionId: 'sectionContact', message: 'Kérjük, adjon meg érvényes telefonszámot.' };
+    }
+    return { ok: true };
+  }
+
+  function validateRequiredFields() {
+    if (isProgramIncomplete()) {
+      var field = !document.getElementById('date').value
+        ? document.getElementById('date')
+        : document.getElementById('headcount');
+      return { ok: false, field: field, sectionId: 'sectionProgram', message: 'Kérjük, töltse ki a kötelező adatokat.' };
+    }
+    if (!document.getElementById('name').value.trim()) {
+      return { ok: false, field: document.getElementById('name'), sectionId: 'sectionContact', message: 'Kérjük, töltse ki a kötelező adatokat.' };
+    }
+    var phoneCheck = validatePhone();
+    if (!phoneCheck.ok) return phoneCheck;
+    return { ok: true };
+  }
+
+  function showValidationError(result) {
+    setFormStatus(result.message, false);
+    updateAccordionWarnings();
+    if (result.sectionId) openAccordion(result.sectionId);
+    focusAndScrollTo(result.field);
+  }
+
+  function isMobileView() {
+    return window.matchMedia('(max-width: 900px)').matches;
+  }
+
+  function isSelectionActive() {
+    if (bookingType === 'single_location') return true;
+    if (bookingType === 'custom_route') return !routeFinalized;
+    return false;
+  }
+
+  function updateMapCursor() {
+    var active = isSelectionActive();
+    mapEl.classList.toggle('selection-active', active);
+    leafletContainer.classList.toggle('selection-active', active);
+    if (mobileCrosshair) {
+      var showCross = isMobileView() && active;
+      mobileCrosshair.classList.toggle('is-visible', showCross);
+      mobileCrosshair.hidden = !showCross;
+    }
+    if (isMobileView() && active && bookingType === 'single_location') {
+      mapTapHint.textContent = 'Koppintson a térképre a helyszín kijelöléséhez.';
+      mapTapHint.hidden = false;
+    } else {
+      mapTapHint.hidden = true;
+    }
+    updateRouteStatusBar();
+  }
+
+  function updateMapActions() {
+    var showUndo = false;
+    var showClear = false;
+
+    document.querySelector('.mode-toggle').hidden = false;
+    document.getElementById('modeSingle').hidden = false;
+    modeRouteBtn.hidden = false;
+
+    if (bookingType === 'custom_route') {
+      showUndo = !routeFinalized && routePoints.length > 0;
+      showClear = routePoints.length > 0 || routeFinalized;
+    }
+
+    mapActions.hidden = !(showUndo || showClear);
+    document.getElementById('btnUndoPoint').hidden = !showUndo;
+    document.getElementById('btnClearRoute').hidden = !showClear;
+    updateModeRouteButton();
+    updateMapCursor();
+  }
+
+  function updateModeRouteButton() {
+    modeRouteBtn.hidden = false;
+    document.getElementById('modeSingle').hidden = false;
+
+    if (bookingType !== 'custom_route') {
+      modeRouteBtn.textContent = 'Útvonal megadása';
+      modeRouteBtn.disabled = false;
+      return;
+    }
+    if (routeFinalized) {
+      modeRouteBtn.textContent = 'Útvonal lezárva';
+      modeRouteBtn.disabled = true;
+    } else if (routePoints.length >= 2) {
+      modeRouteBtn.textContent = 'Útvonal lezárása';
+      modeRouteBtn.disabled = false;
+    } else {
+      modeRouteBtn.textContent = 'Útvonal megadása';
+      modeRouteBtn.disabled = false;
+    }
+  }
+
+  function storeSavedLocation(latVal, lngVal) {
+    if (latVal == null || lngVal == null) return;
+    savedLocationPoint = { lat: latVal, lng: lngVal };
+  }
+
+  function seedRouteFromSavedLocation() {
+    if (!savedLocationPoint) return;
+    routePoints = [{ lat: savedLocationPoint.lat, lng: savedLocationPoint.lng }];
+  }
+
+  function normalizeText(s) {
+    return String(s || '').trim().toLowerCase()
+      .replace(/\s+/g, ' ')
+      .replace(/[áà]/g, 'a').replace(/[éè]/g, 'e').replace(/[íì]/g, 'i')
+      .replace(/[óò]/g, 'o').replace(/[öő]/g, 'o')
+      .replace(/[úù]/g, 'u').replace(/[üű]/g, 'u');
+  }
+
+  function rowCityName(row) {
+    var a = (row && row.address) || {};
+    return String(a.city || a.town || a.village || a.municipality || '').trim();
+  }
+
+  function rowStreetText(row) {
+    var a = (row && row.address) || {};
+    return [a.road, a.pedestrian, a.square, a.footway, a.path]
+      .filter(Boolean).join(' ');
+  }
+
+  function rowHasStreet(row) {
+    return !!rowStreetText(row);
+  }
+
+  function streetTokensFromRow(row) {
+    var a = (row && row.address) || {};
+    var tokens = [];
+    [a.road, a.pedestrian, a.square, a.footway, a.path].filter(Boolean).forEach(function (part) {
+      normalizeText(part).split(/[\s,]+/).forEach(function (t) {
+        if (t.length >= 2) tokens.push(t);
+      });
+    });
+    return tokens;
+  }
+
+  function streetMatchesRow(row, streetNorm) {
+    if (!streetNorm || streetNorm.length < 2) return false;
+    var rowText = normalizeText(rowStreetText(row));
+    if (!rowText) return false;
+    if (rowText.indexOf(streetNorm) !== -1) return true;
+
+    var tokens = streetTokensFromRow(row);
+    var queryTokens = streetNorm.split(/\s+/).filter(function (t) { return t.length >= 2; });
+    if (!queryTokens.length) queryTokens = [streetNorm];
+
+    return queryTokens.some(function (qt) {
+      if (rowText.indexOf(qt) !== -1) return true;
+      return tokens.some(function (tk) {
+        if (streetNorm.length >= 3 && tk.indexOf(streetNorm) === 0) return true;
+        if (qt.length >= 3 && tk.indexOf(qt) === 0) return true;
+        if (qt.length >= 2 && tk.indexOf(qt) === 0) return true;
+        return qt.indexOf(tk) === 0;
+      });
+    });
+  }
+
+  function cityMatchesRow(row, cityNorm) {
+    if (!cityNorm) return true;
+    var settlement = normalizeText(rowCityName(row));
+    var displayNorm = normalizeText((row && row.display_name) || '');
+    if (settlement && (settlement.indexOf(cityNorm) !== -1 || cityNorm.indexOf(settlement) !== -1)) return true;
+    return displayNorm.indexOf(cityNorm) !== -1;
+  }
+
+  function isSettlementRow(row) {
+    var a = (row && row.address) || {};
+    if (a.road || a.pedestrian || a.square || a.footway || a.path || a.house_number) return false;
+    return !!(a.city || a.town || a.village || a.municipality);
+  }
+
+  function filterCityResults(rows, cityQuery) {
+    var cityNorm = normalizeText(cityQuery);
+    if (!cityNorm) return [];
+    return (rows || []).filter(function (row) {
+      var a = (row && row.address) || {};
+      if (a.road || a.pedestrian || a.square || a.footway || a.path || a.house_number) return false;
+      if (isSettlementRow(row)) {
+        var settlement = normalizeText(rowCityName(row));
+        if (settlement.indexOf(cityNorm) === 0 || cityNorm.indexOf(settlement) === 0) return true;
+        if (normalizeText(row.display_name || '').indexOf(cityNorm) !== -1) return true;
+        return settlement.indexOf(cityNorm) !== -1;
+      }
+      return normalizeText(row.display_name || '').indexOf(cityNorm) !== -1;
+    });
+  }
+
+  function filterStreetResults(rows, street, city) {
+    var streetTrim = String(street || '').trim();
+    if (streetTrim.length < 2) return [];
+    var streetNorm = normalizeText(streetTrim);
+    var cityNorm = normalizeText(city || '');
+    return (rows || []).filter(function (row) {
+      if (!rowHasStreet(row)) return false;
+      if (cityNorm && !cityMatchesRow(row, cityNorm)) return false;
+      return streetMatchesRow(row, streetNorm);
+    });
+  }
+
+  function clearAddrSuggestions() {
+    addrSuggest.innerHTML = '';
+  }
+
+  function renderAddrSuggestions(rows, onPick) {
+    clearAddrSuggestions();
+    if (!rows || !rows.length) return;
+    rows.slice(0, 5).forEach(function (row) {
+      var li = document.createElement('li');
+      li.textContent = row.display_name || '';
+      li.addEventListener('click', function () {
+        onPick(row);
+        clearAddrSuggestions();
+      });
+      addrSuggest.appendChild(li);
+    });
+  }
+
+  function applyCityHit(row) {
+    var hit = parseNominatimAddress(row);
+    hit.lat = parseFloat(row.lat);
+    hit.lng = parseFloat(row.lon);
+    if (hit.city) document.getElementById('city').value = hit.city;
+    if (hit.lat != null && hit.lng != null) {
+      lat = hit.lat;
+      lng = hit.lng;
+      clearMapLayers();
+      map.setView([hit.lat, hit.lng], 12, { animate: true });
+    }
+    setGeoStatus('Település kiválasztva, adja meg az utcát vagy jelölje ki a pontot.', true);
+  }
+
+  function applyAddrHit(hit) {
+    if (!hit) return;
+    if (hit.city) document.getElementById('city').value = hit.city;
+    if (hit.street) document.getElementById('street').value = hit.street;
+    if (hit.house_number) document.getElementById('houseNumber').value = hit.house_number;
+    syncHiddenAddress();
+    if (!hit.street && hit.display_name) {
+      document.getElementById('locationNote').value = hit.display_name;
+    }
+    if (hit.lat != null && hit.lng != null) {
+      storeSavedLocation(hit.lat, hit.lng);
+      setGeoStatus('Cím kiválasztva, kérjük ellenőrizze.', true);
+      showSingleMarker(hit.lat, hit.lng, formatAddressLine(hit));
+    } else {
+      setGeoStatus('Cím kiválasztva, kérjük ellenőrizze.', true);
+    }
+  }
+
+  function applyAddrHitFromRow(row) {
+    var hit = parseNominatimAddress(row);
+    hit.lat = parseFloat(row.lat);
+    hit.lng = parseFloat(row.lon);
+    applyAddrHit(hit);
+  }
+
+  function todayIso() {
+    var d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  document.getElementById('date').value = todayIso();
+
+  function syncHiddenAddress() {
+    var street = document.getElementById('street').value.trim();
+    var house = document.getElementById('houseNumber').value.trim();
+    document.getElementById('address').value = [street, house].filter(Boolean).join(' ');
+  }
+
+  function formatAddressLine(addr) {
+    if (!addr) return '—';
+    var parts = [addr.city, addr.street, addr.house_number].filter(Boolean);
+    if (parts.length) return parts.join(', ');
+    return addr.display_name || (addr.lat != null ? ('Koordináta: ' + addr.lat.toFixed(5) + ', ' + addr.lng.toFixed(5)) : '—');
+  }
+
+  function parseNominatimAddress(data) {
+    var a = (data && data.address) || {};
+    return {
+      city: String(a.city || a.town || a.village || a.municipality || a.county || '').trim(),
+      street: String(a.road || a.pedestrian || a.square || a.footway || a.path || data.name || '').trim(),
+      house_number: String(a.house_number || '').trim(),
+      display_name: String(data.display_name || '').trim(),
+      lat: data.lat != null ? parseFloat(data.lat) : null,
+      lng: data.lon != null ? parseFloat(data.lon) : null
+    };
+  }
+
+  function reverseGeocode(latVal, lngVal) {
+    var url = 'https://nominatim.openstreetmap.org/reverse?format=json&addressdetails=1&lat=' +
+      encodeURIComponent(latVal) + '&lon=' + encodeURIComponent(lngVal);
+    return fetch(url, { headers: { Accept: 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error('reverse fail')); })
+      .then(function (data) {
+        var parsed = parseNominatimAddress(data);
+        parsed.lat = latVal;
+        parsed.lng = lngVal;
+        return parsed;
+      });
+  }
+
+  function setGeoStatus(text, ok) {
+    geoStatus.textContent = text || '';
+    geoStatus.className = 'geo' + (ok ? ' ok' : '');
+  }
+
+  function clearMapLayers() {
+    mapLayer.clearLayers();
+  }
+
+  function setMode(mode) {
+    bookingType = mode;
+    routeFinalized = false;
+    document.getElementById('modeSingle').classList.toggle('is-active', mode === 'single_location');
+    document.getElementById('modeRoute').classList.toggle('is-active', mode === 'custom_route');
+
+    routeWarn.hidden = mode !== 'custom_route';
+    document.getElementById('sectionLocation').hidden = mode !== 'single_location';
+    clearAddrSuggestions();
+
+    if (mode === 'single_location') {
+      modeHint.textContent = 'Kattintson a térképre a helyszín megjelöléséhez.';
+      routePoints = [];
+      routeDraft = null;
+      startAddress = null;
+      endAddress = null;
+      if (savedLocationPoint) {
+        lat = savedLocationPoint.lat;
+        lng = savedLocationPoint.lng;
+      }
+      setGeoStatus(lat != null && lng != null ? 'Helyszín kijelölve' : '', lat != null && lng != null);
+    } else {
+      modeHint.textContent = 'Kattintson a térképre: indulás, köztes pontok, majd cél.';
+      routeFinalized = false;
+      routeDraft = null;
+      startAddress = null;
+      endAddress = null;
+      seedRouteFromSavedLocation();
+      setGeoStatus(routePoints.length ? 'Útvonal rajzolása folyamatban' : '', !!routePoints.length);
+    }
+    clearMapLayers();
+    redrawMap();
+    updateBodyModeClass();
+    updateMapActions();
+    updateSubmitHint();
+    map.invalidateSize();
+  }
+
+  function routeMarkerIcon(i, count) {
+    var label, cls;
+    if (i === 0) {
+      label = 'S';
+      cls = 'pt-start-icon';
+    } else if (routeFinalized && i === count - 1) {
+      label = 'C';
+      cls = 'pt-end-icon';
+    } else {
+      label = String(i);
+      cls = 'route-pt-icon';
+    }
+    return endpointIcon(label, cls);
+  }
+
+  function endpointIcon(label, cls) {
+    return L.divIcon({
+      className: '',
+      html: '<div class="' + cls + '">' + label + '</div>',
+      iconSize: [28, 28],
+      iconAnchor: [14, 14]
+    });
+  }
+
+  function buildRouteDraft() {
+    if (routePoints.length < 2) return null;
+    return {
+      type: 'LineString',
+      coordinates: routePoints.map(function (p) { return [p.lng, p.lat]; })
+    };
+  }
+
+  function applySingleAddressToForm(addr) {
+    if (!addr) return;
+    if (addr.city) document.getElementById('city').value = addr.city;
+    if (addr.street) document.getElementById('street').value = addr.street;
+    if (addr.house_number) document.getElementById('houseNumber').value = addr.house_number;
+    syncHiddenAddress();
+  }
+
+  function applyReverseGeocodeToForm(addr) {
+    if (!addr) return;
+    if (addr.city) document.getElementById('city').value = addr.city;
+    if (addr.street) {
+      document.getElementById('street').value = addr.street;
+    } else if (addr.display_name) {
+      document.getElementById('locationNote').value = addr.display_name;
+    }
+    if (addr.house_number) document.getElementById('houseNumber').value = addr.house_number;
+    syncHiddenAddress();
+  }
+
+  function showSingleMarker(latVal, lngVal, label) {
+    lat = latVal;
+    lng = lngVal;
+    storeSavedLocation(latVal, lngVal);
+    clearMapLayers();
+    L.circleMarker([latVal, lngVal], {
+      radius: 12,
+      color: '#ea580c',
+      fillColor: '#fb923c',
+      fillOpacity: 0.9,
+      weight: 3
+    }).addTo(mapLayer).bindTooltip(label || 'Helyszín', { direction: 'top' });
+    map.setView([latVal, lngVal], PLACE_ZOOM, { animate: true });
+    updateMapCursor();
+  }
+
+  function redrawRoute() {
+    var count = routePoints.length;
+    routePoints.forEach(function (p, i) {
+      L.marker([p.lat, p.lng], { icon: routeMarkerIcon(i, count), zIndexOffset: 500 }).addTo(mapLayer);
+    });
+    if (count >= 2) {
+      L.polyline(routePoints.map(function (p) { return [p.lat, p.lng]; }), {
+        color: '#ea580c', weight: 5, opacity: 0.9
+      }).addTo(mapLayer);
+      routeDraft = buildRouteDraft();
+      lat = routePoints[0].lat;
+      lng = routePoints[0].lng;
+    } else {
+      routeDraft = null;
+    }
+    if (routeFinalized) {
+      setGeoStatus('Útvonal lezárva', true);
+      modeHint.textContent = 'Útvonal lezárva.';
+      if (isMobileView()) openAccordion('sectionProgram');
+      updateSubmitHint();
+    } else if (count > 0) {
+      setGeoStatus('Útvonal rajzolása folyamatban', false);
+      modeHint.textContent = 'Kattintson a térképre: indulás, köztes pontok, majd cél.';
+      updateSubmitHint();
+    }
+    updateMapActions();
+    updateRouteStatusBar();
+    updateAccordionWarnings();
+  }
+
+  function redrawMap() {
+    clearMapLayers();
+    if (bookingType === 'single_location' && lat != null && lng != null) {
+      showSingleMarker(lat, lng, document.getElementById('city').value || 'Helyszín');
+      return;
+    }
+    if (bookingType === 'custom_route') redrawRoute();
+  }
+
+  function handleMapClick(e) {
+    var clickLat = e.latlng.lat;
+    var clickLng = e.latlng.lng;
+
+    if (bookingType === 'single_location') {
+      setGeoStatus('Cím keresése a kattintás helyén…', false);
+      showSingleMarker(clickLat, clickLng, 'Kiválasztott pont');
+      reverseGeocode(clickLat, clickLng)
+        .then(function (addr) {
+          applyReverseGeocodeToForm(addr);
+          setGeoStatus('Helyszín kijelölve, kérjük ellenőrizze a címet.', true);
+        })
+        .catch(function () {
+          setGeoStatus('Helyszín kijelölve, kérjük ellenőrizze a címet.', true);
+        });
+      return;
+    }
+
+    if (bookingType === 'custom_route') {
+      if (routeFinalized) {
+        setGeoStatus('Az útvonal módosításához nyomja meg a Törlés gombot.', false);
+        return;
+      }
+      routePoints.push({ lat: clickLat, lng: clickLng });
+      redrawMap();
+      if (routePoints.length === 1) map.panTo(e.latlng, { animate: true });
+    }
+  }
+
+  map.on('click', handleMapClick);
+
+  function buildStreetGeocodeQueries(city, street, house) {
+    var queries = [];
+    if (house && city) queries.push([street, house, city, 'Hungary'].join(', '));
+    queries.push([street, city, 'Hungary'].join(', '));
+    queries.push([city, street, 'Hungary'].join(', '));
+    queries.push([street, 'Hungary'].join(', '));
+    var seen = {};
+    return queries.filter(function (q) {
+      if (seen[q]) return false;
+      seen[q] = true;
+      return true;
+    });
+  }
+
+  function nominatimSearch(q, limit) {
+    var lim = limit || 8;
+    return fetch('https://nominatim.openstreetmap.org/search?format=json&limit=' + lim + '&countrycodes=hu&addressdetails=1&q=' + encodeURIComponent(q), {
+      headers: { Accept: 'application/json' }
+    })
+      .then(function (r) { return r.ok ? r.json() : []; })
+      .then(function (rows) { return rows && rows.length ? rows : []; });
+  }
+
+  function tryStreetGeocodeQueries(queries, index, street, city) {
+    if (!queries.length || index >= queries.length) return Promise.resolve([]);
+    var q = queries[index];
+    geoLog('street query', q);
+    return nominatimSearch(q, 8).then(function (rows) {
+      geoLog('raw results', rows.length, 'for', q);
+      var filtered = filterStreetResults(rows, street, city);
+      geoLog('filtered results', filtered.length, 'street', street, 'city', city);
+      if (filtered.length) return filtered;
+      return tryStreetGeocodeQueries(queries, index + 1, street, city);
+    });
+  }
+
+  function runCitySearch(city) {
+    geoLog('city input', city);
+    setGeoStatus('Település keresése…', false);
+    return nominatimSearch(city + ', Hungary', 8).then(function (rows) {
+      geoLog('city raw results', rows.length);
+      var filtered = filterCityResults(rows, city);
+      geoLog('city filtered results', filtered.length);
+      if (!filtered.length) {
+        clearAddrSuggestions();
+        setGeoStatus('Település nem található – próbáljon más névvel.', false);
+        return;
+      }
+      renderAddrSuggestions(filtered, applyCityHit);
+      setGeoStatus('Válasszon települést a listából.', false);
+    });
+  }
+
+  function runStreetSearch(city, street, house) {
+    geoLog('street input', { city: city, street: street, house: house });
+    setGeoStatus('Utca keresése…', false);
+    var queries = buildStreetGeocodeQueries(city, street, house);
+    geoLog('query list', queries);
+    return tryStreetGeocodeQueries(queries, 0, street, city).then(function (rows) {
+      geoLog('final street results', rows.length);
+      if (!rows.length) {
+        clearAddrSuggestions();
+        setGeoStatus('Nem találtunk pontos utcát. Próbálja meg más névvel, vagy jelölje ki a helyszínt a térképen.', false);
+        return;
+      }
+      renderAddrSuggestions(rows, applyAddrHitFromRow);
+      setGeoStatus('Válasszon címet a listából.', false);
+    });
+  }
+
+  function runGeocodeSearch(force) {
+    if (bookingType !== 'single_location') return;
+    syncHiddenAddress();
+    var city = document.getElementById('city').value.trim();
+    var street = document.getElementById('street').value.trim();
+    var house = document.getElementById('houseNumber').value.trim();
+
+    geoLog('runGeocodeSearch', { city: city, street: street, force: force });
+
+    if (!city && !street) {
+      setGeoStatus('', false);
+      clearAddrSuggestions();
+      return;
+    }
+
+    if (!street) {
+      if (city.length < 2) {
+        if (!force) return;
+        clearAddrSuggestions();
+        return;
+      }
+      runCitySearch(city).catch(function () {
+        clearAddrSuggestions();
+        setGeoStatus('Település keresése sikertelen – ellenőrizze a hálózatot.', false);
+      });
+      return;
+    }
+
+    if (city.length < 2 || street.length < 2) {
+      if (!force) return;
+      if (city.length < 2) {
+        setGeoStatus('Adja meg a várost is az utca kereséséhez.', false);
+        return;
+      }
+      if (street.length < 2) return;
+    }
+
+    runStreetSearch(city, street, house).catch(function () {
+      clearAddrSuggestions();
+      setGeoStatus('Utca keresése sikertelen – ellenőrizze a hálózatot.', false);
+    });
+  }
+
+  function scheduleGeocodeFromField(fieldId) {
+    if (bookingType !== 'single_location') return;
+    clearTimeout(geoTimer);
+    var city = document.getElementById('city').value.trim();
+    var street = document.getElementById('street').value.trim();
+    var delay = 500;
+    if (fieldId === 'city' && !street) delay = 400;
+    if (fieldId === 'street' || fieldId === 'houseNumber') delay = 500;
+    geoTimer = setTimeout(function () { runGeocodeSearch(false); }, delay);
+  }
+
+  ['city', 'street', 'houseNumber'].forEach(function (id) {
+    var el = document.getElementById(id);
+    el.addEventListener('input', function () { scheduleGeocodeFromField(id); });
+    el.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter') {
+        ev.preventDefault();
+        clearTimeout(geoTimer);
+        runGeocodeSearch(true);
+      }
+    });
+  });
+
+  document.getElementById('modeSingle').addEventListener('click', function () { setMode('single_location'); });
+  modeRouteBtn.addEventListener('click', function () {
+    if (modeRouteBtn.disabled) return;
+    if (bookingType === 'custom_route' && !routeFinalized && routePoints.length >= 2) {
+      routeFinalized = true;
+      redrawMap();
+      return;
+    }
+    if (bookingType !== 'custom_route') {
+      setMode('custom_route');
+    }
+  });
+
+  document.getElementById('btnUndoPoint').addEventListener('click', function () {
+    if (routeFinalized) return;
+    routePoints.pop();
+    redrawMap();
+  });
+
+  document.getElementById('btnClearRoute').addEventListener('click', function () {
+    if (bookingType !== 'custom_route') return;
+    routeFinalized = false;
+    routeDraft = null;
+    startAddress = null;
+    endAddress = null;
+    seedRouteFromSavedLocation();
+    if (!routePoints.length) {
+      lat = savedLocationPoint ? savedLocationPoint.lat : null;
+      lng = savedLocationPoint ? savedLocationPoint.lng : null;
+    }
+    setGeoStatus(routePoints.length ? 'Útvonal rajzolása folyamatban' : '', !!routePoints.length);
+    modeHint.textContent = 'Kattintson a térképre: indulás, köztes pontok, majd cél.';
+    updateSubmitHint();
+    redrawMap();
+    updateMapActions();
+    updateSubmitHint();
+  });
+
+  ['date', 'headcount', 'name', 'phone'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', updateAccordionWarnings);
+  });
+
+  function withTimeout(promise, ms) {
+    return Promise.race([
+      promise,
+      new Promise(function (_, reject) {
+        setTimeout(function () { reject(new Error('timeout')); }, ms);
+      })
+    ]);
+  }
+
+  function toCoordPair(latVal, lngVal) {
+    var plat = latVal != null ? Number(latVal) : NaN;
+    var plng = lngVal != null ? Number(lngVal) : NaN;
+    if (!isFinite(plat) || !isFinite(plng)) return null;
+    return { lat: plat, lng: plng };
+  }
+
+  function resolvePayloadCoords(payload) {
+    var direct = toCoordPair(payload.lat, payload.lng);
+    if (direct) return direct;
+    if (payload.routePoints && payload.routePoints.length) {
+      var fromPoint = toCoordPair(payload.routePoints[0].lat, payload.routePoints[0].lng);
+      if (fromPoint) return fromPoint;
+    }
+    var draft = payload.routeDraft;
+    if (draft && draft.type === 'LineString' && draft.coordinates && draft.coordinates.length) {
+      var c = draft.coordinates[0];
+      return toCoordPair(c[1], c[0]);
+    }
+    return null;
+  }
+
+  function enrichRouteEndpoints() {
+    if (bookingType !== 'custom_route' || routePoints.length < 1) return Promise.resolve();
+    var first = routePoints[0];
+    var last = routePoints[routePoints.length - 1];
+    var geocodeTimeoutMs = 8000;
+    return Promise.all([
+      withTimeout(reverseGeocode(first.lat, first.lng), geocodeTimeoutMs).catch(function () {
+        return { city: '', street: '', house_number: '', lat: first.lat, lng: first.lng };
+      }),
+      routePoints.length > 1
+        ? withTimeout(reverseGeocode(last.lat, last.lng), geocodeTimeoutMs).catch(function () {
+            return { city: '', street: '', house_number: '', lat: last.lat, lng: last.lng };
+          })
+        : Promise.resolve(null)
+    ]).then(function (res) {
+      startAddress = res[0];
+      endAddress = res[1];
+    });
+  }
+
+  /* Következő admin feladat (külön kör): projektAzonosito, booking_type, start/end cím,
+     részletes nézet GIS mezők bővítése – lásd index.html admin lista. */
+  function saveProjectInquiry(payload) {
+    var coords = resolvePayloadCoords(payload);
+    if (!coords) {
+      return Promise.reject(new Error('missing coordinates'));
+    }
+    var fullPayload = Object.assign({}, payload, {
+      lat: coords.lat,
+      lng: coords.lng,
+      bookingType: 'BERLES',
+      booking_type: payload.booking_type,
+      street: payload.street || '',
+      houseNumber: payload.house_number || payload.houseNumber || '',
+      locationNote: payload.locationNote || '',
+      address: payload.address || [payload.street, payload.house_number || payload.houseNumber].filter(Boolean).join(' '),
+      placeName: payload.placeName || payload.city || payload.address || 'Árajánlatkérés',
+      start_lat: payload.start_lat,
+      start_lng: payload.start_lng,
+      end_lat: payload.end_lat,
+      end_lng: payload.end_lng,
+      start_address: payload.start_address || null,
+      end_address: payload.end_address || null,
+      routePoints: payload.routePoints || null,
+      routeDraft: payload.routeDraft || null,
+      source: payload.source || 'public'
+    });
+    if (payload.routeDraft) {
+      fullPayload.routeGeometry = payload.routeDraft;
+      fullPayload.geometryType = 'ROUTE';
+    }
+
+    var controller = new AbortController();
+    var timeoutId = setTimeout(function () { controller.abort(); }, 20000);
+    return fetch('/api/rent/inquiries', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(fullPayload),
+      signal: controller.signal
+    }).then(function (resp) {
+      clearTimeout(timeoutId);
+      return resp.json().then(function (data) {
+        if (!resp.ok || !data || !data.ok || !data.inquiry) {
+          var errMsg = (data && data.error) ? data.error : ('HTTP ' + resp.status);
+          throw new Error(errMsg);
+        }
+        return data.inquiry;
+      });
+    }).catch(function (err) {
+      clearTimeout(timeoutId);
+      throw err;
+    });
+  }
+
+  function showSaveSuccess(saved) {
+    form.classList.add('is-hidden');
+    successBox.classList.add('is-visible');
+    var refEl = document.getElementById('successRef');
+    if (refEl && saved && saved.id) {
+      refEl.textContent = 'Az árajánlatkérés sikeresen rögzítve. Azonosító: ' + saved.id;
+      refEl.hidden = false;
+    }
+  }
+
+  form.addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var btn = document.getElementById('btnSubmit');
+    syncHiddenAddress();
+    updateAccordionWarnings();
+
+    var requiredCheck = validateRequiredFields();
+    if (!requiredCheck.ok) {
+      showValidationError(requiredCheck);
+      return;
+    }
+    setFormStatus('', false);
+
+    btn.disabled = true;
+
+    function failValidation(result) {
+      btn.disabled = false;
+      if (result && result.field) {
+        showValidationError(result);
+      } else if (result && result.message) {
+        setFormStatus(result.message, false);
+      }
+    }
+
+    function finishSave(payload) {
+      if (payload.timeEnd <= payload.timeStart) {
+        failValidation({
+          message: 'A befejezés időpontja későbbi legyen, mint a kezdés.',
+          field: document.getElementById('timeEnd'),
+          sectionId: 'sectionProgram'
+        });
+        return;
+      }
+
+      if (bookingType === 'single_location') {
+        if (!payload.city && !payload.street) {
+          failValidation({
+            message: 'Adja meg a várost vagy az utcát, vagy kattintson a térképre.',
+            field: document.getElementById('city'),
+            sectionId: 'sectionLocation'
+          });
+          return;
+        }
+        if (payload.lat == null || payload.lng == null) {
+          failValidation({
+            message: 'Kérjük, jelölje meg a helyszínt a térképen vagy adjon meg érvényes címet.',
+            field: document.getElementById('city'),
+            sectionId: 'sectionLocation'
+          });
+          return;
+        }
+      } else if (bookingType === 'custom_route') {
+        if (!routeDraft || routePoints.length < 2) {
+          setFormStatus('Útvonal megadása módban legalább 2 pontot jelöljön a térképen.', false);
+          btn.disabled = false;
+          return;
+        }
+        if (!routeFinalized) {
+          setFormStatus('Kérjük, zárja le az útvonalat az „Útvonal lezárása” gombbal.', false);
+          btn.disabled = false;
+          return;
+        }
+      }
+
+      if (isSubmitting) return;
+      isSubmitting = true;
+      setFormStatus('Küldés folyamatban…', true);
+      btn.disabled = true;
+
+      saveProjectInquiry(payload)
+        .then(function (saved) {
+          showSaveSuccess(saved);
+          isSubmitting = false;
+        })
+        .catch(function (err) {
+          console.error('POST /api/rent/inquiries failed:', err);
+          setFormStatus('A szerveres mentés nem sikerült. Az adatok nem kerültek beküldésre. Próbáld újra.', false);
+          btn.disabled = false;
+          isSubmitting = false;
+        });
+    }
+
+    var basePayload = {
+      name: document.getElementById('name').value.trim(),
+      phone: document.getElementById('phone').value.trim(),
+      email: document.getElementById('email').value.trim(),
+      date: document.getElementById('date').value,
+      timeStart: document.getElementById('timeStart').value,
+      timeEnd: document.getElementById('timeEnd').value,
+      headcount: document.getElementById('headcount').value,
+      note: document.getElementById('note').value.trim(),
+      booking_type: bookingType,
+      locationNote: document.getElementById('locationNote').value.trim()
+    };
+
+    if (bookingType === 'single_location') {
+      basePayload.city = document.getElementById('city').value.trim();
+      basePayload.street = document.getElementById('street').value.trim();
+      basePayload.house_number = document.getElementById('houseNumber').value.trim();
+      basePayload.address = document.getElementById('address').value.trim();
+      basePayload.lat = lat;
+      basePayload.lng = lng;
+      basePayload.placeName = basePayload.city || basePayload.street || 'Helyszín';
+      finishSave(basePayload);
+      return;
+    }
+
+    enrichRouteEndpoints().then(function () {
+      basePayload.routeDraft = routeDraft || buildRouteDraft();
+      basePayload.routePoints = routePoints.slice();
+      var startCoords = toCoordPair(routePoints[0].lat, routePoints[0].lng);
+      basePayload.lat = startCoords ? startCoords.lat : routePoints[0].lat;
+      basePayload.lng = startCoords ? startCoords.lng : routePoints[0].lng;
+      basePayload.start_lat = routePoints[0].lat;
+      basePayload.start_lng = routePoints[0].lng;
+      basePayload.end_lat = routePoints[routePoints.length - 1].lat;
+      basePayload.end_lng = routePoints[routePoints.length - 1].lng;
+      basePayload.start_address = startAddress;
+      basePayload.end_address = endAddress;
+      basePayload.city = (startAddress && startAddress.city) || document.getElementById('city').value.trim();
+      basePayload.street = (startAddress && startAddress.street) || document.getElementById('street').value.trim();
+      basePayload.house_number = (startAddress && startAddress.house_number) || document.getElementById('houseNumber').value.trim();
+      basePayload.address = formatAddressLine(startAddress);
+      basePayload.placeName = basePayload.city || 'Útvonal';
+      finishSave(basePayload);
+    }).catch(function () {
+      basePayload.routeDraft = routeDraft || buildRouteDraft();
+      basePayload.routePoints = routePoints.slice();
+      var fallbackCoords = toCoordPair(routePoints[0].lat, routePoints[0].lng);
+      if (fallbackCoords) {
+        basePayload.lat = fallbackCoords.lat;
+        basePayload.lng = fallbackCoords.lng;
+        basePayload.start_lat = fallbackCoords.lat;
+        basePayload.start_lng = fallbackCoords.lng;
+        var endPt = routePoints[routePoints.length - 1];
+        var endCoords = toCoordPair(endPt.lat, endPt.lng);
+        if (endCoords) {
+          basePayload.end_lat = endCoords.lat;
+          basePayload.end_lng = endCoords.lng;
+        }
+        basePayload.city = document.getElementById('city').value.trim();
+        basePayload.placeName = basePayload.city || 'Útvonal';
+        finishSave(basePayload);
+        return;
+      }
+      btn.disabled = false;
+      setFormStatus('Útvonal végpontok feldolgozása sikertelen.', false);
+    });
+  });
+
+  window.addEventListener('resize', function () {
+    map.invalidateSize();
+    updateMapCursor();
+    var nowMobile = isMobileView();
+    if (nowMobile !== lastWasMobile) {
+      if (nowMobile) {
+        document.querySelectorAll('[data-accordion]').forEach(function (sec, i) {
+          sec.classList.toggle('is-open', i === 0);
+          var btn = sec.querySelector('.form-section-title');
+          if (btn) btn.setAttribute('aria-expanded', i === 0 ? 'true' : 'false');
+        });
+      } else {
+        syncAccordionForViewport();
+      }
+      lastWasMobile = nowMobile;
+    }
+  });
+  setTimeout(function () {
+    map.invalidateSize();
+    updateBodyModeClass();
+    initAccordion();
+    syncAccordionForViewport();
+    updateMapActions();
+    updateRouteStatusBar();
+    updateAccordionWarnings();
+  }, 200);
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js').catch(function () {});
+  }
+})();
+  </script>
+</body>
+</html>

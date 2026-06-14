@@ -204,9 +204,15 @@
         }
     }
 
+    function isRouteLineGeometry(feature) {
+        var t = feature && feature.geometry && feature.geometry.type;
+        return t === 'LineString' || t === 'MultiLineString';
+    }
+
     function addGeoJsonRoute(geoData) {
         clearRoute();
         loadedLayers.black = L.geoJSON(geoData, {
+            filter: isRouteLineGeometry,
             interactive: false,
             style: function (feature) {
                 var g = feature.geometry;
@@ -228,6 +234,7 @@
         }).addTo(map);
 
         loadedLayers.red = L.geoJSON(geoData, {
+            filter: isRouteLineGeometry,
             style: function (feature) {
                 var g = feature.geometry;
                 if (g.type === 'LineString' || g.type === 'MultiLineString') return styleRed();
@@ -476,8 +483,12 @@
             if (!c) return Promise.reject(new Error('unknown city'));
             return loadCityGeojson(c.file, { id: c.id, label: c.label, file: c.file }, false);
         },
-        loadCityByFile: function (filename, label) {
-            return loadCityGeojson(filename, { id: filename, label: label || filename, file: filename }, false);
+        loadCityByFile: function (filename, label, cityId) {
+            return loadCityGeojson(filename, {
+                id: cityId || filename,
+                label: label || filename,
+                file: filename
+            }, false);
         },
         setDestinations: function (list) {
             renderDestinations(list);

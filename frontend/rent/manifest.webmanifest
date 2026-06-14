@@ -1,0 +1,11 @@
+{
+  "name": "Operatív Navigator – Foglalás",
+  "short_name": "OpNav Foglalás",
+  "description": "Útvonalterv és árajánlat kérés – Operatív Navigator előkészítés",
+  "start_url": "/rent/public",
+  "display": "browser",
+  "background_color": "#fff7ed",
+  "theme_color": "#ea580c",
+  "lang": "hu",
+  "orientation": "any"
+}

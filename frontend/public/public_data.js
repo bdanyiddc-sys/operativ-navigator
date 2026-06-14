@@ -42,100 +42,7 @@
         ]
     };
 
-    var MOCK_VEHICLES = {
-        tata: [{
-            id: 'KV01',
-            city: 'Tata',
-            cityId: 'tata',
-            lat: 47.6482,
-            lng: 18.3215,
-            capacity: 56,
-            passengers: 20,
-            freeSeats: 36,
-            status: 'Közlekedik',
-            nextStop: 'Tatai vár',
-            nextDeparture: '15:00',
-            active: true
-        }],
-        eger: [{
-            id: 'KV02',
-            city: 'Eger',
-            cityId: 'eger',
-            lat: 47.905,
-            lng: 20.372,
-            capacity: 56,
-            passengers: 8,
-            freeSeats: 48,
-            status: 'Közlekedik',
-            nextStop: 'Dobó tér',
-            nextDeparture: '14:30',
-            active: true
-        }],
-        gyor: [{
-            id: 'KV03',
-            city: 'Győr',
-            cityId: 'gyor',
-            lat: 47.685,
-            lng: 17.628,
-            capacity: 56,
-            passengers: 0,
-            freeSeats: 56,
-            status: 'Nem közlekedik',
-            nextStop: '—',
-            nextDeparture: '16:00',
-            active: false
-        }],
-        papa: [],
-        szfv: [{
-            id: 'KV04',
-            city: 'Székesfehérvár',
-            cityId: 'szfv',
-            lat: 47.195,
-            lng: 18.408,
-            capacity: 56,
-            passengers: 30,
-            freeSeats: 26,
-            status: 'Közlekedik',
-            nextStop: 'Városháza',
-            nextDeparture: '15:30',
-            active: true
-        }],
-        vac: []
-    };
-
-    var MOCK_SCHEDULES = {
-        tata: [
-            { time: '10:00', label: 'Tata körjárat', seats: 'Van hely', stopId: 'stop_tata_ind' },
-            { time: '11:00', label: 'Tata körjárat', seats: 'Van hely', stopId: 'stop_tata_ind' },
-            { time: '12:00', label: 'Tata körjárat', seats: 'Kevés hely', stopId: 'stop_tata_ind' },
-            { time: '13:00', label: 'Tata körjárat', seats: 'Van hely', stopId: 'stop_tata_ind' },
-            { time: '14:00', label: 'Tata körjárat', seats: 'Van hely', stopId: 'stop_tata_ind' },
-            { time: '15:00', label: 'Tata körjárat', seats: 'Van hely', stopId: 'stop_tata_ind' },
-            { time: '16:00', label: 'Tata körjárat', seats: 'Telítve', stopId: 'stop_tata_ind' }
-        ],
-        eger: [
-            { time: '10:30', label: 'Eger városnéző', seats: 'Van hely', stopId: 'stop_dobo' },
-            { time: '12:30', label: 'Eger városnéző', seats: 'Van hely', stopId: 'stop_dobo' },
-            { time: '14:30', label: 'Eger városnéző', seats: 'Van hely', stopId: 'stop_dobo' }
-        ],
-        gyor: [
-            { time: '11:00', label: 'Győr körjárat', seats: 'Szabad', stopId: 'stop_gyor_kozpont' },
-            { time: '13:00', label: 'Győr körjárat', seats: 'Szabad', stopId: 'stop_gyor_kozpont' },
-            { time: '16:00', label: 'Győr körjárat', seats: 'Szabad', stopId: 'stop_gyor_kozpont' }
-        ],
-        papa: [
-            { time: '10:00', label: 'Pápa körjárat', seats: 'Hamarosan', stopId: 'stop_papa_kozpont' }
-        ],
-        szfv: [
-            { time: '11:00', label: 'Székesfehérvár körjárat', seats: 'Kevés hely', stopId: 'stop_szfv_varoshaza' },
-            { time: '13:00', label: 'Székesfehérvár körjárat', seats: 'Kevés hely', stopId: 'stop_szfv_varoshaza' },
-            { time: '15:30', label: 'Székesfehérvár körjárat', seats: 'Kevés hely', stopId: 'stop_szfv_varoshaza' }
-        ],
-        vac: [
-            { time: '10:00', label: 'Vác körjárat', seats: 'Hamarosan', stopId: 'stop_vac_allomas' },
-            { time: '14:00', label: 'Vác körjárat', seats: 'Hamarosan', stopId: 'stop_vac_allomas' }
-        ]
-    };
+    var SCHEDULES_CACHE = {};
 
     var MOCK_WAITING = {
         tata: { stop_tata_ind: 0, stop_varmegallo: 4, stop_var: 2, stop_veg: 0 },
@@ -165,12 +72,25 @@
         return (MOCK_STOPS[cityId] || []).slice();
     }
 
-    function mockVehicles(cityId) {
-        return (MOCK_VEHICLES[cityId] || []).slice();
+    function mockSchedules(cityId) {
+        return (SCHEDULES_CACHE[cityId] || []).slice();
     }
 
-    function mockSchedules(cityId) {
-        return (MOCK_SCHEDULES[cityId] || []).slice();
+    function loadSchedulesCatalog() {
+        var url = new URL('data/schedules.json', window.location.href).href;
+        return fetch(url, { cache: 'no-store' })
+            .then(function (r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            })
+            .then(function (data) {
+                SCHEDULES_CACHE = data && typeof data === 'object' ? data : {};
+                return SCHEDULES_CACHE;
+            })
+            .catch(function () {
+                SCHEDULES_CACHE = {};
+                return SCHEDULES_CACHE;
+            });
     }
 
     function normalizeHuPhone(raw) {
@@ -227,23 +147,24 @@
 
     function normalizeVehicleFromApi(v, cityId) {
         var cap = Math.max(1, parseInt(v.capacity, 10) || PUBLIC_DEFAULT_CAPACITY);
-        var passengers = Math.max(0, parseInt(v.passengers, 10) || 0);
-        if (v.free != null) {
-            var freeFromApi = Math.max(0, parseInt(v.free, 10) || 0);
-            passengers = Math.max(passengers, cap - freeFromApi);
-        } else if (v.freeSeats != null) {
-            var freeSeatsApi = Math.max(0, parseInt(v.freeSeats, 10) || 0);
-            passengers = Math.max(passengers, cap - freeSeatsApi);
+        var freeRaw = v.free_seats != null ? v.free_seats : (v.free != null ? v.free : v.freeSeats);
+        var freeSeats = null;
+        if (freeRaw != null && freeRaw !== '') {
+            var parsedFree = parseInt(freeRaw, 10);
+            if (!isNaN(parsedFree)) freeSeats = Math.max(0, parsedFree);
         }
-        var freeSeats = v.free != null
-            ? Math.max(0, parseInt(v.free, 10) || 0)
-            : Math.max(0, cap - passengers);
+        var passengers = null;
+        if (v.passengers != null && v.passengers !== '') {
+            var parsedPax = parseInt(v.passengers, 10);
+            if (!isNaN(parsedPax)) passengers = Math.max(0, parsedPax);
+        }
         var vid = String(v.vehicle || v.id || v.vehicle_id || '').trim();
         var lat = v.lat != null ? Number(v.lat) : null;
         var lng = v.lng != null ? Number(v.lng) : null;
         var live = v.live === true || (lat != null && lng != null && !isNaN(lat) && !isNaN(lng));
         return {
             id: vid || 'KV',
+            trip: v.trip != null ? String(v.trip).trim() : '',
             city: v.city || cityId,
             cityId: cityId,
             lat: live ? lat : null,
@@ -255,9 +176,24 @@
             nextStop: v.nextStop || '—',
             nextDeparture: v.nextDeparture || '—',
             speedKmh: v.speed_kmh != null ? Number(v.speed_kmh) : null,
+            lastGps: v.last_gps || v.timestamp || null,
             active: live,
             live: live
         };
+    }
+
+    function dedupeVehicleRowsById(list) {
+        var byId = {};
+        (list || []).forEach(function (raw) {
+            var vid = String(raw.vehicle || raw.id || raw.vehicle_id || '').trim();
+            if (!vid) return;
+            var ts = raw.last_gps || raw.timestamp || '';
+            var prev = byId[vid];
+            if (!prev || String(ts) >= String(prev.last_gps || prev.timestamp || '')) {
+                byId[vid] = raw;
+            }
+        });
+        return Object.keys(byId).map(function (k) { return byId[k]; });
     }
 
     function loadVehicles(cityId) {
@@ -272,7 +208,7 @@
             .then(function (data) {
                 var list = data.vehicles || data;
                 if (!Array.isArray(list) || !list.length) return [];
-                return list.map(function (v) {
+                return dedupeVehicleRowsById(list).map(function (v) {
                     return normalizeVehicleFromApi(v, cityId);
                 }).filter(function (v) { return v.live && v.lat != null && v.lng != null; });
             })
@@ -343,8 +279,7 @@
         PUBLIC_VERSION: PUBLIC_VERSION,
         CITIES: CITIES,
         MOCK_STOPS: MOCK_STOPS,
-        MOCK_VEHICLES: MOCK_VEHICLES,
-        MOCK_SCHEDULES: MOCK_SCHEDULES,
+        getSchedulesCatalog: function () { return SCHEDULES_CACHE; },
         getApiBase: getApiBase,
         API_BASE: API_BASE,
         normalizeHuPhone: normalizeHuPhone,
@@ -358,6 +293,7 @@
         loadReservations: loadReservations,
         submitReservation: submitReservation,
         submitBoardingRequest: submitBoardingRequest,
-        loadPoiCatalog: loadPoiCatalog
+        loadPoiCatalog: loadPoiCatalog,
+        loadSchedulesCatalog: loadSchedulesCatalog
     };
 })(typeof window !== 'undefined' ? window : globalThis);

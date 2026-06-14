@@ -1,5 +1,5 @@
 /* Operativ Navigator Driver PWA – /driver/ scope */
-var CACHE_NAME = 'opnav-driver-v3';
+var CACHE_NAME = 'opnav-driver-v4';
 var LEAFLET_CSS = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
 var LEAFLET_JS = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
 
