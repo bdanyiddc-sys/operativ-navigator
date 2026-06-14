@@ -1204,7 +1204,7 @@
               <button type="button" class="btn ghost sm" id="btnBackToBookingFromRoute">Vissza módosítás nélkül</button>
             </div>
             <div class="route-result" id="routeResult" hidden></div>
-            <p class="hint">OSRM geometria + menetidő. A foglalás kezdési ideje = célérkezés.</p>
+            <p class="hint">Kisvonat útvonal: gyorsforgalom kizárva (Valhalla). Menetidő a megadott átlagsebességből. A foglalás kezdési ideje = célérkezés.</p>
           </div>
         </section>
 
@@ -1272,6 +1272,14 @@
   var DEFAULT_BOOKING_TYPE = 'BERLES';
   var DEFAULT_GEOMETRY_TYPE = 'POINT';
   var DEFAULT_SPEED_KMH = 30;
+  var ROUTING_CONFIG = {
+    avoidHighways: true,
+    osrmBase: 'https://router.project-osrm.org/route/v1',
+    osrmProfile: 'driving',
+    valhallaUrl: 'https://valhalla1.openstreetmap.de/route',
+    valhallaUseHighways: 0,
+    advisoryWarning: 'Az automatikus útvonal csak tájékoztató jellegű, kisvonatra ellenőrizendő.'
+  };
   var API_BASE = localStorage.getItem('rsv_api_base') || 'http://localhost:3000';
   var adminUsers = [];
   var adminLoggedUser = null;
@@ -3619,6 +3627,144 @@
     el.hidden = false;
   }
 
+  function decodeValhallaPolyline(encoded, precision) {
+    precision = precision == null ? 6 : precision;
+    var factor = Math.pow(10, precision);
+    var coords = [];
+    var index = 0;
+    var lat = 0;
+    var lng = 0;
+    while (index < encoded.length) {
+      var b;
+      var shift = 0;
+      var result = 0;
+      do {
+        b = encoded.charCodeAt(index++) - 63;
+        result |= (b & 0x1f) << shift;
+        shift += 5;
+      } while (b >= 0x20);
+      var dlat = (result & 1) ? ~(result >> 1) : (result >> 1);
+      lat += dlat;
+      shift = 0;
+      result = 0;
+      do {
+        b = encoded.charCodeAt(index++) - 63;
+        result |= (b & 0x1f) << shift;
+        shift += 5;
+      } while (b >= 0x20);
+      var dlng = (result & 1) ? ~(result >> 1) : (result >> 1);
+      lng += dlng;
+      coords.push([lng / factor, lat / factor]);
+    }
+    return { type: 'LineString', coordinates: coords };
+  }
+
+  function buildOsrmRouteUrl(fromLng, fromLat, toLng, toLat) {
+    var base = String(ROUTING_CONFIG.osrmBase || 'https://router.project-osrm.org/route/v1').replace(/\/$/, '');
+    var profile = ROUTING_CONFIG.osrmProfile || 'driving';
+    var coords = fromLng + ',' + fromLat + ';' + toLng + ',' + toLat;
+    return base + '/' + profile + '/' + coords + '?overview=full&geometries=geojson';
+  }
+
+  function fetchOsrmRouteJson(url) {
+    return fetch(url).then(function (r) { return r.json(); });
+  }
+
+  function requestOsrmRoute(fromLng, fromLat, toLng, toLat) {
+    var url = buildOsrmRouteUrl(fromLng, fromLat, toLng, toLat);
+    return fetchOsrmRouteJson(url).then(function (data) {
+      if (!data || data.code !== 'Ok' || !data.routes || !data.routes.length) {
+        return { ok: false, provider: 'osrm', url: url, data: data };
+      }
+      var route = data.routes[0];
+      return {
+        ok: true,
+        provider: 'osrm',
+        highwayMode: 'standard',
+        geometry: route.geometry,
+        distanceMeters: route.distance,
+        url: url
+      };
+    });
+  }
+
+  function requestValhallaRoute(fromLng, fromLat, toLng, toLat) {
+    var url = ROUTING_CONFIG.valhallaUrl || 'https://valhalla1.openstreetmap.de/route';
+    var body = {
+      locations: [
+        { lat: fromLat, lon: fromLng },
+        { lat: toLat, lon: toLng }
+      ],
+      costing: 'auto',
+      costing_options: {
+        auto: {
+          use_highways: ROUTING_CONFIG.avoidHighways ? ROUTING_CONFIG.valhallaUseHighways : 1,
+          use_tolls: 0
+        }
+      },
+      units: 'kilometers'
+    };
+    return fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).then(function (r) { return r.json(); }).then(function (data) {
+      if (!data || !data.trip || !data.trip.legs || !data.trip.legs.length) {
+        return { ok: false, provider: 'valhalla', url: url, data: data };
+      }
+      var leg = data.trip.legs[0];
+      if (!leg.shape) {
+        return { ok: false, provider: 'valhalla', url: url, data: data };
+      }
+      var geometry = decodeValhallaPolyline(leg.shape, 6);
+      if (!geometry.coordinates || geometry.coordinates.length < 2) {
+        return { ok: false, provider: 'valhalla', url: url, data: data };
+      }
+      var summary = data.trip.summary || {};
+      return {
+        ok: true,
+        provider: 'valhalla',
+        highwayMode: summary.has_highway ? 'fallback-highway' : 'avoided',
+        geometry: geometry,
+        distanceMeters: (summary.length || 0) * 1000,
+        hasHighway: !!summary.has_highway,
+        url: url
+      };
+    });
+  }
+
+  function requestRoute(fromLng, fromLat, toLng, toLat) {
+    if (ROUTING_CONFIG.avoidHighways) {
+      return requestValhallaRoute(fromLng, fromLat, toLng, toLat).then(function (valhallaResult) {
+        if (valhallaResult && valhallaResult.ok) return valhallaResult;
+        console.warn('[ROUTING] Valhalla failed, OSRM fallback', valhallaResult);
+        return requestOsrmRoute(fromLng, fromLat, toLng, toLat).then(function (osrmResult) {
+          if (osrmResult && osrmResult.ok) {
+            osrmResult.highwayMode = 'fallback-highway';
+            return osrmResult;
+          }
+          return osrmResult || valhallaResult;
+        });
+      });
+    }
+    return requestOsrmRoute(fromLng, fromLat, toLng, toLat);
+  }
+
+  function routeHighwayNoticeHtml(highwayMode, provider) {
+    if (!ROUTING_CONFIG.avoidHighways && highwayMode === 'standard') return '';
+    var msg = ROUTING_CONFIG.advisoryWarning;
+    if (highwayMode === 'avoided') {
+      msg = 'Kisvonat útvonal: gyorsforgalom kizárva (' + (provider || 'Valhalla') + '). ' + msg;
+    } else if (highwayMode === 'fallback-highway') {
+      msg = 'A gyorsforgalom-kizáró szolgáltatás nem elérhető – autópályás útvonal számítva (OSRM). ' + msg;
+    } else if (highwayMode === 'standard') {
+      msg = msg;
+    }
+    return '<div style="margin-top:8px;padding:8px 10px;border-radius:8px;font-size:12px;line-height:1.4;' +
+      'color:#fcd34d;background:rgba(234,179,8,0.12);border:1px solid rgba(234,179,8,0.35)">' +
+      escapeHtml(msg) + '</div>';
+  }
+
   function calcRoute() {
     var booking = getRouteTargetBooking();
     if (!booking || booking.lat == null || booking.lng == null) {
@@ -3639,23 +3785,19 @@
       var fromName = origin.name;
       var toLat = booking.lat;
       var toLng = booking.lng;
-      var url = 'https://router.project-osrm.org/route/v1/driving/' +
-        fromLng + ',' + fromLat + ';' + toLng + ',' + toLat +
-        '?overview=full&geometries=geojson';
-
       showRouteResult('<strong>Útvonal számítása…</strong>');
       $('btnCalcRoute').disabled = true;
 
-      fetch(url)
-        .then(function (r) { return r.json(); })
-        .then(function (data) {
+      requestRoute(fromLng, fromLat, toLng, toLat)
+        .then(function (result) {
           $('btnCalcRoute').disabled = false;
-          if (!data || data.code !== 'Ok' || !data.routes || !data.routes.length) {
-            showRouteResult('<span style="color:#f87171">OSRM útvonal nem elérhető. Próbáld újra később.</span>');
+          if (!result || !result.ok || !result.geometry) {
+            console.error('[ROUTING] route failed', result);
+            showRouteResult('<span style="color:#f87171">Útvonal nem elérhető. Próbáld újra később.</span>');
             return;
           }
-          var route = data.routes[0];
-          var distanceKm = route.distance / 1000;
+          var routeGeometry = result.geometry;
+          var distanceKm = result.distanceMeters / 1000;
           var travelMinutes = (distanceKm / speedKmh) * 60;
           var arrival = parseLocalDateTime(booking.date, booking.timeStart);
           var departure = new Date(arrival.getTime() - travelMinutes * 60000);
@@ -3680,7 +3822,9 @@
             travelMinutes: Math.round(travelMinutes),
             suggestedDeparture: booking.date + 'T' + suggestedDeparture,
             targetArrival: booking.date + 'T' + targetArrival,
-            geometry: route.geometry,
+            geometry: routeGeometry,
+            routingProvider: result.provider,
+            avoidHighways: ROUTING_CONFIG.avoidHighways,
             calculatedAt: new Date().toISOString()
           }, booking);
 
@@ -3701,7 +3845,7 @@
                 isPatchingRoute = false;
               });
           }
-          drawRoute(route.geometry, fromLat, fromLng, toLat, toLng);
+          drawRoute(routeGeometry, fromLat, fromLng, toLat, toLng);
           updateRouteExportButton();
           renderRouteTargetPanel();
           if ($('editId').value === bookingId || (! $('editId').value && bookingId === ROUTE_DRAFT_ID)) {
@@ -3714,12 +3858,14 @@
             '<div><strong>Menetidő:</strong> ' + formatTravelMinutes(travelMinutes) + '</div>' +
             '<div><strong>Indulás:</strong> ' + formatHuDateTime(booking.date, suggestedDeparture) + '</div>' +
             '<div><strong>Érkezés:</strong> ' + formatHuDateTime(booking.date, targetArrival) + '</div>' +
-            '<div style="margin-top:6px;color:var(--muted);font-size:12px">Indulási pont: ' + escapeHtml(fromName) + '</div>'
+            '<div style="margin-top:6px;color:var(--muted);font-size:12px">Indulási pont: ' + escapeHtml(fromName) + '</div>' +
+            routeHighwayNoticeHtml(result.highwayMode, result.provider)
           );
         })
-        .catch(function () {
+        .catch(function (err) {
           $('btnCalcRoute').disabled = false;
-          showRouteResult('<span style="color:#f87171">Hálózati hiba az OSRM lekérésnél.</span>');
+          console.error('[ROUTING] network error', err);
+          showRouteResult('<span style="color:#f87171">Hálózati hiba az útvonal lekérésnél.</span>');
         });
     }
 
