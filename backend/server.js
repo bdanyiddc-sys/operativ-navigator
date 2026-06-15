@@ -74,18 +74,63 @@ function normalizeMasterDriver(d) {
   };
 }
 
+function mapConfigVehicleRow(v) {
+  const local = v.local != null
+    ? String(v.local).trim()
+    : (v.city != null ? String(v.city).trim() : '');
+  return normalizeMasterVehicle({
+    ...v,
+    vehicle_id: v.id || v.vehicle_id,
+    vehicle_name: v.name || v.vehicle_name,
+    local,
+  });
+}
+
+function readLegacyVehiclesArray() {
+  if (!fs.existsSync(vehiclesPath)) {
+    ensureDataDir(vehiclesPath);
+    fs.writeFileSync(vehiclesPath, JSON.stringify(DEFAULT_VEHICLES, null, 2), 'utf8');
+    return DEFAULT_VEHICLES.slice();
+  }
+  const raw = JSON.parse(fs.readFileSync(vehiclesPath, 'utf8'));
+  if (!Array.isArray(raw)) {
+    return DEFAULT_VEHICLES.slice();
+  }
+  return raw;
+}
+
+function readLegacyDriversArray() {
+  if (!fs.existsSync(driversPath)) {
+    ensureDataDir(driversPath);
+    fs.writeFileSync(driversPath, JSON.stringify(DEFAULT_DRIVERS, null, 2), 'utf8');
+    return DEFAULT_DRIVERS.slice();
+  }
+  const raw = JSON.parse(fs.readFileSync(driversPath, 'utf8'));
+  if (!Array.isArray(raw)) {
+    return DEFAULT_DRIVERS.slice();
+  }
+  return raw;
+}
+
+function getVehicleSourceRows() {
+  const raw = readConfigRaw();
+  if (raw != null && Array.isArray(raw.vehicles)) {
+    return raw.vehicles;
+  }
+  return readLegacyVehiclesArray();
+}
+
+function getDriverSourceRows() {
+  const raw = readConfigRaw();
+  if (raw != null && Array.isArray(raw.drivers)) {
+    return raw.drivers;
+  }
+  return readLegacyDriversArray();
+}
+
 function readVehicles() {
   try {
-    if (!fs.existsSync(vehiclesPath)) {
-      ensureDataDir(vehiclesPath);
-      fs.writeFileSync(vehiclesPath, JSON.stringify(DEFAULT_VEHICLES, null, 2), 'utf8');
-      return DEFAULT_VEHICLES.map(normalizeMasterVehicle).filter(Boolean);
-    }
-    const raw = JSON.parse(fs.readFileSync(vehiclesPath, 'utf8'));
-    if (!Array.isArray(raw)) {
-      return DEFAULT_VEHICLES.map(normalizeMasterVehicle).filter(Boolean);
-    }
-    return raw.map(normalizeMasterVehicle).filter(Boolean);
+    return getVehicleSourceRows().map(mapConfigVehicleRow).filter(Boolean);
   } catch (err) {
     console.error('[vehicles] read failed:', err);
     return DEFAULT_VEHICLES.map(normalizeMasterVehicle).filter(Boolean);
@@ -94,16 +139,7 @@ function readVehicles() {
 
 function readDrivers() {
   try {
-    if (!fs.existsSync(driversPath)) {
-      ensureDataDir(driversPath);
-      fs.writeFileSync(driversPath, JSON.stringify(DEFAULT_DRIVERS, null, 2), 'utf8');
-      return DEFAULT_DRIVERS.map(normalizeMasterDriver).filter(Boolean);
-    }
-    const raw = JSON.parse(fs.readFileSync(driversPath, 'utf8'));
-    if (!Array.isArray(raw)) {
-      return DEFAULT_DRIVERS.map(normalizeMasterDriver).filter(Boolean);
-    }
-    return raw.map(normalizeMasterDriver).filter(Boolean);
+    return getDriverSourceRows().map(normalizeMasterDriver).filter(Boolean);
   } catch (err) {
     console.error('[drivers] read failed:', err);
     return DEFAULT_DRIVERS.map(normalizeMasterDriver).filter(Boolean);
@@ -111,10 +147,26 @@ function readDrivers() {
 }
 
 function writeVehicles(list) {
-  ensureDataDir(vehiclesPath);
   const normalized = (Array.isArray(list) ? list : [])
     .map(normalizeMasterVehicle)
     .filter(Boolean);
+  const configRows = normalized.map((v) => {
+    const row = {
+      id: v.vehicle_id,
+      city: v.local || '',
+    };
+    if (v.vehicle_name) row.name = v.vehicle_name;
+    if (v.capacity != null) row.capacity = v.capacity;
+    return row;
+  });
+  const raw = readConfigRaw();
+  if (raw != null) {
+    raw.vehicles = configRows;
+    ensureDataDir(configPath);
+    fs.writeFileSync(configPath, JSON.stringify(raw, null, 2), 'utf8');
+    return normalized;
+  }
+  ensureDataDir(vehiclesPath);
   const fileRows = normalized.map((v) => ({
     id: v.vehicle_id,
     name: v.vehicle_name || undefined,
@@ -152,12 +204,16 @@ function mergeConfigRoutes(configRoutes) {
 
 function buildConfigResponse() {
   const raw = readConfigRaw();
-  const vehicles = (raw && Array.isArray(raw.vehicles) ? raw.vehicles : []).map((v) => {
+  const vehicleRows = getVehicleSourceRows();
+  const driverRows = getDriverSourceRows();
+  const vehicles = vehicleRows.map((v) => {
     const id = String(v.id || v.vehicle_id || '').trim();
-    const city = v.city != null ? String(v.city).trim() : '';
+    const city = v.city != null
+      ? String(v.city).trim()
+      : (v.local != null ? String(v.local).trim() : '');
     return { id, city, vehicle_id: id, local: city };
   }).filter((v) => v.id);
-  const drivers = (raw && Array.isArray(raw.drivers) ? raw.drivers : []).map((d) => {
+  const drivers = driverRows.map((d) => {
     const id = String(d.id || d.driver_id || '').trim();
     const name = String(d.name || d.driver_name || '').trim();
     const pin = d.pin != null ? String(d.pin).trim() : '';
