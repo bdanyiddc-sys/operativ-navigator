@@ -496,6 +496,30 @@
   <script src="booking_storage.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
+    window.KV_ANALYTICS_CONFIG = {
+      analyticsMode: 'rent',
+      firebaseConfig: {
+        apiKey: 'AIzaSyBxUxHjqx-9PX8PpgW05wZW7yR30wNBOaM',
+        authDomain: 'ddc-analitika.firebaseapp.com',
+        projectId: 'ddc-analitika'
+      },
+      tenant: 'kisvonat',
+      project: 'berles',
+      source: 'rent',
+      viewedCity: 'berles',
+      viewedCityLabel: 'Bérlés',
+      routeId: 'berles_inquiry',
+      routeLabel: 'Kisvonat bérlés – árajánlat',
+      collectionName: 'analytics_events',
+      cellSizeM: 50,
+      maxRepresentativeAccuracyM: 500,
+      sampleIntervalMs: 30 * 60 * 1000,
+      privacyPolicyUrl: '/adatvedelem.html',
+      debug: false
+    };
+  </script>
+  <script type="module" src="../public/js/kv_analytics_sender.js"></script>
+  <script>
 (function () {
   'use strict';
 
@@ -506,6 +530,46 @@
     return 'https://operativ-navigator.onrender.com';
   }
   var API_BASE = getApiBase();
+
+  function emitRentAnalytics(detail) {
+    document.dispatchEvent(new CustomEvent('kv_analytics_event', {
+      detail: Object.assign({ source: 'rent' }, detail || {})
+    }));
+  }
+
+  function trackRentPlacedPin(latVal, lngVal, meta) {
+    emitRentAnalytics({
+      event_type: 'RENT_PLACE_PIN',
+      geo_role: 'placed_pin',
+      lat: latVal,
+      lng: lngVal,
+      booking_type: meta.booking_type || bookingType,
+      point_index: meta.point_index != null ? meta.point_index : null,
+      place_role: meta.place_role || null,
+      stop_name: meta.label || null
+    });
+  }
+
+  function trackRentInquirySubmit(payload) {
+    var points = [];
+    if (payload.routePoints && payload.routePoints.length) {
+      points = payload.routePoints;
+    } else if (payload.lat != null && payload.lng != null) {
+      points = [{ lat: payload.lat, lng: payload.lng }];
+    }
+    if (!points.length) return;
+    var primary = points[0];
+    emitRentAnalytics({
+      event_type: 'RENT_INQUIRY_SUBMIT',
+      geo_role: 'placed_pin',
+      lat: primary.lat,
+      lng: primary.lng,
+      booking_type: payload.booking_type,
+      point_index: 0,
+      place_role: payload.booking_type === 'custom_route' ? 'start' : 'single',
+      stop_name: payload.placeName || payload.city || null
+    });
+  }
 
   var HUNGARY_CENTER = [47.1625, 19.5033];
   var HUNGARY_ZOOM = 7;
@@ -1140,6 +1204,12 @@
     if (bookingType === 'single_location') {
       setGeoStatus('Cím keresése a kattintás helyén…', false);
       showSingleMarker(clickLat, clickLng, 'Kiválasztott pont');
+      trackRentPlacedPin(clickLat, clickLng, {
+        booking_type: 'single_location',
+        point_index: 0,
+        place_role: 'single',
+        label: 'Kiválasztott pont'
+      });
       reverseGeocode(clickLat, clickLng)
         .then(function (addr) {
           applyReverseGeocodeToForm(addr);
@@ -1157,6 +1227,14 @@
         return;
       }
       routePoints.push({ lat: clickLat, lng: clickLng });
+      if (routePoints.length === 1) {
+        trackRentPlacedPin(clickLat, clickLng, {
+          booking_type: 'custom_route',
+          point_index: 0,
+          place_role: 'start',
+          label: 'Útvonal kiindulópont'
+        });
+      }
       redrawMap();
       if (routePoints.length === 1) map.panTo(e.latlng, { animate: true });
     }
@@ -1528,6 +1606,7 @@
 
       saveProjectInquiry(payload)
         .then(function (saved) {
+          trackRentInquirySubmit(payload);
           showSaveSuccess(saved);
           isSubmitting = false;
         })
