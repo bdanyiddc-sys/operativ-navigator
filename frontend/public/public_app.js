@@ -39,6 +39,22 @@
 
     function $(id) { return document.getElementById(id); }
 
+    function analyticsRouteId() {
+        var city = DATA.CITIES.find(function (c) { return c.id === state.cityId; });
+        if (!city || !city.file) return state.cityId || null;
+        return state.cityId + '_' + String(city.file).replace(/\.geojson$/i, '');
+    }
+
+    function emitAnalyticsEvent(detail) {
+        document.dispatchEvent(new CustomEvent('kv_analytics_event', {
+            detail: Object.assign({
+                city: state.cityLabel,
+                route_id: analyticsRouteId(),
+                source: 'public'
+            }, detail || {})
+        }));
+    }
+
     function isMobileUi() {
         return window.matchMedia('(max-width: 767px)').matches;
     }
@@ -552,6 +568,12 @@
             });
             var marker = L.marker([v.lat, v.lng], { icon: icon, zIndexOffset: 350 });
             marker.bindPopup(trainPopupHtml(v));
+            marker.on('popupopen', function () {
+                emitAnalyticsEvent({
+                    event_type: 'TRAIN_POPUP_OPEN',
+                    train_id: v.id
+                });
+            });
             marker.addTo(vehicleLayer);
         });
         state.activeVehicle = mapVehicles.find(function (v) { return v.active; }) || mapVehicles[0] || null;
@@ -678,6 +700,11 @@
             m.openPopup();
             openPopupStopId = stopId;
             setStopPopupOpenClass(true);
+            emitAnalyticsEvent({
+                event_type: 'STOP_POPUP_OPEN',
+                stop_id: stopId,
+                stop_name: stop.name
+            });
             var popup = m.getPopup();
             if (popup && popup.isOpen()) popup.update();
             if ((state.popupContext.selectedTime && !state.popupContext.showBoard) || state.popupContext.showBoard) {
@@ -806,6 +833,13 @@
         elBoardSheet.hidden = false;
         elBoardSheet.setAttribute('aria-hidden', 'false');
         requestAnimationFrame(function () { elBoardSheet.classList.add('is-open'); });
+        emitAnalyticsEvent({
+            event_type: 'BOARDING_SHEET_OPEN',
+            stop_id: ctx.type === 'stop' ? ctx.stopId : null,
+            stop_name: ctx.type === 'route' ? 'Útvonal menti felszállás' : stopName,
+            sheet_type: ctx.type,
+            boarding_type: ctx.type === 'route' ? 'route' : 'stop'
+        });
         return true;
     }
 
@@ -871,13 +905,36 @@
             };
         }
 
+        emitAnalyticsEvent({
+            event_type: 'BOARDING_ATTEMPT',
+            stop_id: payload.stop_id,
+            stop_name: payload.stop_name,
+            boarding_type: mobileBoardContext.type === 'route' ? 'route' : 'stop',
+            count: payload.count
+        });
+
         DATA.submitBoardingRequest(payload).then(function () {
+            emitAnalyticsEvent({
+                event_type: 'BOARDING_SUCCESS',
+                stop_id: payload.stop_id,
+                stop_name: payload.stop_name,
+                boarding_type: mobileBoardContext.type === 'route' ? 'route' : 'stop',
+                count: payload.count
+            });
             if (elBoardSheetCta) elBoardSheetCta.textContent = '✓ Jelzés elküldve';
             toast(mobileBoardContext.type === 'route'
                 ? 'Felszállási jelzés elküldve (útvonal menti)'
                 : 'Felszállási jelzés elküldve');
             setTimeout(closeMobileBoardSheet, 900);
-        }).catch(function () {
+        }).catch(function (err) {
+            emitAnalyticsEvent({
+                event_type: 'BOARDING_FAILED',
+                stop_id: payload.stop_id,
+                stop_name: payload.stop_name,
+                boarding_type: mobileBoardContext.type === 'route' ? 'route' : 'stop',
+                count: payload.count,
+                error_message: err && err.message ? String(err.message) : 'Küldés sikertelen'
+            });
             if (elBoardSheetCta) {
                 elBoardSheetCta.disabled = false;
                 elBoardSheetCta.textContent = 'FELSZÁLLNÉK ITT';
@@ -918,6 +975,15 @@
         if (!time) { toast('Válassz időpontot'); return; }
         if (!count || count < 1) { toast('Érvényes létszám szükséges'); return; }
         if (!phone) { toast('Telefon: +36 vagy 06 formátum (pl. +36 30 123 4567)'); return; }
+
+        emitAnalyticsEvent({
+            event_type: 'BOOKING_ATTEMPT',
+            stop_id: stopId,
+            stop_name: stopName,
+            time: time,
+            count: count
+        });
+
         DATA.submitReservation({
             city: state.cityLabel,
             stop_id: stopId,
@@ -930,9 +996,26 @@
             reservation_type: 'scheduled',
             created_at: new Date().toISOString()
         }).then(function () {
+            emitAnalyticsEvent({
+                event_type: 'BOOKING_SUCCESS',
+                stop_id: stopId,
+                stop_name: stopName,
+                time: time,
+                count: count
+            });
             map.closePopup();
             toast('Foglalás rögzítve');
-        }).catch(function () { toast('Foglalás sikertelen'); });
+        }).catch(function (err) {
+            emitAnalyticsEvent({
+                event_type: 'BOOKING_FAILED',
+                stop_id: stopId,
+                stop_name: stopName,
+                time: time,
+                count: count,
+                error_message: err && err.message ? String(err.message) : 'Foglalás sikertelen'
+            });
+            toast('Foglalás sikertelen');
+        });
     }
 
     function routeBoardingPopupHtml() {
@@ -969,6 +1052,15 @@
         var phone = DATA.normalizeHuPhone(phoneRaw);
         if (!count || count < 1) { toast('Érvényes létszám szükséges'); return; }
         if (!phone) { toast('Telefon: +36 vagy 06 formátum (pl. +36 30 123 4567)'); return; }
+
+        emitAnalyticsEvent({
+            event_type: 'BOARDING_ATTEMPT',
+            stop_id: null,
+            stop_name: 'Útvonal menti felszállás',
+            boarding_type: 'route',
+            count: count
+        });
+
         DATA.submitBoardingRequest({
             city: state.cityLabel,
             stop_id: null,
@@ -980,11 +1072,28 @@
             phone: phone,
             created_at: new Date().toISOString()
         }).then(function () {
+            emitAnalyticsEvent({
+                event_type: 'BOARDING_SUCCESS',
+                stop_id: null,
+                stop_name: 'Útvonal menti felszállás',
+                boarding_type: 'route',
+                count: count
+            });
             map.closePopup();
             state.routeBoardMode = false;
             updateRouteBoardModeUi();
             toast('Felszállási jelzés elküldve (útvonal menti)');
-        }).catch(function () { toast('Küldés sikertelen'); });
+        }).catch(function (err) {
+            emitAnalyticsEvent({
+                event_type: 'BOARDING_FAILED',
+                stop_id: null,
+                stop_name: 'Útvonal menti felszállás',
+                boarding_type: 'route',
+                count: count,
+                error_message: err && err.message ? String(err.message) : 'Küldés sikertelen'
+            });
+            toast('Küldés sikertelen');
+        });
     }
 
     function submitStopBoarding(popupEl) {
@@ -998,6 +1107,15 @@
         var phone = DATA.normalizeHuPhone(phoneRaw);
         if (!count || count < 1) { toast('Érvényes létszám szükséges'); return; }
         if (!phone) { toast('Telefon: +36 vagy 06 formátum (pl. +36 30 123 4567)'); return; }
+
+        emitAnalyticsEvent({
+            event_type: 'BOARDING_ATTEMPT',
+            stop_id: stopId,
+            stop_name: stopName,
+            boarding_type: 'stop',
+            count: count
+        });
+
         DATA.submitBoardingRequest({
             city: state.cityLabel,
             stop_id: stopId,
@@ -1006,9 +1124,26 @@
             phone: phone,
             created_at: new Date().toISOString()
         }).then(function () {
+            emitAnalyticsEvent({
+                event_type: 'BOARDING_SUCCESS',
+                stop_id: stopId,
+                stop_name: stopName,
+                boarding_type: 'stop',
+                count: count
+            });
             map.closePopup();
             toast('Felszállási jelzés elküldve');
-        }).catch(function () { toast('Küldés sikertelen'); });
+        }).catch(function (err) {
+            emitAnalyticsEvent({
+                event_type: 'BOARDING_FAILED',
+                stop_id: stopId,
+                stop_name: stopName,
+                boarding_type: 'stop',
+                count: count,
+                error_message: err && err.message ? String(err.message) : 'Küldés sikertelen'
+            });
+            toast('Küldés sikertelen');
+        });
     }
 
     /* ── UI ── */
@@ -1102,6 +1237,11 @@
         bootstrapInstantCity(city);
         loadCityRoute(city);
         refreshCityData(cityId);
+        emitAnalyticsEvent({
+            event_type: 'ROUTE_VIEW',
+            city: city.label,
+            route_id: city.id + '_' + String(city.file || '').replace(/\.geojson$/i, '')
+        });
     }
 
     function buildCityStrip() {
