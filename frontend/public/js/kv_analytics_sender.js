@@ -17,6 +17,7 @@ const POPUP_OPEN_EVENT_TYPES = new Set([
 ]);
 const CONSENT_STORAGE_KEY = 'kv_analytics_consent_v1';
 const SESSION_STORAGE_KEY = 'kv_analytics_session_v1';
+const ENTRY_SOURCE_STORAGE_KEY = 'kv_analytics_entry_source_v1';
 
 let config = null;
 let firebaseApp = null;
@@ -84,14 +85,119 @@ function getOrCreateSessionId() {
     const raw = localStorage.getItem(SESSION_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (parsed && parsed.id) return parsed.id;
+      if (parsed && parsed.id) {
+        ensureEntrySourceForSession(parsed.id);
+        return parsed.id;
+      }
     }
   } catch {
     /* új session */
   }
   const id = crypto.randomUUID();
   localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({ id, createdAt: Date.now() }));
+  captureEntrySourceForSession(id);
   return id;
+}
+
+function readPageQueryParams() {
+  try {
+    return new URLSearchParams(window.location.search || '');
+  } catch {
+    return new URLSearchParams();
+  }
+}
+
+function buildPageUrlWithQuery() {
+  const path = window.location.pathname || '/';
+  const search = window.location.search || '';
+  return search ? path + search : path;
+}
+
+function captureEntrySourceForSession(sessionId) {
+  if (!sessionId) return null;
+  const storageKey = ENTRY_SOURCE_STORAGE_KEY + '_' + sessionId;
+  try {
+    const existing = sessionStorage.getItem(storageKey);
+    if (existing) return JSON.parse(existing);
+  } catch {
+    /* új rögzítés */
+  }
+
+  const params = readPageQueryParams();
+  const qrId = params.get('qr_id') || params.get('src') || params.get('qr') || null;
+  const utmSource = params.get('utm_source') || null;
+  const utmMedium = params.get('utm_medium') || null;
+  const utmCampaign = params.get('utm_campaign') || null;
+  const campaignId = params.get('campaign_id') || utmCampaign || null;
+  const entryCity = params.get('city') || null;
+  const entryStopId = params.get('stop_id') || null;
+
+  let entrySource = null;
+  if (qrId) entrySource = 'qr';
+  else if (utmSource || utmMedium || utmCampaign || campaignId) entrySource = 'campaign';
+  else if (safeReferrerOrigin()) entrySource = 'referrer';
+  else if (params.toString()) entrySource = 'direct';
+
+  const snapshot = {
+    entry_source: entrySource,
+    qr_id: qrId,
+    campaign_id: campaignId,
+    entry_city: entryCity,
+    entry_stop_id: entryStopId,
+    utm_source: utmSource,
+    utm_medium: utmMedium,
+    utm_campaign: utmCampaign,
+    captured_at: Date.now(),
+  };
+
+  const hasData = Object.keys(snapshot).some(function (key) {
+    return key !== 'captured_at' && snapshot[key] != null && snapshot[key] !== '';
+  });
+  if (!hasData) return null;
+
+  try {
+    sessionStorage.setItem(storageKey, JSON.stringify(snapshot));
+  } catch {
+    /* sessionStorage teli */
+  }
+  return snapshot;
+}
+
+function ensureEntrySourceForSession(sessionId) {
+  try {
+    const storageKey = ENTRY_SOURCE_STORAGE_KEY + '_' + sessionId;
+    if (sessionStorage.getItem(storageKey)) return;
+  } catch {
+    /* */
+  }
+  captureEntrySourceForSession(sessionId);
+}
+
+function readEntrySourceSnapshot() {
+  const sessionId = getOrCreateSessionId();
+  if (!sessionId) return null;
+  const storageKey = ENTRY_SOURCE_STORAGE_KEY + '_' + sessionId;
+  try {
+    const raw = sessionStorage.getItem(storageKey);
+    if (!raw) return captureEntrySourceForSession(sessionId);
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function attachEntrySourceFields(payload) {
+  const snap = readEntrySourceSnapshot();
+  if (!snap) return payload;
+  if (snap.entry_source) payload.entry_source = snap.entry_source;
+  if (snap.qr_id) payload.qr_id = snap.qr_id;
+  if (snap.campaign_id) payload.campaign_id = snap.campaign_id;
+  if (snap.entry_city) payload.entry_city = snap.entry_city;
+  if (snap.entry_stop_id) payload.entry_stop_id = snap.entry_stop_id;
+  if (snap.utm_source) payload.utm_source = snap.utm_source;
+  if (snap.utm_medium) payload.utm_medium = snap.utm_medium;
+  if (snap.utm_campaign) payload.utm_campaign = snap.utm_campaign;
+  return payload;
 }
 
 function clearSessionAndTimers() {
@@ -369,7 +475,7 @@ async function buildVisitorPayload(consentMode, context) {
     location.lat != null ? (location.lat + ',' + location.lng) : 'nincs koordináta',
     location.raw_accuracy_m != null ? ('±' + location.raw_accuracy_m + 'm') : '');
 
-  return {
+  return attachEntrySourceFields({
     version: VERSION,
     tenant: String(cfg.tenant || 'kisvonat'),
     project: String(cfg.project || 'route_public'),
@@ -390,9 +496,9 @@ async function buildVisitorPayload(consentMode, context) {
     is_representative: location.is_representative,
     location_mode: location.location_mode,
     session_id: getOrCreateSessionId(),
-    page_url: window.location.pathname,
+    page_url: buildPageUrlWithQuery(),
     referrer_origin: safeReferrerOrigin(),
-  };
+  });
 }
 
 function popupDedupKey(eventType, detail) {
@@ -448,7 +554,7 @@ async function buildInteractionPayload(detail, consentMode) {
     count: detail.count != null ? detail.count : null,
     time: detail.time || null,
     error_message: detail.error_message || null,
-    page_url: window.location.pathname,
+    page_url: buildPageUrlWithQuery(),
     referrer_origin: safeReferrerOrigin(),
   };
 
@@ -476,7 +582,7 @@ async function buildInteractionPayload(detail, consentMode) {
     const location = await resolveGeoSnapshot('geo');
     attachLocationFields(payload, location);
   }
-  return payload;
+  return attachEntrySourceFields(payload);
 }
 
 async function handleAnalyticsEvent(detail) {
@@ -685,6 +791,7 @@ async function bootstrapSender() {
     logStatus('Sender v' + VERSION + ' indul. Oldal:', window.location.href);
     registerAnalyticsEventListener();
     injectConsentUi();
+    captureEntrySourceForSession(getOrCreateSessionId());
 
     if (!isRentSurface()) {
       document.addEventListener('visibilitychange', function () {
