@@ -1,5 +1,5 @@
 /**
- * Operativ Navigator – központi környezetfelismerés (kompat: opnav-config.js néven is betölthető).
+ * Operativ Navigator – központi környezetfelismerés (alias: opnav-config.js ugyanez).
  * LOCAL: localhost / 127.0.0.1 → http://localhost:3000
  * PRODUCTION: minden más → https://operativ-navigator.onrender.com
  */

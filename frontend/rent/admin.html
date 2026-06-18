@@ -8,6 +8,7 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <title>Reservation Map Admin</title>
   <link rel="manifest" href="manifest.webmanifest" />
+  <script src="../opnav-config.js"></script>
   <script src="booking_storage.js"></script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
@@ -113,6 +114,18 @@
     }
     .work-header h1 { margin: 0; font-size: 16px; font-weight: 800; letter-spacing: 0.03em; }
     .work-header .sub { margin: 4px 0 0; color: var(--muted); font-size: 11px; line-height: 1.4; }
+    .admin-debug-banner {
+      display: block;
+      margin-top: 6px;
+      padding: 4px 6px;
+      border-radius: 6px;
+      background: rgba(56, 189, 248, 0.12);
+      color: #7dd3fc;
+      font-family: ui-monospace, "Cascadia Code", "Consolas", monospace;
+      font-size: 10px;
+      line-height: 1.45;
+      word-break: break-all;
+    }
     .main-nav {
       flex-shrink: 0;
       display: flex;
@@ -883,6 +896,7 @@
           <div>
             <h1>Reservation Map Admin</h1>
             <p class="sub">Foglalások · térkép · naptár · útvonal</p>
+            <span id="admin-debug-banner" class="admin-debug-banner" aria-live="polite">API: … | CONFIG: vehicles=?, drivers=? | BUILD: …</span>
             <span id="admin-user-badge" class="admin-user-badge is-off">Bejelentkezve: <strong id="admin-user-name">—</strong>
               <button type="button" id="admin-logout-btn" class="btn-admin-logout" hidden>Kilépés</button>
             </span>
@@ -1257,6 +1271,7 @@
   var STORAGE_KEY = 'opnav_foglalasi_terkep_v3';
   var STORAGE_KEY_LEGACY = 'opnav_foglalasi_terkep_v1';
   var MODULE_VERSION = '5.0.0';
+  var ADMIN_BUILD_STAMP = '2026-06-01 12:00';
   var LABEL_ZOOM_FULL = 11;
   var mapViewMode = 'normal';
   var calendarMonth = new Date();
@@ -1285,7 +1300,40 @@
     valhallaUseHighways: 0,
     advisoryWarning: 'Az automatikus útvonal csak tájékoztató jellegű, kisvonatra ellenőrizendő.'
   };
-  var API_BASE = localStorage.getItem('rsv_api_base') || 'http://localhost:3000';
+  function isRentLocalHost() {
+    var host = location && location.hostname;
+    return !host || host === 'localhost' || host === '127.0.0.1';
+  }
+
+  function isRentLocalApiUrl(url) {
+    if (!url) return false;
+    return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/i.test(String(url).trim());
+  }
+
+  function resolveRentApiBase() {
+    var stored = '';
+    try { stored = localStorage.getItem('rsv_api_base') || ''; } catch (e) {}
+    if (window.OPNAV_ENV && window.OPNAV_ENV.resolveApiBase) {
+      return window.OPNAV_ENV.resolveApiBase(stored);
+    }
+    if (stored && !isRentLocalHost() && isRentLocalApiUrl(stored)) {
+      stored = '';
+    }
+    if (stored) return String(stored).replace(/\/+$/, '');
+    if (window.OPNAV_API_BASE) return String(window.OPNAV_API_BASE).replace(/\/+$/, '');
+    if (isRentLocalHost()) return 'http://localhost:3000';
+    return 'https://operativ-navigator.onrender.com';
+  }
+
+  var API_BASE = resolveRentApiBase();
+
+  function updateAdminDebugBanner() {
+    var el = document.getElementById('admin-debug-banner');
+    if (!el) return;
+    el.textContent = 'API: ' + API_BASE
+      + ' | CONFIG: vehicles=' + FLEET_VEHICLES.length + ', drivers=' + FLEET_DRIVERS.length
+      + ' | BUILD: ' + ADMIN_BUILD_STAMP;
+  }
   var adminUsers = [];
   var adminLoggedUser = null;
   var appBooted = false;
@@ -1378,6 +1426,7 @@
   var geocodeSeq = 0;
 
   var $ = function (id) { return document.getElementById(id); };
+  updateAdminDebugBanner();
 
   function adminUserName(u) {
     return String((u && (u.username || u.user)) || '');
@@ -1468,36 +1517,31 @@
       if (FLEET_VEHICLES.length || FLEET_DRIVERS.length) {
         renderResourceSuggestions();
       }
+      updateAdminDebugBanner();
       return !!(FLEET_VEHICLES.length || FLEET_DRIVERS.length);
     }
 
-    function fetchConfigJsonPaths() {
-      var paths = [
-        '../../operativ-navigator_RESTORE/backend/data/config.json',
-        '../operativ-navigator_RESTORE/backend/data/config.json',
-        '../../../operativ-navigator_RESTORE/backend/data/config.json',
-        API_BASE.replace(/\/$/, '') + '/data/config.json'
-      ];
-      function tryPath(i) {
-        if (i >= paths.length) return Promise.resolve(false);
-        return fetch(paths[i], { headers: { Accept: 'application/json' } })
-          .then(function (r) {
-            if (!r.ok) throw new Error('HTTP ' + r.status);
-            return r.json();
-          })
-          .then(function (raw) { return applyConfig(raw); })
-          .catch(function () { return tryPath(i + 1); });
-      }
-      return tryPath(0);
+    function fetchMasterListsFallback() {
+      var base = API_BASE.replace(/\/$/, '');
+      return Promise.all([
+        fetch(base + '/api/vehicles', { headers: { Accept: 'application/json' } }).then(function (r) { return r.ok ? r.json() : null; }),
+        fetch(base + '/api/drivers', { headers: { Accept: 'application/json' } }).then(function (r) { return r.ok ? r.json() : null; })
+      ]).then(function (parts) {
+        var vehicles = parts[0] && parts[0].vehicles ? parts[0].vehicles : [];
+        var drivers = parts[1] && parts[1].drivers ? parts[1].drivers : [];
+        if (!vehicles.length && !drivers.length) return false;
+        return applyConfig({ vehicles: vehicles, drivers: drivers });
+      }).catch(function () { return false; });
     }
 
     return fetch(API_BASE.replace(/\/$/, '') + '/api/config', { headers: { Accept: 'application/json' } })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (data) {
         if (data && data.ok) return applyConfig(data);
-        return fetchConfigJsonPaths();
+        return fetchMasterListsFallback();
       })
-      .catch(function () { return fetchConfigJsonPaths(); });
+      .catch(function () { return fetchMasterListsFallback(); })
+      .finally(function () { updateAdminDebugBanner(); });
   }
 
   function initAdminLogin() {
@@ -4177,23 +4221,33 @@
         alert('A fájl nem tartalmaz inquiries tömböt.');
         return;
       }
-      fetch('/api/rent/import', {
+      fetch(API_BASE.replace(/\/$/, '') + '/api/rent/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ inquiries: inquiries })
       }).then(function (resp) {
         return resp.json().then(function (data) {
-          if (!resp.ok || !data || !data.ok) {
-            throw new Error((data && data.error) || ('HTTP ' + resp.status));
+          data = data || {};
+          var detail = 'POST /api/rent/import HTTP ' + resp.status
+            + '\nimported: ' + (data.imported != null ? data.imported : '—')
+            + '\nskipped: ' + (data.skipped != null ? data.skipped : '—')
+            + '\nerror: ' + (data.error || '—');
+          if (!resp.ok || !data.ok) {
+            alert('Import sikertelen.\n\n' + detail);
+            throw new Error(detail);
           }
+          alert('Import kész.\n\n' + detail);
           return data;
+        }).catch(function (parseErr) {
+          if (parseErr && parseErr.message && parseErr.message.indexOf('POST /api/rent/import') === 0) throw parseErr;
+          alert('Import sikertelen.\n\nPOST /api/rent/import HTTP ' + resp.status
+            + '\nimported: —\nskipped: —\nerror: érvénytelen JSON válasz');
+          throw parseErr;
         });
       }).then(function (data) {
-        alert('Import kész.\nÚj: ' + (data.imported || 0) + '\nKihagyva (már létezik): ' + (data.skipped || 0));
         return reloadRentData();
       }).catch(function (err) {
         console.error('Rent backup import failed:', err);
-        alert('A foglalások importja nem sikerült.');
       });
     };
     reader.onerror = function () {

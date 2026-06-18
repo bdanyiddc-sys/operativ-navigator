@@ -400,7 +400,7 @@
           <p class="hint" id="successRef" hidden></p>
         </div>
 
-        <form id="inquiryForm" class="form-body" novalidate>
+        <form id="inquiryForm" class="form-body" novalidate autocomplete="on">
           <div class="warn-box" id="routeWarn" hidden>
             A megadott útvonal tájékoztató jellegű – a végleges útvonalat munkatársaink egyeztetik Önnel.
           </div>
@@ -411,22 +411,25 @@
             <button type="button" class="form-section-title" aria-expanded="true">Helyszín <span class="acc-chevron" aria-hidden="true"></span></button>
             <div class="form-section-body">
             <div id="fieldsSingle">
-              <label for="city">Város</label>
-              <input id="city" placeholder="pl. Eger" />
+              <label for="placeName">Program / hely megnevezése</label>
+              <input id="placeName" name="rent-ship-place" placeholder="pl. Esküvő, városnézés" autocomplete="section-ship off" />
+
+              <label for="city">Foglalási hely – város</label>
+              <input id="city" name="rent-ship-city" placeholder="pl. Eger" autocomplete="section-ship shipping address-level2" />
 
               <div class="grid2">
                 <div class="field">
                   <label for="street">Utca / tér</label>
-                  <input id="street" placeholder="pl. Dobó István tér" />
+                  <input id="street" name="rent-ship-street" placeholder="pl. Dobó István tér" autocomplete="section-ship shipping address-line1" />
                 </div>
                 <div class="field">
                   <label for="houseNumber">Házszám</label>
-                  <input id="houseNumber" placeholder="pl. 5" />
+                  <input id="houseNumber" name="rent-ship-housenumber" placeholder="pl. 5" autocomplete="section-ship shipping address-line2" />
                 </div>
               </div>
 
-              <label for="locationNote">Helyszín megnevezése (opcionális)</label>
-              <input id="locationNote" placeholder="pl. Hotel előtt" />
+              <label for="locationNote">Helyszín megjegyzés (opcionális)</label>
+              <input id="locationNote" name="rent-ship-note" placeholder="pl. Hotel előtt" autocomplete="section-ship off" />
               <ul class="addr-suggest" id="addrSuggest" aria-label="Cím javaslatok"></ul>
             </div>
             <input type="hidden" id="address" />
@@ -469,18 +472,49 @@
             <div class="form-section-body">
             <div class="grid2">
               <div class="field">
-                <label for="name">Név</label>
-                <input id="name" required autocomplete="name" />
+                <label for="ordererName">Megrendelő neve</label>
+                <input id="ordererName" name="rent-bill-name" required autocomplete="section-bill billing name" />
               </div>
               <div class="field">
-                <label for="phone">Telefon</label>
-                <input id="phone" type="tel" required placeholder="+36 30 123 4567" autocomplete="tel" inputmode="tel" />
+                <label for="contact">Kapcsolattartó</label>
+                <input id="contact" name="rent-bill-contact" placeholder="Ha eltér a megrendelőtől" autocomplete="section-bill off" />
               </div>
             </div>
-            <label for="email">Email</label>
-            <input id="email" type="email" autocomplete="email" inputmode="email" />
+            <div class="grid2">
+              <div class="field">
+                <label for="companyName">Cég / szervezet</label>
+                <input id="companyName" name="rent-bill-org" autocomplete="section-bill billing organization" />
+              </div>
+              <div class="field">
+                <label for="taxId">Adószám</label>
+                <input id="taxId" name="rent-bill-taxid" placeholder="12345678-2-10" autocomplete="section-bill off" inputmode="numeric" />
+              </div>
+            </div>
+            <p class="hint" style="margin:0 0 8px">Számlázási / megrendelő cím (opcionális – nem a foglalási hely)</p>
+            <label for="ordererCity">Megrendelő – város</label>
+            <input id="ordererCity" name="rent-bill-city" placeholder="pl. Budapest" autocomplete="section-bill billing address-level2" />
+            <div class="grid2">
+              <div class="field">
+                <label for="ordererStreet">Utca / tér</label>
+                <input id="ordererStreet" name="rent-bill-street" placeholder="pl. Kossuth Lajos utca" autocomplete="section-bill billing street-address" />
+              </div>
+              <div class="field">
+                <label for="ordererHouseNumber">Házszám</label>
+                <input id="ordererHouseNumber" name="rent-bill-housenumber" placeholder="pl. 1" autocomplete="section-bill billing address-line2" />
+              </div>
+            </div>
+            <div class="grid2">
+              <div class="field">
+                <label for="phone">Telefon</label>
+                <input id="phone" name="rent-bill-tel" type="tel" required placeholder="+36 30 123 4567" autocomplete="section-bill tel" inputmode="tel" />
+              </div>
+              <div class="field">
+                <label for="email">Email</label>
+                <input id="email" name="rent-bill-email" type="email" autocomplete="section-bill email" inputmode="email" />
+              </div>
+            </div>
             <label for="note">Megjegyzés</label>
-            <textarea id="note" placeholder="Esküvő, városnézés, megállók…"></textarea>
+            <textarea id="note" name="rent-bill-note" placeholder="Esküvő, városnézés, megállók…" autocomplete="section-bill off"></textarea>
             </div>
           </div>
 
@@ -712,7 +746,7 @@
   }
 
   function isContactIncomplete() {
-    return !document.getElementById('name').value.trim() || !document.getElementById('phone').value.trim();
+    return !document.getElementById('ordererName').value.trim() || !document.getElementById('phone').value.trim();
   }
 
   function updateAccordionWarnings() {
@@ -751,8 +785,8 @@
         : document.getElementById('headcount');
       return { ok: false, field: field, sectionId: 'sectionProgram', message: 'Kérjük, töltse ki a kötelező adatokat.' };
     }
-    if (!document.getElementById('name').value.trim()) {
-      return { ok: false, field: document.getElementById('name'), sectionId: 'sectionContact', message: 'Kérjük, töltse ki a kötelező adatokat.' };
+    if (!document.getElementById('ordererName').value.trim()) {
+      return { ok: false, field: document.getElementById('ordererName'), sectionId: 'sectionContact', message: 'Kérjük, töltse ki a kötelező adatokat.' };
     }
     var phoneCheck = validatePhone();
     if (!phoneCheck.ok) return phoneCheck;
@@ -879,6 +913,29 @@
     return tokens;
   }
 
+  var LOCATION_FIELD_IDS = ['placeName', 'city', 'street', 'houseNumber', 'locationNote'];
+  var CONTACT_FIELD_IDS = ['ordererName', 'contact', 'companyName', 'taxId', 'ordererCity', 'ordererStreet', 'ordererHouseNumber', 'phone', 'email', 'note'];
+
+  function setFieldValue(id, value) {
+    if (CONTACT_FIELD_IDS.indexOf(id) !== -1) return;
+    if (LOCATION_FIELD_IDS.indexOf(id) === -1 && id !== 'address') return;
+    var el = document.getElementById(id);
+    if (!el || value == null || String(value).trim() === '') return;
+    el.value = String(value).trim();
+  }
+
+  function applyLocationFromParsed(addr) {
+    if (!addr) return;
+    setFieldValue('placeName', addr.placeName);
+    setFieldValue('city', addr.city);
+    setFieldValue('street', addr.street);
+    setFieldValue('houseNumber', addr.house_number || addr.houseNumber);
+    syncHiddenAddress();
+    if (!addr.street && addr.display_name) {
+      setFieldValue('locationNote', addr.display_name);
+    }
+  }
+
   function streetMatchesRow(row, streetNorm) {
     if (!streetNorm || streetNorm.length < 2) return false;
     var rowText = normalizeText(rowStreetText(row));
@@ -892,9 +949,8 @@
     return queryTokens.some(function (qt) {
       if (rowText.indexOf(qt) !== -1) return true;
       return tokens.some(function (tk) {
-        if (streetNorm.length >= 3 && tk.indexOf(streetNorm) === 0) return true;
+        if (tk.indexOf(qt) === 0) return true;
         if (qt.length >= 3 && tk.indexOf(qt) === 0) return true;
-        if (qt.length >= 2 && tk.indexOf(qt) === 0) return true;
         return qt.indexOf(tk) === 0;
       });
     });
@@ -930,16 +986,26 @@
     });
   }
 
+  function dedupeStreetRows(rows) {
+    var seen = {};
+    return (rows || []).filter(function (row) {
+      var key = normalizeText(rowStreetText(row)) + '|' + normalizeText(rowCityName(row));
+      if (!key || seen[key]) return false;
+      seen[key] = true;
+      return true;
+    });
+  }
+
   function filterStreetResults(rows, street, city) {
     var streetTrim = String(street || '').trim();
     if (streetTrim.length < 2) return [];
     var streetNorm = normalizeText(streetTrim);
     var cityNorm = normalizeText(city || '');
-    return (rows || []).filter(function (row) {
+    return dedupeStreetRows((rows || []).filter(function (row) {
       if (!rowHasStreet(row)) return false;
       if (cityNorm && !cityMatchesRow(row, cityNorm)) return false;
       return streetMatchesRow(row, streetNorm);
-    });
+    }));
   }
 
   function clearAddrSuggestions() {
@@ -949,9 +1015,13 @@
   function renderAddrSuggestions(rows, onPick) {
     clearAddrSuggestions();
     if (!rows || !rows.length) return;
-    rows.slice(0, 5).forEach(function (row) {
+    rows.slice(0, 8).forEach(function (row) {
       var li = document.createElement('li');
-      li.textContent = row.display_name || '';
+      var streetLabel = rowStreetText(row);
+      var cityLabel = rowCityName(row);
+      li.textContent = streetLabel
+        ? (cityLabel ? (streetLabel + ', ' + cityLabel) : streetLabel)
+        : (row.display_name || '');
       li.addEventListener('click', function () {
         onPick(row);
         clearAddrSuggestions();
@@ -964,7 +1034,7 @@
     var hit = parseNominatimAddress(row);
     hit.lat = parseFloat(row.lat);
     hit.lng = parseFloat(row.lon);
-    if (hit.city) document.getElementById('city').value = hit.city;
+    setFieldValue('city', hit.city);
     if (hit.lat != null && hit.lng != null) {
       lat = hit.lat;
       lng = hit.lng;
@@ -976,13 +1046,7 @@
 
   function applyAddrHit(hit) {
     if (!hit) return;
-    if (hit.city) document.getElementById('city').value = hit.city;
-    if (hit.street) document.getElementById('street').value = hit.street;
-    if (hit.house_number) document.getElementById('houseNumber').value = hit.house_number;
-    syncHiddenAddress();
-    if (!hit.street && hit.display_name) {
-      document.getElementById('locationNote').value = hit.display_name;
-    }
+    applyLocationFromParsed(hit);
     if (hit.lat != null && hit.lng != null) {
       storeSavedLocation(hit.lat, hit.lng);
       setGeoStatus('Cím kiválasztva, kérjük ellenőrizze.', true);
@@ -1123,23 +1187,11 @@
   }
 
   function applySingleAddressToForm(addr) {
-    if (!addr) return;
-    if (addr.city) document.getElementById('city').value = addr.city;
-    if (addr.street) document.getElementById('street').value = addr.street;
-    if (addr.house_number) document.getElementById('houseNumber').value = addr.house_number;
-    syncHiddenAddress();
+    applyLocationFromParsed(addr);
   }
 
   function applyReverseGeocodeToForm(addr) {
-    if (!addr) return;
-    if (addr.city) document.getElementById('city').value = addr.city;
-    if (addr.street) {
-      document.getElementById('street').value = addr.street;
-    } else if (addr.display_name) {
-      document.getElementById('locationNote').value = addr.display_name;
-    }
-    if (addr.house_number) document.getElementById('houseNumber').value = addr.house_number;
-    syncHiddenAddress();
+    applyLocationFromParsed(addr);
   }
 
   function showSingleMarker(latVal, lngVal, label) {
@@ -1247,6 +1299,8 @@
     if (house && city) queries.push([street, house, city, 'Hungary'].join(', '));
     queries.push([street, city, 'Hungary'].join(', '));
     queries.push([city, street, 'Hungary'].join(', '));
+    queries.push([street + ' utca', city, 'Hungary'].join(', '));
+    queries.push([street + ' út', city, 'Hungary'].join(', '));
     queries.push([street, 'Hungary'].join(', '));
     var seen = {};
     return queries.filter(function (q) {
@@ -1295,12 +1349,34 @@
     });
   }
 
+  function runPartialStreetSearch(city, streetPrefix) {
+    var prefix = String(streetPrefix || '').trim();
+    if (prefix.length < 2 || String(city || '').trim().length < 2) return Promise.resolve([]);
+    return nominatimSearch(city + ', Hungary', 50).then(function (rows) {
+      var filtered = filterStreetResults(rows, prefix, city);
+      if (filtered.length) return filtered;
+      return nominatimSearch(prefix + ' utca, ' + city + ', Hungary', 20).then(function (more) {
+        var extra = filterStreetResults(more, prefix, city);
+        if (extra.length) return extra;
+        return nominatimSearch(prefix + ', ' + city + ', Hungary', 20).then(function (more2) {
+          return filterStreetResults(more2, prefix, city);
+        });
+      });
+    });
+  }
+
   function runStreetSearch(city, street, house) {
     geoLog('street input', { city: city, street: street, house: house });
     setGeoStatus('Utca keresése…', false);
     var queries = buildStreetGeocodeQueries(city, street, house);
     geoLog('query list', queries);
-    return tryStreetGeocodeQueries(queries, 0, street, city).then(function (rows) {
+    var partialFirst = street.length >= 2 && street.length <= 5 && city.length >= 2
+      ? runPartialStreetSearch(city, street)
+      : Promise.resolve([]);
+    return partialFirst.then(function (partialRows) {
+      if (partialRows.length) return partialRows;
+      return tryStreetGeocodeQueries(queries, 0, street, city);
+    }).then(function (rows) {
       geoLog('final street results', rows.length);
       if (!rows.length) {
         clearAddrSuggestions();
@@ -1416,7 +1492,7 @@
     updateSubmitHint();
   });
 
-  ['date', 'headcount', 'name', 'phone'].forEach(function (id) {
+  ['date', 'headcount', 'ordererName', 'phone'].forEach(function (id) {
     document.getElementById(id).addEventListener('input', updateAccordionWarnings);
   });
 
@@ -1619,7 +1695,14 @@
     }
 
     var basePayload = {
-      name: document.getElementById('name').value.trim(),
+      name: document.getElementById('ordererName').value.trim(),
+      ordererName: document.getElementById('ordererName').value.trim(),
+      contact: document.getElementById('contact').value.trim(),
+      companyName: document.getElementById('companyName').value.trim(),
+      taxId: document.getElementById('taxId').value.trim(),
+      ordererCity: document.getElementById('ordererCity').value.trim(),
+      ordererStreet: document.getElementById('ordererStreet').value.trim(),
+      ordererHouseNumber: document.getElementById('ordererHouseNumber').value.trim(),
       phone: document.getElementById('phone').value.trim(),
       email: document.getElementById('email').value.trim(),
       date: document.getElementById('date').value,
@@ -1628,7 +1711,8 @@
       headcount: document.getElementById('headcount').value,
       note: document.getElementById('note').value.trim(),
       booking_type: bookingType,
-      locationNote: document.getElementById('locationNote').value.trim()
+      locationNote: document.getElementById('locationNote').value.trim(),
+      placeName: document.getElementById('placeName').value.trim()
     };
 
     if (bookingType === 'single_location') {
@@ -1638,7 +1722,7 @@
       basePayload.address = document.getElementById('address').value.trim();
       basePayload.lat = lat;
       basePayload.lng = lng;
-      basePayload.placeName = basePayload.city || basePayload.street || 'Helyszín';
+      basePayload.placeName = basePayload.placeName || basePayload.city || basePayload.street || 'Helyszín';
       finishSave(basePayload);
       return;
     }

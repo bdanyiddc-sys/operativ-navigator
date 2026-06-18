@@ -186,6 +186,16 @@ function readEntrySourceSnapshot() {
   }
 }
 
+function attachEnvironmentFields(payload) {
+  payload.page_origin = window.location.origin;
+  payload.environment =
+    window.location.hostname === 'localhost' ||
+    window.location.hostname === '127.0.0.1'
+      ? 'local'
+      : 'production';
+  return payload;
+}
+
 function attachEntrySourceFields(payload) {
   const snap = readEntrySourceSnapshot();
   if (!snap) return payload;
@@ -475,7 +485,7 @@ async function buildVisitorPayload(consentMode, context) {
     location.lat != null ? (location.lat + ',' + location.lng) : 'nincs koordináta',
     location.raw_accuracy_m != null ? ('±' + location.raw_accuracy_m + 'm') : '');
 
-  return attachEntrySourceFields({
+  return attachEnvironmentFields(attachEntrySourceFields({
     version: VERSION,
     tenant: String(cfg.tenant || 'kisvonat'),
     project: String(cfg.project || 'route_public'),
@@ -498,7 +508,7 @@ async function buildVisitorPayload(consentMode, context) {
     session_id: getOrCreateSessionId(),
     page_url: buildPageUrlWithQuery(),
     referrer_origin: safeReferrerOrigin(),
-  });
+  }));
 }
 
 function popupDedupKey(eventType, detail) {
@@ -582,7 +592,7 @@ async function buildInteractionPayload(detail, consentMode) {
     const location = await resolveGeoSnapshot('geo');
     attachLocationFields(payload, location);
   }
-  return attachEntrySourceFields(payload);
+  return attachEnvironmentFields(attachEntrySourceFields(payload));
 }
 
 async function handleAnalyticsEvent(detail) {

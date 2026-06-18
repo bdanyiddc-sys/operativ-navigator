@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=5" />
+    <meta name="theme-color" content="#1a237e" />
+    <meta name="description" content="KisvonatNavigator – élő utasinformáció, menetrend, foglalás" />
+    <title>KisvonatNavigator – Utasinformáció</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="public_style.css" />
+</head>
+<body>
+    <div id="app">
+        <div id="map" aria-label="Kisvonat megállók és útvonal térképe"></div>
+
+        <header class="status-bar" aria-live="polite">
+            <p id="status-line">🚂 Tata • — • 🟢 — hely</p>
+        </header>
+
+        <nav class="city-strip" id="city-strip" aria-label="Város választás"></nav>
+
+        <div class="fab-col right">
+            <button type="button" class="fab fab-sm" id="btn-my-location" aria-label="Saját helyzet">📍</button>
+            <button type="button" class="fab fab-sm" id="btn-schedule-fab" aria-label="Menetrend">🕒</button>
+        </div>
+
+        <section class="stop-bar" id="stop-bar" aria-label="Legközelebbi megálló">
+            <div class="stop-bar-info" id="stop-bar-info">
+                <span class="stop-bar-name" id="peek-stop">🚏 —</span>
+                <span class="stop-bar-meta" id="peek-stop-meta">🚶 —</span>
+            </div>
+            <div class="stop-bar-actions">
+                <button type="button" class="bar-btn bar-book" id="btn-peek-reserve">Foglalok</button>
+                <button type="button" class="bar-btn bar-board" id="btn-peek-board">Felszállnánk</button>
+            </div>
+        </section>
+
+        <p class="version-footer" id="version-footer" title="Public UI">Public UI v0.7 - 2026.06.05</p>
+        <div id="toast" role="status" aria-live="polite"></div>
+    </div>
+
+    <section class="overlay-panel overlay-mini" id="schedule-panel" aria-label="Menetrend">
+        <div class="overlay-head overlay-head-mini">
+            <h2>Menetrend</h2>
+            <button type="button" class="sheet-close" data-close="schedule-panel" aria-label="Bezárás">×</button>
+        </div>
+        <div class="overlay-body overlay-body-mini">
+            <ul class="schedule-list" id="schedule-list"></ul>
+        </div>
+    </section>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="/opnav-config.js"></script>
+    <script src="public_data.js"></script>
+    <script src="public_app.js"></script>
+    <script>
+      window.KV_ANALYTICS_CONFIG = {
+        firebaseConfig: {
+          apiKey: "AIzaSyBxUxHjqx-9PX8PpgW05wZW7yR30wNBOaM",
+          authDomain: "ddc-analitika.firebaseapp.com",
+          projectId: "ddc-analitika"
+        },
+        tenant: "kisvonat",
+        project: "route_public",
+        collectionName: "analytics_events",
+        cellSizeM: 50,
+        maxRepresentativeAccuracyM: 100,
+        sampleIntervalMs: 30 * 60 * 1000,
+        privacyPolicyUrl: "/adatvedelem.html",
+        debug: false
+      };
+    </script>
+    <script
+      type="module"
+      src="js/kv_analytics_sender.js">
+    </script>
+</body>
+</html>
