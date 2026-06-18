@@ -3036,17 +3036,23 @@
     var elApiBase = document.getElementById('api-base');
 
     function getApiBase() {
+        if (window.OPNAV_ENV && window.OPNAV_ENV.getApiBase) {
+            return window.OPNAV_ENV.getApiBase();
+        }
         var host = window.location.hostname;
         if (host === 'localhost' || host === '127.0.0.1') {
             return 'http://localhost:3000';
         }
-        return window.location.origin;
+        return window.OPNAV_API_BASE || window.location.origin;
     }
 
     function apiBase() {
+        var manual = (elApiBase && elApiBase.value) ? elApiBase.value.trim() : '';
+        if (window.OPNAV_ENV && window.OPNAV_ENV.resolveApiBase) {
+            return window.OPNAV_ENV.resolveApiBase(manual);
+        }
         if (window.OPNAV_API_BASE) return String(window.OPNAV_API_BASE).replace(/\/+$/, '');
-        var v = (elApiBase && elApiBase.value) ? elApiBase.value.trim() : '';
-        if (v) return v.replace(/\/+$/, '');
+        if (manual) return manual.replace(/\/+$/, '');
         return getApiBase();
     }
 
@@ -7169,7 +7175,12 @@
                 if (lastReportData) renderReportPanel(lastReportData);
             });
         });
-        if (elApiBase && !elApiBase.value) elApiBase.value = getApiBase();
+        if (elApiBase) {
+            var initBase = getApiBase();
+            if (!elApiBase.value || (window.OPNAV_ENV && window.OPNAV_ENV.isLocalApiUrl(elApiBase.value) && !window.OPNAV_ENV.isLocalHost())) {
+                elApiBase.value = initBase;
+            }
+        }
         document.querySelectorAll('[data-action="open-service"]').forEach(function (btn) {
             btn.addEventListener('click', openServiceManager);
         });
