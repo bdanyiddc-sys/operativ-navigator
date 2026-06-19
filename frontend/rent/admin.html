@@ -74,6 +74,43 @@
       box-shadow: 0 2px 8px rgba(0,0,0,0.35);
       touch-action: manipulation;
     }
+    .map-basemap-switcher {
+      display: flex;
+      flex-direction: row;
+      gap: 2px;
+      padding: 3px;
+      border-radius: 10px;
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.38);
+    }
+    .map-basemap-switcher button {
+      border: 0;
+      border-radius: 7px;
+      padding: 5px 8px;
+      min-height: 28px;
+      font-size: 10px;
+      font-weight: 800;
+      line-height: 1.2;
+      white-space: nowrap;
+      color: #cbd5e1;
+      background: transparent;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .map-basemap-switcher button:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: #f1f5f9;
+    }
+    .map-basemap-switcher button.is-active {
+      background: rgba(249, 115, 22, 0.42);
+      color: #ffedd5;
+      box-shadow: inset 0 0 0 1px rgba(249, 115, 22, 0.55);
+    }
+    .leaflet-bottom.leaflet-left .map-basemap-switcher {
+      margin-bottom: 10px;
+      margin-left: 10px;
+    }
     body.map-fullscreen { overflow: hidden; }
     body.map-fullscreen .app { display: block; height: 100vh; height: 100dvh; }
     body.map-fullscreen .map-panel {
@@ -102,51 +139,75 @@
     }
     .work-header {
       flex-shrink: 0;
-      padding: 12px 14px 10px;
+      padding: 5px 10px 4px;
       border-bottom: 1px solid var(--line);
       background: rgba(15, 23, 42, 0.65);
+      overflow: visible;
+      position: relative;
+      z-index: 200;
+    }
+    .work-toolbar {
+      display: flex;
+      align-items: flex-start;
+      gap: 4px;
+      margin: 2px 0 3px;
+      overflow: visible;
+    }
+    .work-toolbar-fixed {
+      display: flex;
+      flex-shrink: 0;
+      align-items: center;
+      gap: 3px;
+      padding-top: 1px;
     }
     .work-header-top {
       display: flex;
-      align-items: flex-start;
+      align-items: center;
       justify-content: space-between;
-      gap: 10px;
+      gap: 8px;
     }
-    .work-header h1 { margin: 0; font-size: 16px; font-weight: 800; letter-spacing: 0.03em; }
-    .work-header .sub { margin: 4px 0 0; color: var(--muted); font-size: 11px; line-height: 1.4; }
+    .work-header h1 { margin: 0; font-size: 13px; font-weight: 800; letter-spacing: 0.03em; }
+    .work-header .sub { margin: 1px 0 0; color: var(--muted); font-size: 9px; line-height: 1.25; }
     .admin-debug-banner {
       display: block;
-      margin-top: 6px;
-      padding: 4px 6px;
-      border-radius: 6px;
-      background: rgba(56, 189, 248, 0.12);
+      margin-top: 2px;
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: rgba(56, 189, 248, 0.1);
       color: #7dd3fc;
       font-family: ui-monospace, "Cascadia Code", "Consolas", monospace;
-      font-size: 10px;
-      line-height: 1.45;
-      word-break: break-all;
+      font-size: 8px;
+      line-height: 1.25;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      cursor: pointer;
+      max-width: 100%;
     }
+    .admin-debug-banner.is-error { color: #fca5a5; background: rgba(220, 38, 38, 0.12); }
     .main-nav {
       flex-shrink: 0;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      padding: 8px 12px;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 3px;
+      padding: 3px 8px;
       border-bottom: 1px solid var(--line);
       background: rgba(10, 16, 26, 0.55);
     }
     .main-nav-btn {
-      flex: 1 1 auto;
+      width: 100%;
       min-width: 0;
-      padding: 8px 10px;
-      border-radius: 9px;
+      padding: 4px 4px;
+      border-radius: 6px;
       border: 1px solid var(--line);
       background: rgba(15, 23, 42, 0.55);
       color: var(--muted);
-      font-size: 11px;
+      font-size: 9px;
       font-weight: 800;
       cursor: pointer;
       white-space: nowrap;
+      text-overflow: ellipsis;
+      overflow: hidden;
     }
     .main-nav-btn.is-active {
       border-color: rgba(249, 115, 22, 0.55);
@@ -164,7 +225,7 @@
       height: 100%;
       min-height: 0;
       overflow: hidden;
-      padding: 12px 14px 18px;
+      padding: 8px 10px 10px;
     }
     .main-module.is-active { display: flex; flex-direction: column; }
     .detail-module-pane,
@@ -184,7 +245,7 @@
       display: flex;
       flex-direction: column;
       overflow: hidden;
-      padding-bottom: 12px;
+      padding-bottom: 8px;
     }
     .booking-detail-header {
       flex-shrink: 0;
@@ -334,9 +395,9 @@
     }
     .pane-head {
       flex-shrink: 0;
-      padding: 10px 12px;
+      padding: 6px 10px;
       border-bottom: 1px solid var(--line);
-      font-size: 12px;
+      font-size: 10px;
       font-weight: 800;
       text-transform: uppercase;
       letter-spacing: 0.06em;
@@ -350,7 +411,13 @@
       flex: 1;
       min-height: 0;
       overflow-y: auto;
-      padding: 10px 12px 12px;
+      padding: 6px 10px 8px;
+    }
+    .bookings-list-module .pane-scroll {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      overflow: hidden;
     }
     .form-tabs {
       display: flex;
@@ -436,11 +503,22 @@
       color: #e9d5ff;
       font-size: 18px;
     }
-    .analytics-placeholder ul {
-      text-align: left;
+    .report-export-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
       max-width: 360px;
+      margin: 20px auto 0;
+    }
+    .report-export-actions .btn {
+      width: 100%;
+      justify-content: center;
+    }
+    .report-export-hint {
       margin: 16px auto 0;
-      padding-left: 18px;
+      max-width: 420px;
+      font-size: 12px;
+      opacity: 0.85;
     }
     .module-full-card {
       border: 1px solid var(--line);
@@ -467,7 +545,8 @@
     .bookings-list-module .list {
       max-height: none;
       flex: 1;
-      min-height: 120px;
+      min-height: 0;
+      overflow-y: auto;
     }
     .topbar {
       display: flex;
@@ -519,6 +598,50 @@
       display: grid; grid-template-columns: repeat(4, 1fr);
       gap: 8px; margin-bottom: 12px;
     }
+    .stats-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 4px 8px;
+      padding: 5px 8px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(15, 23, 42, 0.55);
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.3;
+      flex-shrink: 0;
+    }
+    .stats-row .stats-sep { opacity: 0.35; user-select: none; }
+    .stats-row strong { color: var(--text); font-size: 12px; font-weight: 800; }
+    .stats-row .rent-data-status { margin: 0; font-size: 10px; }
+    .bookings-list-module .filters-compact {
+      flex-shrink: 0;
+    }
+    .bookings-list-module .filters-compact label {
+      font-size: 11px;
+      margin-bottom: 2px;
+    }
+    .bookings-list-module .filters-compact input {
+      padding: 5px 7px;
+      font-size: 12px;
+      min-height: 28px;
+    }
+    .bookings-list-module .filters-compact .field {
+      margin-bottom: 5px;
+    }
+    .bookings-list-module .filters-compact .filters {
+      gap: 5px;
+    }
+    .bookings-list-module .filters-compact .actions {
+      margin-top: 5px;
+      gap: 5px;
+    }
+    .bookings-list-module .filters-compact .btn.sm {
+      padding: 3px 6px;
+      font-size: 10px;
+      min-height: 26px;
+    }
     .stat {
       background: rgba(15, 23, 42, 0.7);
       border: 1px solid var(--line); border-radius: 10px; padding: 10px;
@@ -548,10 +671,6 @@
       min-height: 44px;
       font-size: 15px;
     }
-    .main-nav-btn[data-main-module="detail"] {
-      flex: 1.4 1 auto;
-      font-size: 12px;
-    }
     .lifecycle-step { cursor: pointer; user-select: none; }
     .lifecycle-step:hover { opacity: 0.92; }
     .list-intro {
@@ -569,8 +688,6 @@
       min-height: 0;
     }
     .bdh-item strong#bdhId { color: #fdba74; font-size: 15px; }
-    .work-header h1 { font-size: 18px; }
-    .work-header .sub { font-size: 12px; }
     input, select, textarea {
       width: 100%; border: 1px solid var(--line); border-radius: 8px;
       padding: 9px 10px; font-size: 14px;
@@ -608,16 +725,18 @@
       border: 1px solid var(--line); border-radius: 10px;
     }
     .list-item {
-      padding: 10px 12px; border-bottom: 1px solid var(--line); cursor: pointer;
+      padding: 6px 72px 6px 8px;
+      border-bottom: 1px solid var(--line);
+      cursor: pointer;
     }
     .list-item:hover, .list-item.is-active { background: rgba(249, 115, 22, 0.12); }
     .list-item:last-child { border-bottom: 0; }
-    .list-title { font-weight: 800; font-size: 14px; }
-    .list-meta { color: var(--muted); font-size: 12px; margin-top: 3px; }
-    .list-tags { margin-top: 5px; display: flex; flex-wrap: wrap; gap: 5px; }
+    .list-title { font-weight: 800; font-size: 13px; line-height: 1.25; }
+    .list-meta { color: var(--muted); font-size: 11px; margin-top: 2px; line-height: 1.25; }
+    .list-tags { margin-top: 3px; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
     .tag {
-      display: inline-block; padding: 2px 8px; border-radius: 999px;
-      font-size: 11px; font-weight: 700;
+      display: inline-block; padding: 1px 6px; border-radius: 999px;
+      font-size: 10px; font-weight: 700;
     }
     .tag-people { background: rgba(34, 197, 94, 0.2); color: #86efac; }
     .tag-veh { background: rgba(56, 189, 248, 0.2); color: #7dd3fc; }
@@ -634,8 +753,17 @@
     .tag-st-teljesitve { background: rgba(59, 130, 246, 0.35); color: #93c5fd; }
     .tag-st-lemondva { background: rgba(239, 68, 68, 0.28); color: #fca5a5; }
     .list-item { position: relative; }
-    .list-item-actions { margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap; }
-    .list-del-btn { font-size: 12px; padding: 4px 8px; min-height: 0; }
+    .list-item-actions { display: none; }
+    .list-del-btn {
+      position: absolute;
+      top: 5px;
+      right: 5px;
+      z-index: 2;
+      font-size: 10px;
+      padding: 2px 6px;
+      min-height: 0;
+      line-height: 1.2;
+    }
     .rent-modal {
       position: fixed; inset: 0; z-index: 9999;
       background: rgba(0,0,0,0.55); display: flex; align-items: center; justify-content: center;
@@ -655,6 +783,107 @@
       .rent-modal-actions { flex-direction: column-reverse; width: 100%; }
       .rent-modal-actions .btn { width: 100%; min-height: 44px; justify-content: center; }
     }
+    .rent-preview-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+      margin-top: 10px;
+    }
+    .rent-preview-table th,
+    .rent-preview-table td {
+      border-bottom: 1px solid var(--line);
+      padding: 4px 6px;
+      text-align: left;
+      vertical-align: top;
+    }
+    .rent-preview-summary {
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--muted);
+      margin: 8px 0 0;
+    }
+    .rent-new-toast {
+      position: absolute;
+      top: 52px;
+      right: 10px;
+      z-index: 1100;
+      width: min(320px, calc(100vw - 24px));
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: rgba(15, 23, 42, 0.96);
+      border: 1px solid rgba(249, 115, 22, 0.55);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+      color: var(--text);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    .rent-new-toast[hidden] { display: none !important; }
+    .rent-new-toast-title { font-weight: 800; color: var(--accent2); margin: 0 0 8px; font-size: 14px; }
+    .rent-new-toast-row { margin: 2px 0; color: var(--muted); }
+    .rent-new-toast-row strong { color: var(--text); font-weight: 700; }
+    .rent-new-toast-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+    .rent-inquiry-panel {
+      position: absolute;
+      right: 10px;
+      bottom: 10px;
+      z-index: 1150;
+      width: min(380px, calc(100vw - 24px));
+      max-height: min(42vh, 320px);
+      display: flex;
+      flex-direction: column;
+      border-radius: 12px;
+      background: rgba(15, 23, 42, 0.97);
+      border: 1px solid rgba(249, 115, 22, 0.55);
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+      color: var(--text);
+      font-size: 12px;
+    }
+    .rent-inquiry-panel[hidden] { display: none !important; }
+    .rent-inquiry-panel-head {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.08);
+      font-weight: 800; color: #fb923c;
+    }
+    .rent-inquiry-panel-list { overflow-y: auto; padding: 6px 8px 8px; }
+    .rent-inquiry-row {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      padding: 7px 8px; border-radius: 8px; margin-bottom: 4px;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06);
+    }
+    .rent-inquiry-text { flex: 1; min-width: 0; line-height: 1.35; color: #e2e8f0; }
+    .rent-inquiry-row-actions { display: flex; gap: 4px; flex-shrink: 0; }
+    .data-mgmt-btn { position: static; }
+    .data-mgmt-wrap {
+      position: relative;
+      flex: 0 0 auto;
+    }
+    .data-mgmt-menu {
+      position: fixed;
+      z-index: 10050;
+      min-width: 220px;
+      padding: 6px;
+      border-radius: 10px;
+      background: rgba(15, 23, 42, 0.98);
+      border: 1px solid rgba(255,255,255,0.12);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    }
+    .data-mgmt-menu[hidden] { display: none !important; }
+    .data-mgmt-menu button {
+      display: block; width: 100%; text-align: left;
+      margin: 2px 0; padding: 8px 10px; border: 0; border-radius: 8px;
+      background: transparent; color: var(--text); cursor: pointer; font: inherit; font-size: 12px;
+    }
+    .data-mgmt-menu button:hover { background: rgba(255,255,255,0.08); }
+    .bookings-import-actions-legacy { display: none !important; }
+    .popup-customer { font-weight: 800; font-size: 12px; margin-bottom: 1px; color: #0f172a; }
+    .popup-section {
+      margin-top: 4px; padding-top: 4px; border-top: 1px solid #e2e8f0;
+    }
+    .popup-section:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+    .popup-note {
+      font-size: 10px; color: #475569; margin: 1px 0; white-space: pre-wrap;
+      max-height: 3.6em; overflow: auto;
+    }
     .empty { padding: 20px; text-align: center; color: var(--muted); font-size: 13px; }
     .route-result {
       margin-top: 10px; padding: 10px; border-radius: 10px;
@@ -667,51 +896,109 @@
       background: rgba(15, 23, 42, 0.6); border: 1px solid var(--line);
       font-size: 13px; margin-bottom: 8px;
     }
-    .leaflet-popup-content {
-      margin: 10px 12px;
-      line-height: 1.45;
-      font-size: 13px;
+    .leaflet-popup.rent-booking-popup .leaflet-popup-content-wrapper {
+      border-radius: 10px;
+    }
+    .leaflet-popup.rent-booking-popup .leaflet-popup-content {
+      margin: 8px 10px;
+      line-height: 1.3;
+      font-size: 11px;
       color: #1e293b;
-      max-width: min(300px, calc(100vw - 48px));
+      max-width: min(280px, calc(100vw - 48px));
+    }
+    .leaflet-popup.rent-booking-popup .leaflet-popup-close-button {
+      width: 22px; height: 22px; font-size: 18px; line-height: 20px;
+    }
+    .leaflet-popup-content {
+      margin: 8px 10px;
+      line-height: 1.3;
+      font-size: 11px;
+      color: #1e293b;
+      max-width: min(280px, calc(100vw - 48px));
     }
     .leaflet-container { font: inherit; }
-    .popup-date { font-weight: 800; font-size: 15px; }
-    .popup-time { font-weight: 700; color: #c2410c; }
-    .popup-people { font-weight: 800; font-size: 14px; margin: 4px 0; }
-    .popup-meta { font-size: 12px; color: #475569; margin: 2px 0; }
-    .popup-place { color: #334155; font-weight: 600; margin-top: 4px; }
-    .popup-nav { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+    .popup-date { font-weight: 800; font-size: 13px; }
+    .popup-time { font-weight: 700; color: #c2410c; font-size: 11px; }
+    .popup-people { font-weight: 800; font-size: 12px; margin: 2px 0; }
+    .popup-meta { font-size: 10px; color: #475569; margin: 1px 0; line-height: 1.3; }
+    .popup-place { color: #334155; font-weight: 600; margin-top: 2px; font-size: 10px; }
+    .popup-nav { display: flex; gap: 5px; margin-top: 6px; flex-wrap: wrap; }
     .popup-nav a, .popup-nav button {
-      display: inline-block; padding: 6px 10px; border-radius: 8px;
-      text-decoration: none; font-weight: 700; font-size: 12px; color: #fff; border: 0; cursor: pointer;
+      display: inline-block; padding: 5px 8px; border-radius: 7px;
+      text-decoration: none; font-weight: 700; font-size: 10px; color: #fff; border: 0; cursor: pointer;
     }
     .nav-gmaps { background: #2563eb; }
     .nav-waze { background: #0ea5e9; }
     .nav-route { background: #0284c7; }
-    .leaflet-tooltip.map-label {
-      background: rgba(15, 23, 42, 0.94);
-      border: 1px solid rgba(255, 255, 255, 0.14);
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
-      color: #f1f5f9;
-      font-size: 11px;
-      line-height: 1.35;
-      padding: 5px 8px;
+    .leaflet-tooltip.map-label,
+    .leaflet-tooltip.rent-map-label-dark {
+      background: rgba(15, 23, 42, 0.94) !important;
+      background-color: rgba(15, 23, 42, 0.94) !important;
+      border: 1px solid rgba(255, 255, 255, 0.14) !important;
+      border-radius: 6px !important;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35) !important;
+      color: #f1f5f9 !important;
+      font-size: 8px;
+      line-height: 1.25;
+      padding: 4px 6px !important;
       font-weight: 600;
       white-space: nowrap;
-      pointer-events: none;
+      pointer-events: auto;
+      cursor: pointer;
+    }
+    .leaflet-tooltip.map-label:hover,
+    .leaflet-tooltip.rent-map-label-dark:hover {
+      border-color: rgba(251, 146, 60, 0.55) !important;
+      box-shadow: 0 2px 10px rgba(251, 146, 60, 0.2) !important;
     }
     .leaflet-tooltip-left.map-label::before,
-    .leaflet-tooltip-right.map-label::before {
-      border-right-color: rgba(15, 23, 42, 0.94);
+    .leaflet-tooltip-left.rent-map-label-dark::before {
+      border-left-color: rgba(15, 23, 42, 0.94) !important;
     }
-    .map-label .ml-date { font-weight: 800; font-size: 12px; color: #fb923c; }
-    .map-label .ml-time { color: #fde68a; }
-    .map-label .ml-people { font-weight: 800; color: #86efac; }
-    .map-label .ml-status { color: #93c5fd; font-weight: 700; }
-    .map-label .ml-veh { color: #7dd3fc; font-weight: 800; }
+    .leaflet-tooltip-right.map-label::before,
+    .leaflet-tooltip-right.rent-map-label-dark::before {
+      border-right-color: rgba(15, 23, 42, 0.94) !important;
+    }
+    .leaflet-tooltip-top.map-label::before,
+    .leaflet-tooltip-top.rent-map-label-dark::before {
+      border-top-color: rgba(15, 23, 42, 0.94) !important;
+    }
+    .leaflet-tooltip-bottom.map-label::before,
+    .leaflet-tooltip-bottom.rent-map-label-dark::before {
+      border-bottom-color: rgba(15, 23, 42, 0.94) !important;
+    }
+    .map-label .ml-date { font-weight: 800; font-size: 9px; color: #fb923c; }
+    .map-label .ml-time { font-size: 8px; color: #fde68a; }
+    .map-label .ml-people { font-weight: 800; font-size: 8px; color: #86efac; }
+    .map-label .ml-status { font-size: 8px; color: #93c5fd; font-weight: 700; }
+    .map-label .ml-veh { font-size: 8px; color: #7dd3fc; font-weight: 800; }
     .view-toggle {
-      display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;
+      display: flex;
+      flex-direction: row;
+      flex-wrap: nowrap;
+      gap: 3px;
+      margin: 0;
+      align-items: center;
+      overflow-x: auto;
+      overflow-y: hidden;
+      flex: 1;
+      min-width: 0;
+      position: relative;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: thin;
+    }
+    .view-toggle .btn.secondary.sm {
+      padding: 3px 6px;
+      font-size: 9px;
+      line-height: 1.2;
+      white-space: nowrap;
+      flex: 0 0 auto;
+    }
+    .view-toggle .data-mgmt-btn {
+      flex: 0 0 auto;
+    }
+    .view-toggle .data-mgmt-wrap {
+      flex: 0 0 auto;
     }
     .view-toggle .btn.is-active {
       background: #0284c7;
@@ -801,8 +1088,8 @@
     }
     .admin-login-err { margin: 10px 0 0; font-size: 12px; color: #fca5a5; min-height: 16px; }
     .admin-user-badge {
-      display: inline-flex; align-items: center; gap: 8px;
-      font-size: 12px; color: var(--muted); margin-top: 6px;
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 10px; color: var(--muted); margin-top: 3px;
     }
     .admin-user-badge.is-off { opacity: 0.55; }
     .btn-admin-logout {
@@ -866,6 +1153,11 @@
       }
       .work-header-top { flex-direction: column; align-items: stretch; }
       .work-header-top .btn { width: 100%; }
+      .map-basemap-switcher button {
+        min-height: 36px;
+        padding: 6px 10px;
+        font-size: 11px;
+      }
     }
   </style>
 </head>
@@ -888,6 +1180,13 @@
     <div class="map-panel" id="mapPanel">
       <div id="map" aria-label="Foglalási térkép"></div>
       <button type="button" class="btn-map-fs" id="btnMapFullscreen" title="Térkép teljes képernyő" aria-label="Térkép teljes képernyő">⛶</button>
+      <div id="rentInquiryPanel" class="rent-inquiry-panel" hidden role="region" aria-label="Új érdeklődések">
+        <div class="rent-inquiry-panel-head">
+          <span>Új árajánlatkérés érkezett</span>
+          <button type="button" class="btn ghost sm" id="rentInquiryDismissAll">Összes bezárása</button>
+        </div>
+        <div id="rentInquiryPanelList" class="rent-inquiry-panel-list"></div>
+      </div>
     </div>
 
     <aside class="work-panel">
@@ -903,21 +1202,41 @@
           </div>
           <button type="button" class="btn sm" id="btnNew">Új bérlés</button>
         </div>
-        <div class="view-toggle" style="margin-top:10px">
-          <button type="button" class="btn secondary sm is-active" id="viewNormal">Normál nézet</button>
-          <button type="button" class="btn secondary sm" id="viewLoad">Terheltségi nézet</button>
+        <div class="work-toolbar">
+          <div class="view-toggle">
+            <button type="button" class="btn secondary sm is-active" id="viewNormal">Normál nézet</button>
+            <button type="button" class="btn secondary sm" id="viewLoad">Terheltségi nézet</button>
+            <button type="button" class="btn secondary sm" id="btnRefreshRent">Frissítés</button>
+            <button type="button" class="btn secondary sm is-active" id="btnAutoRefreshToggle" title="Automatikus frissítés 5 mp-enként">Auto frissítés: BE</button>
+          </div>
+          <div class="work-toolbar-fixed">
+            <button type="button" class="btn secondary sm" id="btnOwnerReport" title="Riport V1 – CSV export">Riport</button>
+            <div class="data-mgmt-wrap">
+              <button type="button" class="btn secondary sm data-mgmt-btn" id="btnDataMgmt" aria-expanded="false" aria-haspopup="true" aria-controls="dataMgmtMenu">Adatkezelés ▾</button>
+            </div>
+          </div>
+        </div>
+        <div id="dataMgmtMenu" class="data-mgmt-menu" hidden role="menu" aria-label="Adatkezelés">
+          <button type="button" role="menuitem" data-dm-action="export-bookings">Export foglalások</button>
+          <button type="button" role="menuitem" data-dm-action="import-bookings">Import foglalások</button>
+          <button type="button" role="menuitem" data-dm-action="restore-backup">Backup visszaállítás</button>
+          <button type="button" role="menuitem" data-dm-action="export-routes">Útvonalak export</button>
+          <button type="button" role="menuitem" data-dm-action="export-routes-backup">Útvonalak backup / mentés</button>
+          <button type="button" role="menuitem" data-dm-action="export-bookings-geo">Foglalások GeoJSON</button>
+          <button type="button" role="menuitem" data-dm-action="export-forecast-90-csv">90 napos előrejelzés (CSV)</button>
+          <button type="button" role="menuitem" data-dm-action="export-closed-30-csv">Lezárt 30 nap (CSV)</button>
         </div>
       </header>
 
       <nav class="main-nav" aria-label="Főmenü">
-        <button type="button" class="main-nav-btn is-active" data-main-module="detail">Foglalási adatlap</button>
-        <button type="button" class="main-nav-btn" data-main-module="bookings">Foglalások</button>
+        <button type="button" class="main-nav-btn is-active" data-main-module="bookings">Foglalások</button>
         <button type="button" class="main-nav-btn" data-main-module="calendar">Naptár</button>
+        <button type="button" class="main-nav-btn" data-main-module="detail">Foglalási adatlap</button>
         <button type="button" class="main-nav-btn" data-main-module="routes">Útvonaltervezés</button>
       </nav>
 
       <div class="module-viewport">
-        <section id="module-detail" class="main-module is-active" aria-label="Foglalási adatlap">
+        <section id="module-detail" class="main-module" aria-label="Foglalási adatlap" hidden>
           <div id="formCard" class="detail-module-pane">
               <div class="booking-detail-header" id="bookingDetailHeader">
                 <div class="bdh-top">
@@ -1125,16 +1444,19 @@
           </div>
         </section>
 
-        <section id="module-bookings" class="main-module" aria-label="Foglalások" hidden>
+        <section id="module-bookings" class="main-module is-active" aria-label="Foglalások">
           <div id="bookingListView" class="bookings-list-module">
               <div class="pane-head">Foglalások</div>
               <div class="pane-scroll">
-                <div class="stats" style="margin-bottom:10px">
-                  <div class="stat"><strong id="statCount">0</strong><span>foglalás</span></div>
-                  <p id="rentDataStatus" class="rent-data-status" hidden></p>
-                  <div class="stat"><strong id="statPeople">0</strong><span>össz. fő</span></div>
-                  <div class="stat"><strong id="statDays">0</strong><span>érintett nap</span></div>
-                  <div class="stat"><strong id="statPeak">—</strong><span>csúcs nap (fő)</span></div>
+                <div class="stats-row" aria-label="Összesítés">
+                  <span class="stats-chip"><strong id="statCount">0</strong> foglalás</span>
+                  <span class="stats-sep">|</span>
+                  <span class="stats-chip"><strong id="statPeople">0</strong> fő</span>
+                  <span class="stats-sep">|</span>
+                  <span class="stats-chip"><strong id="statDays">0</strong> nap</span>
+                  <span class="stats-sep">|</span>
+                  <span class="stats-chip">csúcs: <strong id="statPeak">—</strong></span>
+                  <span id="rentDataStatus" class="rent-data-status" hidden></span>
                 </div>
                 <div class="filters-compact">
                   <div class="filters">
@@ -1155,7 +1477,7 @@
                       <input id="filterTo" type="date" />
                     </div>
                   </div>
-                  <div class="field" style="margin-top:8px">
+                  <div class="field" style="margin-top:4px">
                     <label for="filterSearch">Szöveges keresés</label>
                     <input id="filterSearch" placeholder="Megrendelő, cég, jármű, sofőr, telefon…" />
                   </div>
@@ -1167,10 +1489,12 @@
                     <button type="button" class="btn secondary sm" id="filter30">30 nap</button>
                     <button type="button" class="btn ghost sm" id="filterReset">Törlés</button>
                   </div>
-                  <div class="actions" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line)">
+                  <div class="actions bookings-import-actions-legacy" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line)">
                     <button type="button" class="btn secondary sm" id="btnRentBackupExport">💾 Export foglalások</button>
                     <button type="button" class="btn secondary sm" id="btnRentBackupImport">📂 Import foglalások</button>
+                    <button type="button" class="btn danger sm" id="btnRentBackupRestore">💾 Backup visszaállítás</button>
                     <input type="file" id="rentBackupFileInput" accept=".json,application/json" hidden />
+                    <input type="file" id="rentRestoreFileInput" accept=".json,application/json" hidden />
                   </div>
                 </div>
                 <div class="list" id="bookingList"></div>
@@ -1227,17 +1551,15 @@
           </div>
         </section>
 
-        <section id="module-analytics" class="main-module" aria-label="Analitika" hidden>
+        <section id="module-analytics" class="main-module" aria-label="Tulajdonosi riport" hidden>
           <div class="module-full-card analytics-placeholder">
-            <h3>Analitika · Hamarosan</h3>
-            <p>Marketing és érdeklődési elemzések később.</p>
-            <ul>
-              <li>Marketing hőtérkép</li>
-              <li>Városi hőtérkép</li>
-              <li>Országos érdeklődési térkép</li>
-              <li>Város → város érdeklődés</li>
-              <li>Időszakos elemzés</li>
-            </ul>
+            <h3>Riport V1 – CSV export</h3>
+            <p>90 napos előrejelzés és lezárt 30 napos összesítés. Semicolon CSV, naponta összesítő sorral.</p>
+            <div class="report-export-actions">
+              <button type="button" class="btn" id="btnReportExportForecast">90 napos előrejelzés (CSV)</button>
+              <button type="button" class="btn secondary" id="btnReportExportClosed">Lezárt 30 nap (CSV)</button>
+            </div>
+            <p class="report-export-hint">Oszlopok: Dátum · Város · Vonat · Utas fő · Ár · Állapot (adatlap) · Fizetési állapot (adatlap, ha kitöltve) · napi Összesen fő/ár az adott nap utolsó sorában. Ugyanaz elérhető az <strong>Adatkezelés</strong> menüben is.</p>
           </div>
         </section>
       </div>
@@ -1250,6 +1572,30 @@
       <div class="rent-modal-actions">
         <button type="button" class="btn danger" id="rentDeleteConfirm">IGEN</button>
         <button type="button" class="btn ghost" id="rentDeleteCancel">MÉGSEM</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="rentImportPreviewModal" class="rent-modal" hidden role="dialog" aria-modal="true" aria-labelledby="rentImportPreviewTitle">
+    <div class="rent-modal-box" style="max-width:min(720px,calc(100vw - 24px))">
+      <p id="rentImportPreviewTitle"><strong>Import előnézet</strong></p>
+      <p id="rentImportPreviewSummary" class="rent-preview-summary"></p>
+      <div id="rentImportPreviewTableWrap" style="max-height:280px;overflow:auto"></div>
+      <div class="rent-modal-actions" style="margin-top:12px">
+        <button type="button" class="btn" id="rentImportPreviewConfirm">Import (UPSERT)</button>
+        <button type="button" class="btn ghost" id="rentImportPreviewCancel">Mégse</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="rentRestoreModal" class="rent-modal" hidden role="dialog" aria-modal="true" aria-labelledby="rentRestoreModalTitle">
+    <div class="rent-modal-box">
+      <p id="rentRestoreModalTitle"><strong>FIGYELEM!</strong></p>
+      <p id="rentRestoreModalSummary" class="rent-preview-summary"></p>
+      <p>A jelenlegi foglalási adatbázis lecserélődik a backup tartalmára.</p>
+      <div class="rent-modal-actions">
+        <button type="button" class="btn danger" id="rentRestoreConfirm">Igen, visszaállítás</button>
+        <button type="button" class="btn ghost" id="rentRestoreCancel">Mégse</button>
       </div>
     </div>
   </div>
@@ -1271,13 +1617,51 @@
   var STORAGE_KEY = 'opnav_foglalasi_terkep_v3';
   var STORAGE_KEY_LEGACY = 'opnav_foglalasi_terkep_v1';
   var MODULE_VERSION = '5.0.0';
-  var ADMIN_BUILD_STAMP = '2026-06-01 12:00';
-  var LABEL_ZOOM_FULL = 11;
+  var ADMIN_BUILD_STAMP = 'rent-admin-report-csv-v4';
+  var RENT_AUTO_REFRESH_KEY = 'rent_admin_auto_refresh';
+  var rentAutoRefreshEnabled = true;
+  var RENT_POLL_MS = 5000;
+  var RENT_DISMISS_KEY = 'rent_admin_dismissed_new';
+  var rentPollTimer = null;
+  var rentPollSnapshot = '';
+  var rentPollKnownIds = null;
+  var knownBookingIds = null;
+  var rentPollInitialized = false;
+  var rentPollStats = {
+    ok: 0,
+    fail: 0,
+    lastAt: '',
+    lastChange: false,
+    lastMs: 0,
+    lastRefreshAt: '',
+    lastDataChangeAt: ''
+  };
+  var dismissedNewBookingIds = new Set();
+  var rentPollVisibilityBound = false;
+  var rentMapPopupBookingId = null;
+  var rentMapPopupRestoreOnRender = false;
+  var rentMapPopupUserClosed = false;
+  var rentMapPopupSuppressClose = false;
+  var rentInquiryPanelItems = [];
+  var RENT_BOOKING_POPUP_OPTS = {
+    maxWidth: 280,
+    minWidth: 220,
+    autoClose: true,
+    closeButton: true,
+    autoPan: true,
+    keepInView: true,
+    autoPanPadding: [16, 16],
+    className: 'rent-booking-popup'
+  };
+  var rentShowRoutePointMarkers = false;
   var mapViewMode = 'normal';
   var calendarMonth = new Date();
-  var FLEET_VEHICLES = ['KV01', 'KV02', 'KV03', 'KV04', 'KV05', 'KV11'];
+  var FLEET_VEHICLES = [];
   var FLEET_VEHICLE_CITIES = {};
   var FLEET_DRIVERS = [];
+  var fleetConfigStatus = 'pending';
+  var fleetConfigVia = '';
+  var fleetConfigPath = '';
   var VEHICLE_CAPACITY = 56;
   var DEFAULT_PENDING = 'FÜGGŐ';
   var DEFAULT_STATUS = 'ARAJANLATKERES';
@@ -1327,17 +1711,46 @@
 
   var API_BASE = resolveRentApiBase();
 
+  /** Admin mindig a backend-del egy originen fut – config/inquiries same-origin. */
+  function adminApiUrl(path) {
+    var p = path.charAt(0) === '/' ? path : '/' + path;
+    if (typeof location !== 'undefined' && location.protocol &&
+        (location.protocol === 'http:' || location.protocol === 'https:')) {
+      return p;
+    }
+    return API_BASE.replace(/\/$/, '') + p;
+  }
+
   function updateAdminDebugBanner() {
     var el = document.getElementById('admin-debug-banner');
     if (!el) return;
-    el.textContent = 'API: ' + API_BASE
-      + ' | CONFIG: vehicles=' + FLEET_VEHICLES.length + ', drivers=' + FLEET_DRIVERS.length
-      + ' | BUILD: ' + ADMIN_BUILD_STAMP;
+    var cfgOk = FLEET_VEHICLES.length > 0 && FLEET_DRIVERS.length > 0;
+    el.classList.toggle('is-error', fleetConfigStatus === 'fail' || (!cfgOk && fleetConfigStatus !== 'pending'));
+    el.title = 'API: ' + API_BASE
+      + ' | CONFIG path: ' + (fleetConfigPath || '—')
+      + ' | via: ' + (fleetConfigVia || '—')
+      + ' | POLL: ' + (rentPollStats.fail ? 'err' : 'ok')
+      + ' ref:' + (rentPollStats.lastRefreshAt || '—')
+      + ' chg:' + (rentPollStats.lastDataChangeAt || '—')
+      + (rentPollStats.lastChange ? ' Δ' : '');
+    el.textContent = 'CONFIG: vehicles=' + FLEET_VEHICLES.length + ', drivers=' + FLEET_DRIVERS.length
+      + ' (' + fleetConfigStatus + ')'
+      + ' | BUILD: ' + ADMIN_BUILD_STAMP
+      + ' | API: ' + API_BASE.replace(/^https?:\/\//, '');
+  }
+
+  function rentPollNowLabel() {
+    return new Date().toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+
+  function syncKnownBookingIdsFromBookings() {
+    knownBookingIds = new Set(bookings.map(function (b) { return b.id; }));
+    rentPollKnownIds = knownBookingIds;
   }
   var adminUsers = [];
   var adminLoggedUser = null;
   var appBooted = false;
-  var activeMainModule = 'detail';
+  var activeMainModule = 'bookings';
   var activeFormTab = 'basic';
   var ROUTE_DRAFT_ID = '__ROUTE_DRAFT__';
   var formDraftSnapshot = null;
@@ -1404,10 +1817,101 @@
   ];
 
   var map = L.map('map', { zoomControl: true, tapTolerance: 20 }).setView([47.1625, 19.5033], 7);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-  }).addTo(map);
+
+  var MAP_BASEMAP_KEY = 'rent_map_basemap';
+  var baseMapLayerDefs = {
+    normal: {
+      url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+      opts: {
+        maxZoom: 20,
+        subdomains: 'abcd',
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+      }
+    },
+    dark: {
+      url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+      opts: {
+        maxZoom: 20,
+        subdomains: 'abcd',
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+      }
+    },
+    satellite: {
+      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      opts: {
+        maxZoom: 19,
+        attribution: 'Tiles &copy; Esri &mdash; Maxar, Earthstar Geographics'
+      }
+    }
+  };
+  var baseMapLayers = {
+    normal: L.tileLayer(baseMapLayerDefs.normal.url, baseMapLayerDefs.normal.opts),
+    dark: L.tileLayer(baseMapLayerDefs.dark.url, baseMapLayerDefs.dark.opts),
+    satellite: L.tileLayer(baseMapLayerDefs.satellite.url, baseMapLayerDefs.satellite.opts)
+  };
+  var activeBasemapId = 'normal';
+  var activeBasemapLayer = null;
+  var basemapSwitcherEl = null;
+
+  function loadBasemapPref() {
+    try {
+      var v = localStorage.getItem(MAP_BASEMAP_KEY);
+      if (v === 'normal' || v === 'dark' || v === 'satellite') return v;
+    } catch (e) { /* ignore */ }
+    return 'normal';
+  }
+
+  function saveBasemapPref(id) {
+    try { localStorage.setItem(MAP_BASEMAP_KEY, id); } catch (e) { /* ignore */ }
+  }
+
+  function syncBasemapSwitcherUi() {
+    if (!basemapSwitcherEl) return;
+    basemapSwitcherEl.querySelectorAll('[data-basemap]').forEach(function (btn) {
+      btn.classList.toggle('is-active', btn.getAttribute('data-basemap') === activeBasemapId);
+    });
+  }
+
+  function setBasemap(id, persist) {
+    if (!baseMapLayers[id] || id === activeBasemapId) return;
+    if (activeBasemapLayer) map.removeLayer(activeBasemapLayer);
+    activeBasemapId = id;
+    activeBasemapLayer = baseMapLayers[id];
+    activeBasemapLayer.addTo(map);
+    if (activeBasemapLayer.bringToBack) activeBasemapLayer.bringToBack();
+    if (persist !== false) saveBasemapPref(id);
+    syncBasemapSwitcherUi();
+  }
+
+  var BasemapControl = L.Control.extend({
+    options: { position: 'bottomleft' },
+    onAdd: function () {
+      var wrap = L.DomUtil.create('div', 'map-basemap-switcher');
+      wrap.setAttribute('role', 'group');
+      wrap.setAttribute('aria-label', 'Térkép háttér');
+      wrap.innerHTML =
+        '<button type="button" data-basemap="normal" title="Normál térkép">Normál</button>' +
+        '<button type="button" data-basemap="dark" title="Sötét térkép">Dark</button>' +
+        '<button type="button" data-basemap="satellite" title="Műholdkép">Műhold</button>';
+      basemapSwitcherEl = wrap;
+      L.DomEvent.disableClickPropagation(wrap);
+      L.DomEvent.disableScrollPropagation(wrap);
+      wrap.querySelectorAll('[data-basemap]').forEach(function (btn) {
+        L.DomEvent.on(btn, 'click', function (ev) {
+          L.DomEvent.stop(ev);
+          setBasemap(btn.getAttribute('data-basemap'));
+        });
+      });
+      syncBasemapSwitcherUi();
+      return wrap;
+    }
+  });
+  map.addControl(new BasemapControl());
+
+  activeBasemapId = loadBasemapPref();
+  activeBasemapLayer = baseMapLayers[activeBasemapId];
+  activeBasemapLayer.addTo(map);
+  syncBasemapSwitcherUi();
 
   var bookings = [];
   var calculatedRoutes = [];
@@ -1492,11 +1996,24 @@
   }
 
   function loadFleetConfig() {
-    function applyConfig(data) {
+    fleetConfigStatus = 'loading';
+
+    function logConfigSource(status) {
+      console.log('[CONFIG SOURCE]:\npath=' + (fleetConfigPath || '—') +
+        '\nstatus=' + (status || fleetConfigStatus) +
+        '\nvehicles=' + FLEET_VEHICLES.length +
+        '\ndrivers=' + FLEET_DRIVERS.length +
+        '\nvia=' + (fleetConfigVia || '—') +
+        '\napi_base=' + API_BASE);
+    }
+
+    function applyConfig(data, sourcePath, via) {
       if (!data) return false;
+      fleetConfigPath = sourcePath || fleetConfigPath;
+      fleetConfigVia = via || fleetConfigVia;
       var vehicles = data.vehicles;
       var drivers = data.drivers;
-      if (Array.isArray(vehicles) && vehicles.length) {
+      if (Array.isArray(vehicles)) {
         FLEET_VEHICLE_CITIES = {};
         FLEET_VEHICLES = vehicles.map(function (v) {
           var id = String(v.id || v.vehicle_id || '').trim();
@@ -1506,7 +2023,7 @@
           return id;
         }).filter(Boolean);
       }
-      if (Array.isArray(drivers) && drivers.length) {
+      if (Array.isArray(drivers)) {
         FLEET_DRIVERS = drivers.map(function (d) {
           return {
             id: String(d.id || d.driver_id || '').trim(),
@@ -1514,33 +2031,53 @@
           };
         }).filter(function (d) { return d.id || d.name; });
       }
-      if (FLEET_VEHICLES.length || FLEET_DRIVERS.length) {
-        renderResourceSuggestions();
-      }
+      var ok = FLEET_VEHICLES.length > 0 && FLEET_DRIVERS.length > 0;
+      fleetConfigStatus = ok ? 'ok' : 'fail';
+      renderResourceSuggestions();
       updateAdminDebugBanner();
-      return !!(FLEET_VEHICLES.length || FLEET_DRIVERS.length);
+      logConfigSource(fleetConfigStatus);
+      return ok;
     }
 
     function fetchMasterListsFallback() {
-      var base = API_BASE.replace(/\/$/, '');
       return Promise.all([
-        fetch(base + '/api/vehicles', { headers: { Accept: 'application/json' } }).then(function (r) { return r.ok ? r.json() : null; }),
-        fetch(base + '/api/drivers', { headers: { Accept: 'application/json' } }).then(function (r) { return r.ok ? r.json() : null; })
+        fetch(adminApiUrl('/api/vehicles'), { headers: { Accept: 'application/json' } }).then(function (r) { return r.ok ? r.json() : null; }),
+        fetch(adminApiUrl('/api/drivers'), { headers: { Accept: 'application/json' } }).then(function (r) { return r.ok ? r.json() : null; })
       ]).then(function (parts) {
         var vehicles = parts[0] && parts[0].vehicles ? parts[0].vehicles : [];
         var drivers = parts[1] && parts[1].drivers ? parts[1].drivers : [];
-        if (!vehicles.length && !drivers.length) return false;
-        return applyConfig({ vehicles: vehicles, drivers: drivers });
-      }).catch(function () { return false; });
+        if (!vehicles.length && !drivers.length) {
+          fleetConfigStatus = 'fail';
+          logConfigSource('fail');
+          return false;
+        }
+        return applyConfig(
+          { vehicles: vehicles, drivers: drivers },
+          '/api/vehicles + /api/drivers',
+          'fallback-split-endpoints'
+        );
+      }).catch(function (err) {
+        fleetConfigStatus = 'fail';
+        console.error('[CONFIG SOURCE] fallback failed:', err);
+        logConfigSource('fail');
+        return false;
+      });
     }
 
-    return fetch(API_BASE.replace(/\/$/, '') + '/api/config', { headers: { Accept: 'application/json' } })
+    var configUrl = adminApiUrl('/api/config');
+    fleetConfigPath = configUrl;
+    return fetch(configUrl, { headers: { Accept: 'application/json' } })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (data) {
-        if (data && data.ok) return applyConfig(data);
+        if (data && data.ok) {
+          return applyConfig(data, configUrl, 'same-origin-api-config');
+        }
         return fetchMasterListsFallback();
       })
-      .catch(function () { return fetchMasterListsFallback(); })
+      .catch(function (err) {
+        console.error('[CONFIG SOURCE] primary failed:', err);
+        return fetchMasterListsFallback();
+      })
       .finally(function () { updateAdminDebugBanner(); });
   }
 
@@ -1847,19 +2384,37 @@
     });
   }
 
+  function resolveRouteTargetBookingId() {
+    var selId = $('routeBookingId') ? $('routeBookingId').value : '';
+    if (selId) return selId;
+    var editId = $('editId') ? $('editId').value : '';
+    if (editId) return editId;
+    return ROUTE_DRAFT_ID;
+  }
+
   function getRouteTargetBookingId() {
-    return $('editId').value || $('routeBookingId').value || ROUTE_DRAFT_ID;
+    return resolveRouteTargetBookingId();
   }
 
   function getRouteTargetBooking() {
-    var selId = $('routeBookingId').value;
-    var editId = $('editId').value;
-    var lookupId = selId || editId;
+    var lookupId = resolveRouteTargetBookingId();
     if (lookupId && lookupId !== ROUTE_DRAFT_ID) {
       var saved = bookings.find(function (x) { return x.id === lookupId; });
       if (saved) return saved;
     }
     return buildBookingFromFormForRoute();
+  }
+
+  function logRouteTargetDebug(context) {
+    var booking = getRouteTargetBooking();
+    var customer = booking
+      ? (booking.ordererName || booking.name || booking.customer_name || booking.companyName || '—')
+      : '—';
+    console.log('[ROUTE TARGET]' + (context ? ' ' + context : '') + ':\n' +
+      'bookingId=' + (booking && booking.id ? booking.id : '—') + '\n' +
+      'customer=' + customer + '\n' +
+      'lat=' + (booking && booking.lat != null ? booking.lat : '—') + '\n' +
+      'lng=' + (booking && booking.lng != null ? booking.lng : '—'));
   }
 
   function openRoutePlanning() {
@@ -1982,7 +2537,7 @@
   }
 
   function setMainModule(moduleId) {
-    activeMainModule = moduleId || 'detail';
+    activeMainModule = moduleId || 'bookings';
     document.querySelectorAll('.main-nav-btn[data-main-module]').forEach(function (btn) {
       btn.classList.toggle('is-active', btn.getAttribute('data-main-module') === activeMainModule);
     });
@@ -1992,9 +2547,11 @@
       mod.hidden = !on;
     });
     if (activeMainModule === 'routes') {
-      var rid = $('editId').value;
-      if (rid) selectRouteTarget(rid, false);
-      else if (!$('routeBookingId').value) $('routeBookingId').value = ROUTE_DRAFT_ID;
+      if (!$('routeBookingId').value) {
+        var rid = $('editId').value;
+        if (rid) selectRouteTarget(rid, false);
+        else $('routeBookingId').value = ROUTE_DRAFT_ID;
+      }
       renderRouteTargetPanel();
     }
     if (activeMainModule === 'detail') renderGisTabSummary();
@@ -2395,30 +2952,143 @@
     return v && v.toUpperCase() !== DEFAULT_PENDING;
   }
 
-  function isCompactLabelZoom() {
-    return map.getZoom() < LABEL_ZOOM_FULL;
+  function markerHeadcountLabel(b) {
+    if (!b || b.headcount == null || b.headcount === '') return '—';
+    return String(b.headcount) + ' fő';
   }
 
-  function markerLabelHtml(b, compact) {
-    var dateLine = '<div class="ml-date">' + escapeHtml(formatShortDate(b.date)) + '</div>';
-    var peopleLine = '<div class="ml-people">' + escapeHtml(String(b.headcount)) + ' fő</div>';
-    if (compact) {
-      return '<div class="map-label-inner">' + dateLine + peopleLine + '</div>';
-    }
-    var timeLine = '<div class="ml-time">' + escapeHtml(formatTimeShort(b.timeStart)) + '-' +
-      escapeHtml(formatTimeShort(b.timeEnd)) + '</div>';
-    var statusLine = '<div class="ml-status">' + escapeHtml(statusShortLabel(b.status)) + '</div>';
-    var vehLine = showVehicleLabel(b.vehicle)
-      ? '<div class="ml-veh">' + escapeHtml(b.vehicle) + '</div>'
+  function markerTimeRange(b) {
+    if (!b) return '—';
+    var start = formatTimeShort(b.timeStart) || '—';
+    var end = formatTimeShort(b.timeEnd);
+    if (end && end !== '—' && end !== start) return start + '-' + end;
+    return start;
+  }
+
+  function markerVehicleLabel(b) {
+    if (!b) return '';
+    var v = String(b.vehicle || b.vehicle_id || '').trim();
+    if (!showVehicleLabel(v)) return '';
+    return v;
+  }
+
+  function markerLabelHtml(b) {
+    if (!b) b = {};
+    var dateLine = '<div class="ml-date" style="font-weight:800;font-size:9px;color:#fb923c">' +
+      escapeHtml(formatShortDate(b.date)) + '</div>';
+    var timeLine = '<div class="ml-time" style="font-size:8px;color:#fde68a">' +
+      escapeHtml(markerTimeRange(b)) + '</div>';
+    var peopleLine = '<div class="ml-people" style="font-weight:800;font-size:8px;color:#86efac">' +
+      escapeHtml(markerHeadcountLabel(b)) + '</div>';
+    var statusLine = '<div class="ml-status" style="font-size:8px;color:#93c5fd;font-weight:700">' +
+      escapeHtml(statusShortLabel(b.status)) + '</div>';
+    var veh = markerVehicleLabel(b);
+    var vehLine = veh
+      ? ('<div class="ml-veh" style="font-weight:800;font-size:8px;color:#7dd3fc">' + escapeHtml(veh) + '</div>')
       : '';
     return '<div class="map-label-inner">' + dateLine + timeLine + peopleLine + statusLine + vehLine + '</div>';
   }
 
+  function applyMapLabelTooltipTheme(source) {
+    var tooltip = source && source.getTooltip ? source.getTooltip() : source;
+    if (!tooltip || !tooltip.getElement) return;
+    var el = tooltip.getElement();
+    if (!el) return;
+    el.classList.add('map-label', 'rent-map-label-dark');
+    el.style.setProperty('background', 'rgba(15, 23, 42, 0.94)', 'important');
+    el.style.setProperty('background-color', 'rgba(15, 23, 42, 0.94)', 'important');
+    el.style.setProperty('border', '1px solid rgba(255, 255, 255, 0.14)', 'important');
+    el.style.setProperty('color', '#f1f5f9', 'important');
+    el.style.setProperty('box-shadow', '0 2px 6px rgba(0, 0, 0, 0.35)', 'important');
+    el.style.setProperty('border-radius', '6px', 'important');
+    el.style.setProperty('padding', '4px 6px', 'important');
+    el.style.setProperty('font-size', '8px', 'important');
+    el.style.setProperty('line-height', '1.25', 'important');
+  }
+
+  function activateBookingMarkerPopup(m, b) {
+    if (!m || !b || !b.id) return;
+    rentMapPopupUserClosed = false;
+    rentMapPopupRestoreOnRender = true;
+    rentMapPopupBookingId = b.id;
+    m.openPopup();
+  }
+
+  function wireBookingMarkerTooltipClick(m, b) {
+    if (!m || !b) return;
+    var tooltip = m.getTooltip ? m.getTooltip() : null;
+    if (!tooltip || !tooltip.getElement) return;
+    var el = tooltip.getElement();
+    if (!el) return;
+    el.classList.add('map-label-clickable');
+    applyMapLabelTooltipTheme(tooltip);
+    if (el._rentPopupClick) {
+      L.DomEvent.off(el, 'click', el._rentPopupClick);
+    }
+    el._rentPopupClick = function (ev) {
+      if (L.DomEvent) {
+        L.DomEvent.stopPropagation(ev);
+        L.DomEvent.preventDefault(ev);
+      }
+      activateBookingMarkerPopup(m, b);
+    };
+    L.DomEvent.on(el, 'click', el._rentPopupClick);
+  }
+
+  function wireBookingMarkerInteraction(m, b) {
+    if (!m || !b) return;
+    function onMarkerClick(ev) {
+      if (L.DomEvent) {
+        L.DomEvent.stopPropagation(ev);
+      }
+      activateBookingMarkerPopup(m, b);
+    }
+    m.off('click', m._rentMarkerClick);
+    m._rentMarkerClick = onMarkerClick;
+    m.on('click', onMarkerClick);
+    wireBookingMarkerTooltipClick(m, b);
+  }
+
+  function captureRentMapPopupRestoreId() {
+    if (rentMapPopupRestoreOnRender && rentMapPopupBookingId && !rentMapPopupUserClosed) {
+      return rentMapPopupBookingId;
+    }
+    var openId = null;
+    markerEntries.forEach(function (entry) {
+      if (entry.marker && entry.marker.isPopupOpen && entry.marker.isPopupOpen()) {
+        openId = entry.booking && entry.booking.id;
+      }
+    });
+    if (openId) {
+      rentMapPopupBookingId = openId;
+      rentMapPopupRestoreOnRender = true;
+      rentMapPopupUserClosed = false;
+      return openId;
+    }
+    return null;
+  }
+
+  function restoreRentMapPopupIfNeeded(restoreId) {
+    if (!restoreId || rentMapPopupUserClosed) return;
+    var entry = markerEntries.find(function (e) {
+      return e.booking && e.booking.id === restoreId;
+    });
+    if (!entry) {
+      rentMapPopupBookingId = null;
+      rentMapPopupRestoreOnRender = false;
+      return;
+    }
+    rentMapPopupSuppressClose = true;
+    entry.marker.openPopup();
+    rentMapPopupSuppressClose = false;
+  }
+
   function refreshMarkerLabels() {
     if (mapViewMode === 'load') return;
-    var compact = isCompactLabelZoom();
     markerEntries.forEach(function (entry) {
-      entry.marker.setTooltipContent(markerLabelHtml(entry.booking, compact));
+      entry.marker.setTooltipContent(markerLabelHtml(entry.booking));
+      applyMapLabelTooltipTheme(entry.marker);
+      wireBookingMarkerTooltipClick(entry.marker, entry.booking);
     });
   }
 
@@ -2480,9 +3150,9 @@
 
   function loadLabelHtml(group) {
     return '<div class="map-label-inner">' +
-      '<div class="ml-date">' + escapeHtml(formatHuDate(group.date)) + '</div>' +
-      '<div class="ml-people">' + escapeHtml(String(group.count)) + ' foglalás</div>' +
-      '<div class="ml-people">' + escapeHtml(String(group.headcount)) + ' fő</div>' +
+      '<div class="ml-date" style="font-weight:800;font-size:9px;color:#fb923c">' + escapeHtml(formatHuDate(group.date)) + '</div>' +
+      '<div class="ml-people" style="font-weight:800;font-size:8px;color:#86efac">' + escapeHtml(String(group.count)) + ' foglalás</div>' +
+      '<div class="ml-people" style="font-weight:800;font-size:8px;color:#86efac">' + escapeHtml(String(group.headcount)) + ' fő</div>' +
       '</div>';
   }
 
@@ -2544,7 +3214,7 @@
     }).filter(Boolean);
   }
 
-  function getBookingRoutePoints(booking) {
+  function getCustomerRoutePoints(booking) {
     if (!booking) return [];
     if (booking.routePoints && Array.isArray(booking.routePoints) && booking.routePoints.length) {
       var fromRoutePoints = coordsFromRoutePoints(booking.routePoints);
@@ -2555,6 +3225,23 @@
     var fromDraft = coordsFromGeoJsonLineString(booking.routeDraft);
     if (fromDraft.length) return fromDraft;
     return [];
+  }
+
+  function getAdminRoutePoints(booking) {
+    if (!booking) return [];
+    if (booking.adminCalculatedRoute && booking.adminCalculatedRoute.geometry) {
+      var fromAdmin = coordsFromGeoJsonLineString(booking.adminCalculatedRoute.geometry);
+      if (fromAdmin.length) return fromAdmin;
+    }
+    var calc = calculatedRoutes.find(function (r) { return r.bookingId === booking.id; });
+    if (calc && calc.geometry) {
+      return coordsFromGeoJsonLineString(calc.geometry);
+    }
+    return [];
+  }
+
+  function getBookingRoutePoints(booking) {
+    return getCustomerRoutePoints(booking);
   }
 
   function routePointDivIcon(label, kind) {
@@ -2572,25 +3259,35 @@
   function drawBookingRoutePoints(pts, layer, styleOpts) {
     if (!pts || !pts.length) return null;
     var opts = styleOpts || {};
+    var showPointMarkers = !!opts.showPointMarkers;
+    var maxPointMarkers = opts.maxPointMarkers || 16;
     if (pts.length >= 2) {
       L.polyline(pts.map(function (p) { return [p.lat, p.lng]; }), {
         color: opts.color || '#a855f7',
         weight: opts.weight || 4,
-        opacity: 0.85,
+        opacity: opts.opacity != null ? opts.opacity : 0.85,
         dashArray: opts.dashArray || '6 4'
       }).addTo(layer);
-      pts.forEach(function (p, i) {
-        var label = 'S';
-        var kind = 'start';
-        if (i === pts.length - 1 && i > 0) {
-          label = 'C';
-          kind = 'end';
-        } else if (i > 0) {
-          label = String(i);
-          kind = 'mid';
+      if (showPointMarkers && pts.length <= maxPointMarkers) {
+        pts.forEach(function (p, i) {
+          var label = 'S';
+          var kind = 'start';
+          if (i === pts.length - 1 && i > 0) {
+            label = 'C';
+            kind = 'end';
+          } else if (i > 0) {
+            label = String(i);
+            kind = 'mid';
+          }
+          L.marker([p.lat, p.lng], { icon: routePointDivIcon(label, kind), zIndexOffset: 400 }).addTo(layer);
+        });
+      } else {
+        L.marker([pts[0].lat, pts[0].lng], { icon: routePointDivIcon('S', 'start'), zIndexOffset: 400 }).addTo(layer);
+        if (pts.length > 1) {
+          var last = pts[pts.length - 1];
+          L.marker([last.lat, last.lng], { icon: routePointDivIcon('C', 'end'), zIndexOffset: 400 }).addTo(layer);
         }
-        L.marker([p.lat, p.lng], { icon: routePointDivIcon(label, kind), zIndexOffset: 500 }).addTo(layer);
-      });
+      }
     } else if (pts.length === 1) {
       L.circleMarker([pts[0].lat, pts[0].lng], {
         radius: 8,
@@ -2745,10 +3442,265 @@
 
   function reloadRentData() {
     return loadRentInquiriesFromApi().then(function () {
+      rentPollSnapshot = rentBookingsChangeSignature(bookings);
+      syncKnownBookingIdsFromBookings();
       render();
     }).catch(function () {
       render();
     });
+  }
+
+  function loadDismissedNewBookingIds() {
+    try {
+      var raw = sessionStorage.getItem(RENT_DISMISS_KEY);
+      if (!raw) return;
+      JSON.parse(raw).forEach(function (id) { dismissedNewBookingIds.add(String(id)); });
+    } catch (e) { /* ignore */ }
+  }
+
+  function persistDismissedNewBookingIds() {
+    try {
+      sessionStorage.setItem(RENT_DISMISS_KEY, JSON.stringify(Array.from(dismissedNewBookingIds)));
+    } catch (e) { /* ignore */ }
+  }
+
+  function rentBookingsChangeSignature(list) {
+    return JSON.stringify((list || []).map(function (b) {
+      return {
+        id: b.id,
+        updatedAt: b.updatedAt || b.updated_at || '',
+        status: b.status || '',
+        vehicle: b.vehicle || '',
+        driver: b.driver || ''
+      };
+    }).sort(function (a, b) { return String(a.id).localeCompare(String(b.id)); }));
+  }
+
+  function popupDisplay(value) {
+    if (value == null) return '—';
+    var s = String(value).trim();
+    return s === '' ? '—' : s;
+  }
+
+  function bookingCustomerLabel(b) {
+    if (!b) return '—';
+    return popupDisplay(b.ordererName || b.customer_name || b.name || b.companyName);
+  }
+
+  function formatInquiryPanelLine(b) {
+    if (!b) return '—';
+    var city = popupDisplay(b.city || b.placeName);
+    var date = b.date ? formatHuDate(b.date) : '—';
+    var time = formatTimeShort(b.timeStart) || '—';
+    return city + ' | ' + date + ' | ' + time + ' | ' + markerHeadcountLabel(b);
+  }
+
+  function renderRentInquiryPanel() {
+    var panel = $('rentInquiryPanel');
+    var list = $('rentInquiryPanelList');
+    if (!panel || !list) return;
+    var visible = rentInquiryPanelItems.filter(function (item) {
+      return item && item.id && !dismissedNewBookingIds.has(item.id);
+    });
+    if (!visible.length) {
+      panel.hidden = true;
+      list.innerHTML = '';
+      return;
+    }
+    panel.hidden = false;
+    list.innerHTML = visible.map(function (item) {
+      return '<div class="rent-inquiry-row" data-inquiry-id="' + escapeHtml(item.id) + '">' +
+        '<span class="rent-inquiry-text">' + escapeHtml(formatInquiryPanelLine(item)) + '</span>' +
+        '<div class="rent-inquiry-row-actions">' +
+        '<button type="button" class="btn sm rent-inquiry-open" data-inquiry-open="' + escapeHtml(item.id) + '">Megnyitás</button>' +
+        '<button type="button" class="btn ghost sm rent-inquiry-dismiss" data-inquiry-dismiss="' + escapeHtml(item.id) + '" title="Bezárás">×</button>' +
+        '</div></div>';
+    }).join('');
+    list.querySelectorAll('[data-inquiry-open]').forEach(function (btn) {
+      btn.onclick = function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        var id = btn.getAttribute('data-inquiry-open');
+        if (id) openBookingForm(id);
+      };
+    });
+    list.querySelectorAll('[data-inquiry-dismiss]').forEach(function (btn) {
+      btn.onclick = function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        var id = btn.getAttribute('data-inquiry-dismiss');
+        if (id) {
+          dismissedNewBookingIds.add(id);
+          persistDismissedNewBookingIds();
+          renderRentInquiryPanel();
+        }
+      };
+    });
+  }
+
+  function addRentInquiryPanelItem(booking) {
+    if (!booking || !booking.id || dismissedNewBookingIds.has(booking.id)) return;
+    var norm = normalizeBooking(booking);
+    var idx = rentInquiryPanelItems.findIndex(function (x) { return x.id === norm.id; });
+    if (idx >= 0) rentInquiryPanelItems[idx] = norm;
+    else rentInquiryPanelItems.push(norm);
+    renderRentInquiryPanel();
+  }
+
+  function handleDetectedNewBookings(newOnes) {
+    if (!newOnes || !newOnes.length) return;
+    newOnes.forEach(function (b) { addRentInquiryPanelItem(b); });
+  }
+
+  function loadRentAutoRefreshPref() {
+    try {
+      var stored = sessionStorage.getItem(RENT_AUTO_REFRESH_KEY);
+      if (stored === '0') rentAutoRefreshEnabled = false;
+      else if (stored === '1') rentAutoRefreshEnabled = true;
+    } catch (e) { /* ignore */ }
+  }
+
+  function saveRentAutoRefreshPref() {
+    try {
+      sessionStorage.setItem(RENT_AUTO_REFRESH_KEY, rentAutoRefreshEnabled ? '1' : '0');
+    } catch (e) { /* ignore */ }
+  }
+
+  function updateAutoRefreshToggleUi() {
+    var btn = $('btnAutoRefreshToggle');
+    if (!btn) return;
+    btn.textContent = rentAutoRefreshEnabled ? 'Auto frissítés: BE' : 'Auto frissítés: KI';
+    btn.classList.toggle('is-active', rentAutoRefreshEnabled);
+  }
+
+  function stopRentAutoRefreshTimer() {
+    if (rentPollTimer) {
+      clearInterval(rentPollTimer);
+      rentPollTimer = null;
+    }
+  }
+
+  function startRentAutoRefreshTimer() {
+    stopRentAutoRefreshTimer();
+    if (!rentAutoRefreshEnabled) return;
+    rentPollTimer = setInterval(function () { pollRentInquiriesOnce(); }, RENT_POLL_MS);
+  }
+
+  function toggleRentAutoRefresh() {
+    rentAutoRefreshEnabled = !rentAutoRefreshEnabled;
+    saveRentAutoRefreshPref();
+    updateAutoRefreshToggleUi();
+    startRentAutoRefreshTimer();
+    if (rentAutoRefreshEnabled) pollRentInquiriesOnce();
+  }
+
+  function manualRefreshRentData() {
+    return loadRentInquiriesFromApi().then(function () {
+      rentPollSnapshot = rentBookingsChangeSignature(bookings);
+      syncKnownBookingIdsFromBookings();
+      var restoreId = captureRentMapPopupRestoreId();
+      render();
+      restoreRentMapPopupIfNeeded(restoreId);
+      updateAdminDebugBanner();
+    }).catch(function (err) {
+      console.warn('Manual refresh failed:', err);
+      updateAdminDebugBanner();
+    });
+  }
+
+  function isRentMapUiEventTarget(target) {
+    if (!target || !target.closest) return false;
+    return !!(target.closest('.leaflet-tooltip') || target.closest('.leaflet-popup') || target.closest('.leaflet-marker-icon'));
+  }
+
+  function applyRentBookingsFromServer(rows, opts) {
+    opts = opts || {};
+    var prevIds = knownBookingIds || rentPollKnownIds || new Set();
+    var normalized = rows.map(normalizeBooking);
+    var newOnes = [];
+    if (rentPollInitialized) {
+      newOnes = normalized.filter(function (b) {
+        return b.id && !prevIds.has(b.id) && !dismissedNewBookingIds.has(b.id);
+      });
+    }
+    bookings = normalized;
+    restoreCalculatedRoutesFromBookings();
+    syncKnownBookingIdsFromBookings();
+    if (!rentPollInitialized) {
+      rentPollInitialized = true;
+    } else if (!opts.skipToast) {
+      handleDetectedNewBookings(newOnes);
+    }
+    setRentDataStatus('server');
+  }
+
+  function softRefreshOpenBookingChrome() {
+    var activeId = $('editId') && $('editId').value;
+    if (!activeId) return;
+    renderBookingDetailHeader();
+    renderLifecycleBar();
+    renderResourceSuggestions();
+    renderGisTabSummary();
+    populateRouteBookingSelect();
+    var list = getFiltered();
+    renderList(list);
+  }
+
+  function pollRentInquiriesOnce() {
+    if (!appBooted || document.hidden || !rentAutoRefreshEnabled) return Promise.resolve(false);
+    var t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    return fetch(rentApiUrl('/api/rent/inquiries'), { headers: { Accept: 'application/json' } })
+      .then(function (resp) {
+        return resp.json().then(function (data) {
+          if (!resp.ok || !data || !data.ok || !Array.isArray(data.inquiries)) {
+            throw new Error((data && data.error) || ('HTTP ' + resp.status));
+          }
+          return data.inquiries;
+        });
+      })
+      .then(function (rows) {
+        var sig = rentBookingsChangeSignature(rows.map(normalizeBooking));
+        var changed = sig !== rentPollSnapshot;
+        var nowLabel = rentPollNowLabel();
+        rentPollStats.ok += 1;
+        rentPollStats.lastAt = nowLabel;
+        rentPollStats.lastRefreshAt = nowLabel;
+        rentPollStats.lastChange = changed;
+        rentPollStats.lastMs = Math.round(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0);
+        if (!changed) {
+          updateAdminDebugBanner();
+          return false;
+        }
+        rentPollStats.lastDataChangeAt = nowLabel;
+        applyRentBookingsFromServer(rows);
+        rentPollSnapshot = sig;
+        render({ soft: true });
+        softRefreshOpenBookingChrome();
+        updateAdminDebugBanner();
+        return true;
+      })
+      .catch(function (err) {
+        rentPollStats.fail += 1;
+        rentPollStats.lastAt = 'err';
+        rentPollStats.lastChange = false;
+        updateAdminDebugBanner();
+        console.warn('Rent poll failed:', err);
+        return false;
+      });
+  }
+
+  function startRentAutoRefresh() {
+    if (rentPollTimer && rentAutoRefreshEnabled) return;
+    loadDismissedNewBookingIds();
+    loadRentAutoRefreshPref();
+    updateAutoRefreshToggleUi();
+    startRentAutoRefreshTimer();
+    if (!rentPollVisibilityBound) {
+      rentPollVisibilityBound = true;
+      document.addEventListener('visibilitychange', function () {
+        if (!document.hidden && rentAutoRefreshEnabled) pollRentInquiriesOnce();
+      });
+    }
   }
 
   function patchRentInquiryApi(id, body) {
@@ -2902,7 +3854,7 @@
 
   function resolveBookingHeadcount(b) {
     if (!b) return null;
-    var candidates = [b.headcount, b.passenger_count, b.passengerCount, b.letszam];
+    var candidates = [b.headcount, b.passenger_count, b.passengerCount, b.people, b.passengers, b.letszam];
     for (var i = 0; i < candidates.length; i++) {
       var v = candidates[i];
       if (v == null || v === '') continue;
@@ -3378,38 +4330,108 @@
     populateRouteBookingSelect();
   }
 
+  function popupMetaRow(label, value) {
+    return '<div class="popup-meta">' + escapeHtml(label) + ': ' + escapeHtml(popupDisplay(value)) + '</div>';
+  }
+
+  function popupTimeRange(b) {
+    if (!b) return '—';
+    var start = formatTimeShort(b.timeStart);
+    var end = formatTimeShort(b.timeEnd);
+    if (start && end) return start + '–' + end;
+    return start || end || '—';
+  }
+
+  function popupPriceLabel(b) {
+    if (!b || b.price == null || b.price === '') return '';
+    var n = Number(b.price);
+    if (!isFinite(n) || n <= 0) return '';
+    return n.toLocaleString('hu-HU') + ' Ft';
+  }
+
+  function popupDepositLabel(b) {
+    if (!b) return '';
+    var raw = b.deposit != null ? b.deposit : (b.advance != null ? b.advance : (b.elole != null ? b.elole : b.prePayment));
+    if (raw == null || raw === '') return '';
+    var n = Number(raw);
+    if (!isFinite(n) || n <= 0) return popupDisplay(raw);
+    return n.toLocaleString('hu-HU') + ' Ft';
+  }
+
+  function popupPaymentStatusLabel(b) {
+    if (!b) return '';
+    return b.paymentStatus || b.payment_status || b.fizetesStatus || b.fizetes_status || '';
+  }
+
   function popupHtml(b) {
+    if (!b) b = {};
     var lat = b.lat;
     var lng = b.lng;
-    var gmaps = 'https://www.google.com/maps/dir/?api=1&destination=' + lat + ',' + lng;
-    var waze = 'https://waze.com/ul?ll=' + lat + ',' + lng + '&navigate=yes';
-    return '<div>' +
-      '<div class="popup-date">' + escapeHtml(formatHuDate(b.date)) + '</div>' +
-      '<div class="popup-time">' + escapeHtml(formatTimeShort(b.timeStart)) + '-' + escapeHtml(formatTimeShort(b.timeEnd)) + '</div>' +
-      '<div class="popup-people">' + escapeHtml(String(b.headcount)) + ' fő</div>' +
-      '<div class="popup-meta">Állapot: ' + escapeHtml(statusLabel(b.status)) + '</div>' +
-      '<div class="popup-meta">Jármű: ' + escapeHtml(b.vehicle || DEFAULT_PENDING) + '</div>' +
-      '<div class="popup-meta">Sofőr: ' + escapeHtml(b.driver || DEFAULT_PENDING) + '</div>' +
-      '<div class="popup-place">' + escapeHtml(b.placeName || b.address) + '</div>' +
+    var gmaps = lat != null && lng != null && isFinite(Number(lat)) && isFinite(Number(lng))
+      ? ('https://www.google.com/maps/dir/?api=1&destination=' + lat + ',' + lng)
+      : '';
+    var statusText = b.status ? statusLabel(b.status) : '—';
+    var noteText = popupDisplay(b.note);
+    var bookingId = b.id ? String(b.id) : '';
+    return '<div class="popup-detail">' +
+      '<div class="popup-section">' +
+      popupMetaRow('Ügyfél', bookingCustomerLabel(b)) +
+      popupMetaRow('Kapcsolattartó', b.contact) +
+      popupMetaRow('Telefon', b.phone) +
+      popupMetaRow('Email', b.email) +
+      (noteText !== '—'
+        ? ('<div class="popup-meta">Megjegyzés:</div><div class="popup-note">' + escapeHtml(noteText) + '</div>')
+        : popupMetaRow('Megjegyzés', '')) +
+      '</div>' +
+      '<div class="popup-section">' +
+      popupMetaRow('Dátum', b.date ? formatHuDate(b.date) : '—') +
+      popupMetaRow('Idő', popupTimeRange(b)) +
+      popupMetaRow('Létszám', markerHeadcountLabel(b)) +
+      '</div>' +
+      '<div class="popup-section">' +
+      popupMetaRow('Ár', popupPriceLabel(b)) +
+      popupMetaRow('Előleg', popupDepositLabel(b)) +
+      popupMetaRow('Fizetési státusz', popupPaymentStatusLabel(b)) +
+      '</div>' +
+      '<div class="popup-section">' +
+      popupMetaRow('Állapot', statusText) +
+      popupMetaRow('Sofőr', b.driver) +
+      popupMetaRow('Jármű', b.vehicle) +
+      '</div>' +
       '<div class="popup-nav">' +
-      '<button type="button" class="nav-route" data-route-booking="' + escapeHtml(b.id) + '">Útvonal ide</button>' +
-      '<a class="nav-gmaps" href="' + gmaps + '" target="_blank" rel="noopener">Google Maps</a>' +
-      '<a class="nav-waze" href="' + waze + '" target="_blank" rel="noopener">Waze</a>' +
-      '</div></div>';
+      '<button type="button" class="nav-route popup-open-form" data-open-booking="' + escapeHtml(bookingId) + '">Adatlap</button>' +
+      '<button type="button" class="nav-route popup-open-route" data-route-booking="' + escapeHtml(bookingId) + '">Útvonaltervezés</button>' +
+      '</div>' +
+      '</div>';
   }
 
   function bindPopupActions() {
     document.querySelectorAll('[data-route-booking]').forEach(function (btn) {
       btn.onclick = function (ev) {
         ev.preventDefault();
+        ev.stopPropagation();
         var id = btn.getAttribute('data-route-booking');
-        selectRouteTarget(id, true);
         map.closePopup();
+        if (id && id !== '—') selectRouteTarget(id, true);
+      };
+    });
+    document.querySelectorAll('[data-open-booking]').forEach(function (btn) {
+      btn.onclick = function (ev) {
+        ev.preventDefault();
+        var id = btn.getAttribute('data-open-booking');
+        map.closePopup();
+        if (id && id !== '—') openBookingForm(id);
       };
     });
   }
 
   map.on('popupopen', bindPopupActions);
+  map.on('popupclose', function () {
+    if (rentMapPopupSuppressClose) return;
+    rentMapPopupUserClosed = true;
+    rentMapPopupRestoreOnRender = false;
+    rentMapPopupBookingId = null;
+  });
   map.on('zoomend', refreshMarkerLabels);
 
   function markerRadius(n) {
@@ -3454,12 +4476,24 @@
     });
   }
 
-  function renderMarkers(list) {
+  function renderMarkers(list, opts) {
+    opts = opts || {};
+    var preserveView = !!opts.preserveView;
+    var preserveDraft = !!opts.preserveDraft;
+    var mapCenter = preserveView ? map.getCenter() : null;
+    var mapZoom = preserveView ? map.getZoom() : null;
+    var draftLatLng = null;
+    if (preserveDraft && draftMarker && draftMarker.getLatLng) {
+      draftLatLng = draftMarker.getLatLng();
+    }
+
+    var restorePopupId = captureRentMapPopupRestoreId();
+    rentMapPopupSuppressClose = true;
     markerLayer.clearLayers();
     bookingRouteLayer.clearLayers();
     markers = [];
     markerEntries = [];
-    draftMarker = null;
+    if (!preserveDraft) draftMarker = null;
 
     if (mapViewMode === 'load') {
       aggregateByDate(list).forEach(function (g) {
@@ -3469,33 +4503,48 @@
           color: color, fillColor: color, fillOpacity: 0.82, weight: 2
         }).addTo(markerLayer);
         m.bindTooltip(loadLabelHtml(g), {
-          permanent: true, direction: 'right', className: 'map-label', offset: [10, 0], opacity: 1
+          permanent: true, direction: 'right', className: 'map-label rent-map-label-dark', offset: [8, 0], opacity: 1
         });
+        applyMapLabelTooltipTheme(m);
         m.bindPopup(loadPopupHtml(g), { maxWidth: 320 });
         m.on('click', function () { setFilterDayOnly(g.date); });
         markers.push(m);
       });
+      if (preserveView && mapCenter) map.setView(mapCenter, mapZoom, { animate: false });
+      rentMapPopupSuppressClose = false;
       return;
     }
 
-    var compact = isCompactLabelZoom();
     list.forEach(function (b) {
-      var pts = getBookingRoutePoints(b);
+      var customerPts = getCustomerRoutePoints(b);
+      var adminPts = getAdminRoutePoints(b);
       var markerLat = null;
       var markerLng = null;
-      if (pts.length >= 1) {
-        markerLat = pts[0].lat;
-        markerLng = pts[0].lng;
+      if (customerPts.length >= 1) {
+        markerLat = customerPts[0].lat;
+        markerLng = customerPts[0].lng;
       } else if (b.lat != null && b.lng != null) {
         markerLat = b.lat;
         markerLng = b.lng;
       }
       if (markerLat == null || markerLng == null) return;
 
-      if (pts.length >= 2) {
-        drawBookingRoutePoints(pts, bookingRouteLayer);
-      } else if (pts.length === 1) {
-        drawBookingRoutePoints(pts, bookingRouteLayer);
+      if (customerPts.length >= 2) {
+        drawBookingRoutePoints(customerPts, bookingRouteLayer, {
+          color: '#a855f7',
+          dashArray: '6 4',
+          weight: 4,
+          showPointMarkers: rentShowRoutePointMarkers
+        });
+      }
+      if (adminPts.length >= 2) {
+        drawBookingRoutePoints(adminPts, bookingRouteLayer, {
+          color: '#38bdf8',
+          dashArray: null,
+          weight: 5,
+          opacity: 0.9,
+          showPointMarkers: false
+        });
       }
 
       var color = statusColor(b.status);
@@ -3503,14 +4552,29 @@
         radius: markerRadius(b.headcount),
         color: color, fillColor: color, fillOpacity: 0.78, weight: 2
       }).addTo(markerLayer);
-      m.bindTooltip(markerLabelHtml(b, compact), {
-        permanent: true, direction: 'right', className: 'map-label', offset: [10, 0], opacity: 1
+      m.bindTooltip(markerLabelHtml(b), {
+        permanent: true, direction: 'right', className: 'map-label rent-map-label-dark', offset: [8, 0], opacity: 1,
+        interactive: true
       });
-      m.bindPopup(popupHtml(b), { maxWidth: 300 });
-      m.on('click', function () { openBookingForm(b.id); });
+      applyMapLabelTooltipTheme(m);
+      m.bindPopup(popupHtml(b), RENT_BOOKING_POPUP_OPTS);
+      wireBookingMarkerInteraction(m, b);
       markers.push(m);
       markerEntries.push({ marker: m, booking: b });
     });
+
+    if (draftLatLng) {
+      draftMarker = L.circleMarker(draftLatLng, {
+        radius: 10, color: '#f97316', fillColor: '#fb923c',
+        fillOpacity: 0.85, weight: 2, dashArray: '4 4'
+      }).addTo(markerLayer);
+    }
+
+    if (preserveView && mapCenter) {
+      map.setView(mapCenter, mapZoom, { animate: false });
+    }
+    rentMapPopupSuppressClose = false;
+    restoreRentMapPopupIfNeeded(restorePopupId);
   }
 
   function renderList(list) {
@@ -3533,9 +4597,12 @@
     root.innerHTML = list.map(function (b) {
       var cls = b.id === activeId ? ' is-active' : '';
       return '<div class="list-item' + cls + '" data-id="' + escapeHtml(b.id) + '">' +
+        (isBackendRentId(b.id)
+          ? ('<button type="button" class="btn danger sm list-del-btn" data-del-id="' + escapeHtml(b.id) + '">Törlés</button>')
+          : '') +
         '<div class="list-title">' + escapeHtml((b.city ? b.city + ' · ' : '') + (b.placeName || b.address)) + '</div>' +
         '<div class="list-meta">' + escapeHtml(formatHuDate(b.date)) + ' · ' +
-        escapeHtml(formatTimeShort(b.timeStart)) + '-' + escapeHtml(formatTimeShort(b.timeEnd)) + '</div>' +
+        escapeHtml(formatTimeShort(b.timeStart)) + '–' + escapeHtml(formatTimeShort(b.timeEnd)) + '</div>' +
         '<div class="list-tags">' +
         '<span class="tag ' + statusTagClass(b.status) + '">' + escapeHtml(statusLabel(b.status)) + '</span>' +
         '<span class="tag tag-people">' + escapeHtml(String(b.headcount)) + ' fő</span>' +
@@ -3543,10 +4610,6 @@
         '<span class="tag tag-veh">' + escapeHtml(b.vehicle || DEFAULT_PENDING) + '</span>' +
         '<span class="tag tag-drv">' + escapeHtml(b.driver || DEFAULT_PENDING) + '</span>' +
         '</div>' +
-        '<div class="list-meta">' + escapeHtml(formatAddressDisplay(b)) + '</div>' +
-        (isBackendRentId(b.id)
-          ? ('<div class="list-item-actions"><button type="button" class="btn danger sm list-del-btn" data-del-id="' + escapeHtml(b.id) + '">🗑 Törlés</button></div>')
-          : '') +
         '</div>';
     }).join('');
 
@@ -3579,7 +4642,7 @@
     $('statDays').textContent = String(days.length);
     var peakDay = '—', peakVal = 0;
     days.forEach(function (d) {
-      if (byDay[d] > peakVal) { peakVal = byDay[d]; peakDay = formatHuDate(d) + ' (' + peakVal + ')'; }
+      if (byDay[d] > peakVal) { peakVal = byDay[d]; peakDay = formatHuDate(d) + ' (' + peakVal + ' fő)'; }
     });
     $('statPeak').textContent = peakDay;
   }
@@ -3600,8 +4663,11 @@
           '</option>';
       }).join('');
     var editId = $('editId').value;
-    if (editId && opts.some(function (b) { return b.id === editId; })) sel.value = editId;
-    else if (prev === ROUTE_DRAFT_ID && draftOpt) sel.value = ROUTE_DRAFT_ID;
+    if (prev && (prev === ROUTE_DRAFT_ID ? !!draftOpt : opts.some(function (b) { return b.id === prev; }))) {
+      sel.value = prev;
+    } else if (editId && opts.some(function (b) { return b.id === editId; })) {
+      sel.value = editId;
+    } else if (prev === ROUTE_DRAFT_ID && draftOpt) sel.value = ROUTE_DRAFT_ID;
     else if (prev && opts.some(function (b) { return b.id === prev; })) sel.value = prev;
     else if (!editId && draftOpt && $('routeBookingId').value === ROUTE_DRAFT_ID) sel.value = ROUTE_DRAFT_ID;
     updateRouteTargetLabel();
@@ -3815,6 +4881,7 @@
   }
 
   function calcRoute() {
+    logRouteTargetDebug('calcRoute');
     var booking = getRouteTargetBooking();
     if (!booking || booking.lat == null || booking.lng == null) {
       alert('A célfoglalásnak koordinátája szükséges az útvonal számításához.');
@@ -4014,17 +5081,26 @@
     setTimeout(function () { URL.revokeObjectURL(a.href); }, 500);
   }
 
-  function render() {
+  function render(opts) {
+    opts = opts || {};
+    var soft = !!opts.soft;
     var list = getFiltered();
-    renderMarkers(list);
-    renderList(list);
-    renderStats(list);
-    renderCalendar();
-    renderResourceSuggestions();
-    populateRouteBookingSelect();
-    renderLifecycleBar();
-    renderGisTabSummary();
-    renderBookingDetailHeader();
+    renderMarkers(list, { preserveView: soft, preserveDraft: soft });
+    if (!soft) {
+      renderList(list);
+      renderStats(list);
+      renderCalendar();
+      renderResourceSuggestions();
+      populateRouteBookingSelect();
+      renderLifecycleBar();
+      renderGisTabSummary();
+      renderBookingDetailHeader();
+    } else {
+      renderList(list);
+      renderStats(list);
+      renderCalendar();
+      renderResourceSuggestions();
+    }
   }
 
   function saveBooking() {
@@ -4119,6 +5195,68 @@
     });
   }
 
+  function exportRoutesBackup() {
+    var payload = {
+      exportedAt: new Date().toISOString(),
+      version: '1.0',
+      calculatedRoutes: calculatedRoutes,
+      bookings: bookings.map(function (b) {
+        return {
+          id: b.id,
+          routePoints: b.routePoints || null,
+          routeGeometry: b.routeGeometry || null,
+          routeDraft: b.routeDraft || null,
+          adminCalculatedRoute: b.adminCalculatedRoute || null
+        };
+      }).filter(function (row) {
+        return row.routePoints || row.routeGeometry || row.routeDraft || row.adminCalculatedRoute;
+      })
+    };
+    var blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'rent_routes_backup_' + rentBackupStamp() + '.json';
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 500);
+  }
+
+  function exportAllRoutesGeoJson() {
+    var features = [];
+    bookings.forEach(function (b) {
+      var customer = lineStringFromBookingRouteForExport(b);
+      if (customer) {
+        features.push({
+          type: 'Feature',
+          geometry: customer,
+          properties: { bookingId: b.id, routeKind: 'customer' }
+        });
+      }
+      var adminPts = getAdminRoutePoints(b);
+      if (adminPts.length >= 2) {
+        features.push({
+          type: 'Feature',
+          geometry: {
+            type: 'LineString',
+            coordinates: adminPts.map(function (p) { return [p.lng, p.lat]; })
+          },
+          properties: { bookingId: b.id, routeKind: 'admin' }
+        });
+      }
+    });
+    if (!features.length) {
+      alert('Nincs exportálható útvonal.');
+      return;
+    }
+    var blob = new Blob([JSON.stringify({ type: 'FeatureCollection', features: features }, null, 2)], {
+      type: 'application/geo+json'
+    });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'rent_routes_' + rentBackupStamp() + '.geojson';
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 500);
+  }
+
   function exportRouteGeoJson() {
     var bookingId = $('routeBookingId').value;
     var route = getRouteForBooking(bookingId);
@@ -4205,55 +5343,375 @@
       });
   }
 
+  function fetchRentInquiriesList() {
+    return fetch('/api/rent/inquiries')
+      .then(function (resp) {
+        return resp.json().then(function (data) {
+          if (!resp.ok || !data || !data.ok || !Array.isArray(data.inquiries)) {
+            throw new Error((data && data.error) || ('HTTP ' + resp.status));
+          }
+          return data.inquiries;
+        });
+      });
+  }
+
+  function reportCsvCell(val) {
+    if (val == null) return '';
+    var s = String(val);
+    if (/[;"\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+    return s;
+  }
+
+  function reportInquiryDate(b) {
+    return String(b.event_date || b.date || '').trim().slice(0, 10);
+  }
+
+  function reportInquiryVehicle(b) {
+    var v = String(b.vehicle || b.vehicle_id || '').trim();
+    if (!v || isPendingAssign(v)) return '';
+    return v.toUpperCase();
+  }
+
+  function reportInquiryPriceNum(b) {
+    if (b.price == null || b.price === '') return null;
+    var n = Number(b.price);
+    return isFinite(n) ? Math.round(n) : null;
+  }
+
+  function reportInquiryPriceCell(b) {
+    var n = reportInquiryPriceNum(b);
+    return n == null ? '' : String(n);
+  }
+
+  function reportInquiryHeadcountNum(b) {
+    return resolveBookingHeadcount(b);
+  }
+
+  function reportInquiryHeadcountCell(b) {
+    var hc = resolveBookingHeadcount(b);
+    return hc == null ? '' : String(hc);
+  }
+
+  function reportInquiryPaymentLabel(b) {
+    var raw = String(b.paymentStatus || b.payment_status || b.fizetesStatus || b.fizetes_status || '').trim();
+    if (!raw) return '';
+    var u = raw.toUpperCase();
+    if (/TELJES|FIZETVE|PAID|TELJESEN/.test(u)) return 'Fizetve';
+    if (/ELŐLEG|ELOLEG|DEPOSIT|ADVANCE/.test(u)) return 'Előleg';
+    if (/RÉSZ|RESZ|PARTIAL/.test(u)) return 'Részben fizetett';
+    if (/NYITOTT|OPEN|NINCS/.test(u)) return 'Nyitott';
+    return raw;
+  }
+
+  function reportInquiryStatusLabel(b) {
+    return statusLabel(normalizeStatus(b.status));
+  }
+
+  function reportInquiryRow(b, dayTotals) {
+    var totals = dayTotals || {};
+    return [
+      reportInquiryDate(b),
+      String(b.city || '').trim(),
+      reportInquiryVehicle(b),
+      reportInquiryHeadcountCell(b),
+      reportInquiryPriceCell(b),
+      reportInquiryStatusLabel(b),
+      reportInquiryPaymentLabel(b),
+      totals.isLast ? (totals.hasHc ? String(totals.sumHc) : '') : '',
+      totals.isLast ? (totals.hasPrice ? String(totals.sumPrice) : '') : ''
+    ].map(reportCsvCell).join(';');
+  }
+
+  function buildDailyReportCsvLines(inquiries) {
+    var byDate = {};
+    inquiries.forEach(function (b) {
+      var d = reportInquiryDate(b);
+      if (!d) return;
+      if (!byDate[d]) byDate[d] = [];
+      byDate[d].push(b);
+    });
+    var dates = Object.keys(byDate).sort();
+    var lines = ['DÁTUM;VÁROS;VONAT;UTAS_FŐ;ÁR;ÁLLAPOT;FIZETÉSI_ÁLLAPOT;ÖSSZESEN_FŐ;ÖSSZESEN_ÁR'];
+    dates.forEach(function (d) {
+      var dayRows = byDate[d].slice().sort(function (a, b) {
+        var ca = String(a.city || '');
+        var cb = String(b.city || '');
+        if (ca !== cb) return ca.localeCompare(cb, 'hu');
+        return reportInquiryVehicle(a).localeCompare(reportInquiryVehicle(b), 'hu');
+      });
+      var sumHc = 0;
+      var sumPrice = 0;
+      var hasHc = false;
+      var hasPrice = false;
+      dayRows.forEach(function (b) {
+        var hc = reportInquiryHeadcountNum(b);
+        if (hc != null) { sumHc += hc; hasHc = true; }
+        var pr = reportInquiryPriceNum(b);
+        if (pr != null) { sumPrice += pr; hasPrice = true; }
+      });
+      dayRows.forEach(function (b, idx) {
+        lines.push(reportInquiryRow(b, {
+          isLast: idx === dayRows.length - 1,
+          sumHc: sumHc,
+          sumPrice: sumPrice,
+          hasHc: hasHc,
+          hasPrice: hasPrice
+        }));
+      });
+    });
+    return lines;
+  }
+
+  function downloadReportCsv(filename, lines) {
+    var csv = '\uFEFF' + lines.join('\r\n');
+    var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 500);
+  }
+
+  function exportForecast90Csv() {
+    console.log('CSV_EXPORT_FORECAST_START');
+    var today = todayIso();
+    var end = addDaysIso(today, 90);
+    fetchRentInquiriesList()
+      .then(function (inquiries) {
+        var filtered = inquiries.filter(function (b) {
+          var d = reportInquiryDate(b);
+          if (!d || d < today || d > end) return false;
+          return normalizeStatus(b.status) !== 'LEMONDVA';
+        });
+        if (!filtered.length) {
+          alert('Nincs exportálható foglalás a következő 90 napra.');
+          return;
+        }
+        var lines = buildDailyReportCsvLines(filtered);
+        downloadReportCsv('rent_elorejelzes_90nap_' + today.replace(/-/g, '') + '.csv', lines);
+      })
+      .catch(function (err) {
+        console.error('Forecast CSV export failed:', err);
+        alert('A 90 napos előrejelzés exportja nem sikerült.');
+      });
+  }
+
+  function exportClosed30Csv() {
+    console.log('CSV_EXPORT_CLOSED_START');
+    var today = todayIso();
+    var start = addDaysIso(today, -30);
+    fetchRentInquiriesList()
+      .then(function (inquiries) {
+        var filtered = inquiries.filter(function (b) {
+          var d = reportInquiryDate(b);
+          if (!d || d < start || d >= today) return false;
+          return normalizeStatus(b.status) !== 'LEMONDVA';
+        });
+        var lines = buildDailyReportCsvLines(filtered);
+        var totalHc = 0;
+        var totalPrice = 0;
+        filtered.forEach(function (b) {
+          var hc = reportInquiryHeadcountNum(b);
+          if (hc != null) totalHc += hc;
+          var pr = reportInquiryPriceNum(b);
+          if (pr != null) totalPrice += pr;
+        });
+        lines.push('');
+        lines.push('TELJES_UTAS;' + totalHc);
+        lines.push('TELJES_BEVETEL;' + totalPrice);
+        downloadReportCsv('rent_lezart_30nap_' + today.replace(/-/g, '') + '.csv', lines);
+      })
+      .catch(function (err) {
+        console.error('Closed 30 CSV export failed:', err);
+        alert('A lezárt 30 napos export nem sikerült.');
+      });
+  }
+
+  function rentApiUrl(path) {
+    return API_BASE.replace(/\/$/, '') + path;
+  }
+
+  function readBackupJsonFile(file) {
+    return new Promise(function (resolve, reject) {
+      if (!file) {
+        reject(new Error('no file'));
+        return;
+      }
+      var reader = new FileReader();
+      reader.onload = function () {
+        try {
+          var parsed = JSON.parse(String(reader.result || ''));
+          var inquiries = parsed && Array.isArray(parsed.inquiries) ? parsed.inquiries : null;
+          if (!inquiries || !inquiries.length) {
+            reject(new Error('A fájl nem tartalmaz inquiries tömböt.'));
+            return;
+          }
+          resolve(inquiries);
+        } catch (e) {
+          reject(new Error('Érvénytelen JSON fájl.'));
+        }
+      };
+      reader.onerror = function () { reject(new Error('A fájl beolvasása nem sikerült.')); };
+      reader.readAsText(file, 'utf-8');
+    });
+  }
+
+  function rentImportActionLabel(action) {
+    if (action === 'import') return 'Új';
+    if (action === 'update') return 'Frissül';
+    if (action === 'conflict') return 'Konfliktus';
+    return 'Kihagyva';
+  }
+
+  function formatImportResultMessage(prefix, data) {
+    data = data || {};
+    return prefix
+      + '\nimported: ' + (data.imported != null ? data.imported : 0)
+      + '\nupdated: ' + (data.updated != null ? data.updated : 0)
+      + '\nskipped: ' + (data.skipped != null ? data.skipped : 0)
+      + '\nconflicts: ' + (data.conflicts != null ? data.conflicts : 0)
+      + (data.errors && data.errors.length ? '\nerrors: ' + data.errors.length : '')
+      + (data.error ? '\nerror: ' + data.error : '');
+  }
+
+  var pendingImportInquiries = null;
+
+  function showRentImportPreviewModal(preview, inquiries) {
+    pendingImportInquiries = inquiries;
+    var modal = $('rentImportPreviewModal');
+    var summary = $('rentImportPreviewSummary');
+    var wrap = $('rentImportPreviewTableWrap');
+    if (!modal || !summary || !wrap) return;
+    summary.textContent = 'Backup rekordok: ' + (preview.backupCount || inquiries.length)
+      + ' · Jelenlegi rekordok: ' + (preview.currentCount != null ? preview.currentCount : '—')
+      + ' · Új: ' + (preview.imported || 0)
+      + ' · Frissül: ' + (preview.updated || 0)
+      + ' · Kihagyva: ' + (preview.skipped || 0)
+      + ' · Konfliktus: ' + (preview.conflicts || 0);
+    var rows = (preview.items || []).map(function (item) {
+      return '<tr>'
+        + '<td>' + escapeHtml(item.id || '') + '</td>'
+        + '<td>' + escapeHtml(rentImportActionLabel(item.action)) + '</td>'
+        + '<td>' + escapeHtml(item.decision || '') + '</td>'
+        + '<td>' + escapeHtml(item.backupUpdatedAt || '—') + '</td>'
+        + '<td>' + escapeHtml(item.dbUpdatedAt || '—') + '</td>'
+        + '</tr>';
+    }).join('');
+    wrap.innerHTML = '<table class="rent-preview-table"><thead><tr>'
+      + '<th>ID</th><th>Döntés</th><th>Ok</th><th>Backup updatedAt</th><th>DB updatedAt</th>'
+      + '</tr></thead><tbody>' + rows + '</tbody></table>';
+    modal.hidden = false;
+  }
+
+  function hideRentImportPreviewModal() {
+    pendingImportInquiries = null;
+    var modal = $('rentImportPreviewModal');
+    if (modal) modal.hidden = true;
+  }
+
+  function executeRentImport(inquiries) {
+    return fetch(rentApiUrl('/api/rent/import'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ inquiries: inquiries, mode: 'upsert' })
+    }).then(function (resp) {
+      return resp.json().then(function (data) {
+        data = data || {};
+        var detail = formatImportResultMessage('POST /api/rent/import HTTP ' + resp.status, data);
+        if (!resp.ok || !data.ok) {
+          alert('Import sikertelen.\n\n' + detail);
+          throw new Error(detail);
+        }
+        alert('Import kész.\n\n' + detail);
+        return data;
+      });
+    }).then(function () {
+      return reloadRentData();
+    });
+  }
+
   function importRentBackup(file) {
     if (!file) return;
-    var reader = new FileReader();
-    reader.onload = function () {
-      var parsed;
-      try {
-        parsed = JSON.parse(String(reader.result || ''));
-      } catch (e) {
-        alert('Érvénytelen JSON fájl.');
-        return;
-      }
-      var inquiries = parsed && Array.isArray(parsed.inquiries) ? parsed.inquiries : null;
-      if (!inquiries || !inquiries.length) {
-        alert('A fájl nem tartalmaz inquiries tömböt.');
-        return;
-      }
-      fetch(API_BASE.replace(/\/$/, '') + '/api/rent/import', {
+    readBackupJsonFile(file).then(function (inquiries) {
+      return fetch(rentApiUrl('/api/rent/import/preview'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ inquiries: inquiries })
       }).then(function (resp) {
-        return resp.json().then(function (data) {
-          data = data || {};
-          var detail = 'POST /api/rent/import HTTP ' + resp.status
-            + '\nimported: ' + (data.imported != null ? data.imported : '—')
-            + '\nskipped: ' + (data.skipped != null ? data.skipped : '—')
-            + '\nerror: ' + (data.error || '—');
-          if (!resp.ok || !data.ok) {
-            alert('Import sikertelen.\n\n' + detail);
-            throw new Error(detail);
+        return resp.json().then(function (preview) {
+          if (!resp.ok || !preview || !preview.ok) {
+            throw new Error((preview && preview.error) || ('HTTP ' + resp.status));
           }
-          alert('Import kész.\n\n' + detail);
-          return data;
-        }).catch(function (parseErr) {
-          if (parseErr && parseErr.message && parseErr.message.indexOf('POST /api/rent/import') === 0) throw parseErr;
-          alert('Import sikertelen.\n\nPOST /api/rent/import HTTP ' + resp.status
-            + '\nimported: —\nskipped: —\nerror: érvénytelen JSON válasz');
-          throw parseErr;
+          showRentImportPreviewModal(preview, inquiries);
         });
-      }).then(function (data) {
-        return reloadRentData();
-      }).catch(function (err) {
-        console.error('Rent backup import failed:', err);
       });
-    };
-    reader.onerror = function () {
-      alert('A fájl beolvasása nem sikerült.');
-    };
-    reader.readAsText(file, 'utf-8');
+    }).catch(function (err) {
+      alert(err.message || 'Import előnézet sikertelen.');
+      console.error('Rent backup import preview failed:', err);
+    });
+  }
+
+  var pendingRestoreInquiries = null;
+
+  function showRentRestoreModal(preview, inquiries) {
+    pendingRestoreInquiries = inquiries;
+    var modal = $('rentRestoreModal');
+    var summary = $('rentRestoreModalSummary');
+    if (!modal || !summary) return;
+    summary.textContent = 'Backup rekordok: ' + (preview.backupCount || inquiries.length)
+      + ' · Jelenlegi rekordok: ' + (preview.currentCount != null ? preview.currentCount : '—');
+    modal.hidden = false;
+  }
+
+  function hideRentRestoreModal() {
+    pendingRestoreInquiries = null;
+    var modal = $('rentRestoreModal');
+    if (modal) modal.hidden = true;
+  }
+
+  function restoreRentBackup(file) {
+    if (!file) return;
+    readBackupJsonFile(file).then(function (inquiries) {
+      return fetch(rentApiUrl('/api/rent/restore/preview'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inquiries: inquiries })
+      }).then(function (resp) {
+        return resp.json().then(function (preview) {
+          if (!resp.ok || !preview || !preview.ok) {
+            throw new Error((preview && preview.error) || ('HTTP ' + resp.status));
+          }
+          showRentRestoreModal(preview, inquiries);
+        });
+      });
+    }).catch(function (err) {
+      alert(err.message || 'Restore előnézet sikertelen.');
+      console.error('Rent restore preview failed:', err);
+    });
+  }
+
+  function executeRentRestore(inquiries) {
+    return fetch(rentApiUrl('/api/rent/restore'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ inquiries: inquiries, confirm: true })
+    }).then(function (resp) {
+      return resp.json().then(function (data) {
+        data = data || {};
+        var detail = 'POST /api/rent/restore HTTP ' + resp.status
+          + '\nrestored: ' + (data.restored != null ? data.restored : 0)
+          + '\nfailed: ' + (data.failed != null ? data.failed : 0)
+          + (data.error ? '\nerror: ' + data.error : '');
+        if (!resp.ok || !data.ok) {
+          alert('Restore sikertelen.\n\n' + detail);
+          throw new Error(detail);
+        }
+        alert('Backup visszaállítva.\n\n' + detail);
+        return data;
+      });
+    }).then(function () {
+      return reloadRentData();
+    });
   }
 
   function seedDemoIfEmpty() {
@@ -4283,6 +5741,7 @@
   }
 
   map.on('click', function (e) {
+    if (isRentMapUiEventTarget(e.originalEvent && e.originalEvent.target)) return;
     if (!$('street').value.trim() && !$('placeName').value.trim() && !$('city').value.trim() && !$('editId').value) return;
     $('lat').value = String(e.latlng.lat);
     $('lng').value = String(e.latlng.lng);
@@ -4340,6 +5799,103 @@
   $('btnCalcRoute').addEventListener('click', calcRoute);
   $('viewNormal').addEventListener('click', function () { setMapViewMode('normal'); });
   $('viewLoad').addEventListener('click', function () { setMapViewMode('load'); });
+  $('btnRefreshRent').addEventListener('click', function () { manualRefreshRentData(); });
+  $('btnAutoRefreshToggle').addEventListener('click', toggleRentAutoRefresh);
+  function closeDataMgmtMenu() {
+    var menu = $('dataMgmtMenu');
+    var btn = $('btnDataMgmt');
+    if (menu) menu.hidden = true;
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+  }
+
+  function positionDataMgmtMenu() {
+    var menu = $('dataMgmtMenu');
+    var btn = $('btnDataMgmt');
+    if (!menu || !btn) return;
+    var r = btn.getBoundingClientRect();
+    var w = Math.max(220, menu.offsetWidth || 220);
+    var left = Math.min(Math.max(8, r.right - w), window.innerWidth - w - 8);
+    menu.style.left = left + 'px';
+    menu.style.top = (r.bottom + 4) + 'px';
+  }
+
+  function toggleDataMgmtMenu() {
+    var menu = $('dataMgmtMenu');
+    var btn = $('btnDataMgmt');
+    if (!menu || !btn) return;
+    if (!menu.hidden) {
+      closeDataMgmtMenu();
+      return;
+    }
+    if (menu.parentElement !== document.body) {
+      document.body.appendChild(menu);
+    }
+    menu.hidden = false;
+    positionDataMgmtMenu();
+    btn.setAttribute('aria-expanded', 'true');
+  }
+
+  function initDataMgmtMenu() {
+    var menu = $('dataMgmtMenu');
+    if (menu && menu.parentElement && menu.parentElement !== document.body) {
+      document.body.appendChild(menu);
+    }
+  }
+
+  initDataMgmtMenu();
+  $('btnOwnerReport').addEventListener('click', function () {
+    closeDataMgmtMenu();
+    setMainModule('analytics');
+  });
+  var btnReportExportForecast = $('btnReportExportForecast');
+  if (btnReportExportForecast) btnReportExportForecast.addEventListener('click', exportForecast90Csv);
+  var btnReportExportClosed = $('btnReportExportClosed');
+  if (btnReportExportClosed) btnReportExportClosed.addEventListener('click', exportClosed30Csv);
+  $('btnDataMgmt').addEventListener('click', function (ev) {
+    ev.preventDefault();
+    ev.stopPropagation();
+    toggleDataMgmtMenu();
+  });
+  document.addEventListener('click', function (ev) {
+    var menu = $('dataMgmtMenu');
+    var btn = $('btnDataMgmt');
+    if (!menu || menu.hidden) return;
+    if (btn && (btn === ev.target || btn.contains(ev.target))) return;
+    if (menu.contains(ev.target)) return;
+    closeDataMgmtMenu();
+  });
+  window.addEventListener('resize', closeDataMgmtMenu);
+  window.addEventListener('scroll', closeDataMgmtMenu, true);
+  var dataMgmtMenu = $('dataMgmtMenu');
+  if (dataMgmtMenu) {
+    dataMgmtMenu.querySelectorAll('[data-dm-action]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        closeDataMgmtMenu();
+        var action = btn.getAttribute('data-dm-action');
+        if (action === 'export-bookings') exportRentBackup();
+        else if (action === 'import-bookings') {
+          var input = $('rentBackupFileInput');
+          if (input) { input.value = ''; input.click(); }
+        }
+        else if (action === 'restore-backup') {
+          var rinput = $('rentRestoreFileInput');
+          if (rinput) { rinput.value = ''; rinput.click(); }
+        }
+        else if (action === 'export-routes') exportAllRoutesGeoJson();
+        else if (action === 'export-routes-backup') exportRoutesBackup();
+        else if (action === 'export-bookings-geo') exportBookingsGeoJson();
+        else if (action === 'export-forecast-90-csv') exportForecast90Csv();
+        else if (action === 'export-closed-30-csv') exportClosed30Csv();
+      });
+    });
+  }
+  $('rentInquiryDismissAll').addEventListener('click', function () {
+    rentInquiryPanelItems.forEach(function (item) {
+      if (item && item.id) dismissedNewBookingIds.add(item.id);
+    });
+    persistDismissedNewBookingIds();
+    renderRentInquiryPanel();
+  });
   $('calPrev').addEventListener('click', function () {
     calendarMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1);
     renderCalendar();
@@ -4390,7 +5946,9 @@
   $('btnRentBackupExport').addEventListener('click', exportRentBackup);
   $('btnRentBackupImport').addEventListener('click', function () {
     var input = $('rentBackupFileInput');
-    if (input) input.click();
+    if (!input) return;
+    input.value = '';
+    input.click();
   });
   $('rentBackupFileInput').addEventListener('change', function () {
     var input = $('rentBackupFileInput');
@@ -4398,6 +5956,36 @@
     importRentBackup(input.files[0]);
     input.value = '';
   });
+  $('btnRentBackupRestore').addEventListener('click', function () {
+    var input = $('rentRestoreFileInput');
+    if (!input) return;
+    input.value = '';
+    input.click();
+  });
+  $('rentRestoreFileInput').addEventListener('change', function () {
+    var input = $('rentRestoreFileInput');
+    if (!input || !input.files || !input.files[0]) return;
+    restoreRentBackup(input.files[0]);
+    input.value = '';
+  });
+  $('rentImportPreviewConfirm').addEventListener('click', function () {
+    var inquiries = pendingImportInquiries;
+    hideRentImportPreviewModal();
+    if (!inquiries || !inquiries.length) return;
+    executeRentImport(inquiries).catch(function (err) {
+      console.error('Rent backup import failed:', err);
+    });
+  });
+  $('rentImportPreviewCancel').addEventListener('click', hideRentImportPreviewModal);
+  $('rentRestoreConfirm').addEventListener('click', function () {
+    var inquiries = pendingRestoreInquiries;
+    hideRentRestoreModal();
+    if (!inquiries || !inquiries.length) return;
+    executeRentRestore(inquiries).catch(function (err) {
+      console.error('Rent restore failed:', err);
+    });
+  });
+  $('rentRestoreCancel').addEventListener('click', hideRentRestoreModal);
 
   $('btnMapFullscreen').addEventListener('click', function () {
     document.body.classList.toggle('map-fullscreen');
@@ -4407,6 +5995,32 @@
   window.addEventListener('resize', function () {
     map.invalidateSize();
   });
+
+  window.__rentAuditGetRouteLayerStats = function () {
+    if (!bookingRouteLayer || !bookingRouteLayer.getLayers) {
+      return { polylines: 0, markers: 0, layers: 0 };
+    }
+    var layers = bookingRouteLayer.getLayers();
+    var polylines = 0;
+    var markers = 0;
+    layers.forEach(function (l) {
+      if (l instanceof L.Polyline && !(l instanceof L.Polygon)) polylines++;
+      else if (l instanceof L.Marker || l instanceof L.CircleMarker) markers++;
+    });
+    return { polylines: polylines, markers: markers, layers: layers.length };
+  };
+
+  window.__rentAuditCustomerRouteDrawPlan = function (bookingId) {
+    var b = bookings.find(function (x) { return x.id === bookingId; });
+    if (!b) return null;
+    var pts = getCustomerRoutePoints(b);
+    return {
+      pointCount: pts.length,
+      expectedPolylines: pts.length >= 2 ? 1 : 0,
+      expectedMarkers: pts.length >= 2 ? 2 : (pts.length === 1 ? 1 : 0),
+      showPointMarkers: rentShowRoutePointMarkers
+    };
+  };
 
   window.addEventListener('storage', function () {
     /* legacy localStorage sync kikapcsolva – backend az aktív adatforrás */
@@ -4428,19 +6042,24 @@
       renderResourceSuggestions();
       loadRentInquiriesFromApi().then(function () {
         bookings = bookings.map(normalizeBooking);
+        rentPollSnapshot = rentBookingsChangeSignature(bookings);
+        syncKnownBookingIdsFromBookings();
+        rentPollInitialized = true;
         updateGeometryTypeUi();
         setFormTab('basic');
-        setMainModule('detail');
+        setMainModule('bookings');
         clearRentDateFilters();
         clearForm();
         render();
+        startRentAutoRefresh();
       }).catch(function () {
         updateGeometryTypeUi();
         setFormTab('basic');
-        setMainModule('detail');
+        setMainModule('bookings');
         clearRentDateFilters();
         clearForm();
         render();
+        startRentAutoRefresh();
       });
     });
   }
