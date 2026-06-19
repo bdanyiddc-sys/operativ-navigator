@@ -592,7 +592,12 @@ function initDb(dbPath) {
     CREATE INDEX IF NOT EXISTS idx_rent_inquiries_city ON rent_inquiries(city);
     CREATE INDEX IF NOT EXISTS idx_rent_inquiries_vehicle_id ON rent_inquiries(vehicle_id);
     CREATE INDEX IF NOT EXISTS idx_rent_inquiries_driver_id ON rent_inquiries(driver_id);
+    CREATE TABLE IF NOT EXISTS rent_id_sequence (
+      year INTEGER PRIMARY KEY,
+      last_seq INTEGER NOT NULL DEFAULT 0
+    );
   `);
+  syncRentIdSequenceFromDb(db);
   return db;
 }
 
@@ -1253,6 +1258,8 @@ const updateRentInquiry = db.prepare(`
   WHERE id = @id
 `);
 const deleteRentInquiry = db.prepare('DELETE FROM rent_inquiries WHERE id = ?');
+const deleteAllRentInquiries = db.prepare('DELETE FROM rent_inquiries');
+const selectAllRentInquiryIds = db.prepare('SELECT id FROM rent_inquiries');
 
 function opsId(prefix) {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
@@ -1468,28 +1475,277 @@ function normalizeRentStatus(raw) {
   return s === 'ERDEKLODES' ? 'ARAJANLATKERES' : s;
 }
 
+function parseRentInquirySeq(id) {
+  const m = String(id || '').match(/^RENT-(\d{4})-(\d+)$/);
+  if (!m) return null;
+  return { year: parseInt(m[1], 10), seq: parseInt(m[2], 10) };
+}
+
+function setRentIdSequenceAtLeast(year, seq, dbConn) {
+  const conn = dbConn || db;
+  const y = parseInt(year, 10);
+  const s = parseInt(seq, 10);
+  if (!Number.isFinite(y) || !Number.isFinite(s) || s < 0) return;
+  const row = conn.prepare('SELECT last_seq FROM rent_id_sequence WHERE year = ?').get(y);
+  if (!row) {
+    conn.prepare('INSERT INTO rent_id_sequence (year, last_seq) VALUES (?, ?)').run(y, s);
+  } else if (s > row.last_seq) {
+    conn.prepare('UPDATE rent_id_sequence SET last_seq = ? WHERE year = ?').run(s, y);
+  }
+}
+
+function syncRentIdSequenceFromDb(dbConn) {
+  const conn = dbConn || db;
+  const rows = conn.prepare(`
+    SELECT id FROM rent_inquiries WHERE id LIKE 'RENT-%'
+  `).all();
+  const maxByYear = {};
+  rows.forEach((row) => {
+    const parsed = parseRentInquirySeq(row.id);
+    if (!parsed) return;
+    maxByYear[parsed.year] = Math.max(maxByYear[parsed.year] || 0, parsed.seq);
+  });
+  Object.keys(maxByYear).forEach((year) => {
+    setRentIdSequenceAtLeast(parseInt(year, 10), maxByYear[year], conn);
+  });
+  const currentYear = new Date().getFullYear();
+  if (!conn.prepare('SELECT 1 AS n FROM rent_id_sequence WHERE year = ?').get(currentYear)) {
+    conn.prepare('INSERT INTO rent_id_sequence (year, last_seq) VALUES (?, 0)').run(currentYear);
+  }
+}
+
+function bumpRentIdSequenceFromIds(ids, dbConn) {
+  (ids || []).forEach((id) => {
+    const parsed = parseRentInquirySeq(id);
+    if (parsed) setRentIdSequenceAtLeast(parsed.year, parsed.seq, dbConn);
+  });
+}
+
 function generateRentInquiryId() {
   const year = new Date().getFullYear();
   const prefix = `RENT-${year}-`;
   return db.transaction(() => {
-    const last = db.prepare(`
-      SELECT id FROM rent_inquiries
-      WHERE id LIKE ?
-      ORDER BY id DESC
-      LIMIT 1
-    `).get(`${prefix}%`);
-    let seq = 1;
-    if (last && last.id) {
-      const m = String(last.id).match(/^RENT-\d{4}-(\d+)$/);
-      if (m) seq = parseInt(m[1], 10) + 1;
-    }
+    syncRentIdSequenceFromDb(db);
+    const row = db.prepare('SELECT last_seq FROM rent_id_sequence WHERE year = ?').get(year);
+    let seq = (row && Number.isFinite(row.last_seq) ? row.last_seq : 0) + 1;
     const existsStmt = db.prepare('SELECT 1 AS n FROM rent_inquiries WHERE id = ?');
-    for (let attempt = 0; attempt < 100; attempt += 1) {
-      const id = `${prefix}${String(seq + attempt).padStart(4, '0')}`;
-      if (!existsStmt.get(id)) return id;
+    for (let attempt = 0; attempt < 1000; attempt += 1) {
+      const candidate = seq + attempt;
+      const id = `${prefix}${String(candidate).padStart(4, '0')}`;
+      if (!existsStmt.get(id)) {
+        db.prepare('UPDATE rent_id_sequence SET last_seq = ? WHERE year = ?').run(candidate, year);
+        return id;
+      }
     }
-    return `${prefix}${String(Date.now()).slice(-8)}`;
+    const fallbackSeq = parseInt(String(Date.now()).slice(-8), 10);
+    setRentIdSequenceAtLeast(year, fallbackSeq);
+    return `${prefix}${String(fallbackSeq).padStart(4, '0')}`;
   })();
+}
+
+function rentImportCustomer(item) {
+  return rentPickStr(item, 'customer_name', 'name', 'ordererName') || '';
+}
+
+function rentImportAddress(item) {
+  if (item && item.address != null && String(item.address).trim() !== '') {
+    return String(item.address).trim();
+  }
+  return [item && item.street, item && (item.houseNumber || item.house_number)]
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+}
+
+function rentStableJson(value) {
+  if (value === undefined || value === null) return null;
+  return JSON.stringify(value);
+}
+
+function rentTimestampMs(raw) {
+  if (raw == null || String(raw).trim() === '') return null;
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.getTime();
+}
+
+function rentInquiryAsImportSource(rowOrItem) {
+  if (!rowOrItem) return {};
+  if (rowOrItem.payload_json != null || rowOrItem.created_at != null) {
+    return rowToRentInquiry(rowOrItem);
+  }
+  return rowOrItem;
+}
+
+function rentImportSnapshot(rowOrItem) {
+  const obj = rentInquiryAsImportSource(rowOrItem);
+  return {
+    updatedAt: obj.updatedAt || obj.updated_at || null,
+    customer: rentImportCustomer(obj),
+    date: rentPickStr(obj, 'event_date', 'date'),
+    city: rentPickStr(obj, 'city'),
+    address: rentImportAddress(obj),
+    lat: obj.lat != null && obj.lat !== '' && !Number.isNaN(Number(obj.lat)) ? Number(obj.lat) : null,
+    lng: obj.lng != null && obj.lng !== '' && !Number.isNaN(Number(obj.lng)) ? Number(obj.lng) : null,
+    routePoints: rentStableJson(obj.routePoints),
+    routeGeometry: rentStableJson(obj.routeGeometry),
+    routeDraft: rentStableJson(obj.routeDraft),
+    vehicle: rentPickStr(obj, 'vehicle', 'vehicle_id'),
+    driver: rentPickStr(obj, 'driver', 'driver_id'),
+    status: normalizeRentStatus(obj.status),
+  };
+}
+
+function rentImportSnapshotsEqual(a, b) {
+  const keys = Object.keys(a);
+  return keys.every((key) => a[key] === b[key]);
+}
+
+function decideRentImportAction(backupItem, existingRow) {
+  if (!existingRow) {
+    return { action: 'import', decision: 'insert' };
+  }
+  const backupSnap = rentImportSnapshot(backupItem);
+  const dbSnap = rentImportSnapshot(existingRow);
+  const backupUpdatedAt = backupSnap.updatedAt;
+  const dbUpdatedAt = dbSnap.updatedAt;
+  if (rentImportSnapshotsEqual(backupSnap, dbSnap)) {
+    return {
+      action: 'skip',
+      decision: 'identical',
+      backupUpdatedAt,
+      dbUpdatedAt,
+    };
+  }
+  const backupMs = rentTimestampMs(backupUpdatedAt);
+  const dbMs = rentTimestampMs(dbUpdatedAt);
+  if (backupMs != null && dbMs != null) {
+    if (backupMs > dbMs) {
+      return { action: 'update', decision: 'backup_newer', backupUpdatedAt, dbUpdatedAt };
+    }
+    if (dbMs > backupMs) {
+      return { action: 'skip', decision: 'db_newer', backupUpdatedAt, dbUpdatedAt };
+    }
+    return { action: 'conflict', decision: 'same_time_diff_content', backupUpdatedAt, dbUpdatedAt };
+  }
+  if (backupMs != null && dbMs == null) {
+    return { action: 'update', decision: 'backup_has_time', backupUpdatedAt, dbUpdatedAt };
+  }
+  if (backupMs == null && dbMs != null) {
+    return { action: 'skip', decision: 'db_has_time', backupUpdatedAt, dbUpdatedAt };
+  }
+  return { action: 'conflict', decision: 'no_time_diff_content', backupUpdatedAt, dbUpdatedAt };
+}
+
+function buildRentInquiryPayloadFromImport(item, id, createdAt, updatedAt, existingPayload) {
+  const base = existingPayload && typeof existingPayload === 'object' ? existingPayload : {};
+  const merged = {
+    ...base,
+    ...item,
+    id,
+    projektAzonosito: item.projektAzonosito || item.id || id,
+    createdAt,
+    updatedAt,
+    letrehozasDatuma: createdAt,
+  };
+  const payload = buildRentInquiryPayload(merged, id, createdAt);
+  payload.createdAt = createdAt;
+  payload.updatedAt = updatedAt;
+  payload.letrehozasDatuma = createdAt;
+  if (item.routePoints !== undefined) payload.routePoints = item.routePoints;
+  if (item.routeGeometry !== undefined) payload.routeGeometry = item.routeGeometry;
+  if (item.routeDraft !== undefined) payload.routeDraft = item.routeDraft;
+  if (item.adminCalculatedRoute !== undefined) payload.adminCalculatedRoute = item.adminCalculatedRoute;
+  return payload;
+}
+
+function previewRentImport(inquiries) {
+  const currentCount = selectAllRentInquiryIds.all().length;
+  let imported = 0;
+  let updated = 0;
+  let skipped = 0;
+  let conflicts = 0;
+  const items = [];
+  const errors = [];
+  inquiries.forEach((item) => {
+    const id = item && item.id != null ? String(item.id).trim() : '';
+    if (!id) {
+      skipped += 1;
+      errors.push({ id: '', error: 'missing id' });
+      return;
+    }
+    const existing = getRentInquiryById.get(id);
+    const verdict = decideRentImportAction(item, existing);
+    if (verdict.action === 'import') imported += 1;
+    else if (verdict.action === 'update') updated += 1;
+    else if (verdict.action === 'conflict') conflicts += 1;
+    else skipped += 1;
+    items.push({
+      id,
+      action: verdict.action,
+      decision: verdict.decision,
+      backupUpdatedAt: verdict.backupUpdatedAt || normalizeRentImportTimestamp(
+        item.updatedAt || item.updated_at,
+        null,
+      ),
+      dbUpdatedAt: verdict.dbUpdatedAt || (existing ? normalizeDbTimestamp(existing.updated_at) : null),
+    });
+  });
+  return {
+    backupCount: inquiries.length,
+    currentCount,
+    imported,
+    updated,
+    skipped,
+    conflicts,
+    items,
+    errors,
+  };
+}
+
+function applyRentImportRow(item, mode) {
+  const id = item && item.id != null ? String(item.id).trim() : '';
+  if (!id) return { result: 'error', error: 'missing id' };
+  const existing = getRentInquiryById.get(id);
+  if (mode === 'legacy') {
+    if (existing) return { result: 'skipped', id };
+    const nowIso = new Date().toISOString();
+    const createdAt = normalizeRentImportTimestamp(
+      item.createdAt || item.letrehozasDatuma || item.created_at,
+      nowIso,
+    );
+    const updatedAt = normalizeRentImportTimestamp(item.updatedAt || item.updated_at, createdAt);
+    const payload = buildRentInquiryPayloadFromImport(item, id, createdAt, updatedAt, null);
+    const row = rentInquiryDbRowFromPayload(payload, id, createdAt, updatedAt);
+    insertRentInquiry.run(row);
+    return { result: 'imported', id };
+  }
+  const verdict = decideRentImportAction(item, existing);
+  if (verdict.action === 'skip') return { result: 'skipped', id, decision: verdict.decision };
+  if (verdict.action === 'conflict') {
+    return {
+      result: 'conflict',
+      id,
+      decision: verdict.decision,
+      backupUpdatedAt: verdict.backupUpdatedAt,
+      dbUpdatedAt: verdict.dbUpdatedAt,
+    };
+  }
+  const nowIso = new Date().toISOString();
+  const createdAt = existing
+    ? normalizeDbTimestamp(existing.created_at)
+    : normalizeRentImportTimestamp(item.createdAt || item.letrehozasDatuma || item.created_at, nowIso);
+  const updatedAt = normalizeRentImportTimestamp(item.updatedAt || item.updated_at, createdAt);
+  const existingPayload = existing ? parseRentInquiryPayload(existing) : null;
+  const payload = buildRentInquiryPayloadFromImport(item, id, createdAt, updatedAt, existingPayload);
+  const row = rentInquiryDbRowFromPayload(payload, id, createdAt, updatedAt);
+  if (existing) updateRentInquiry.run(row);
+  else insertRentInquiry.run(row);
+  return {
+    result: verdict.action === 'update' ? 'updated' : 'imported',
+    id,
+    decision: verdict.decision,
+  };
 }
 
 function parseRentInquiryPayload(row) {
@@ -1535,7 +1791,17 @@ function buildRentInquiryPayload(body, id, nowIso) {
     lng: body.lng != null && body.lng !== '' ? Number(body.lng) : body.lng,
     headcount: body.headcount != null && body.headcount !== ''
       ? parseInt(body.headcount, 10)
-      : body.headcount,
+      : (function () {
+        const keys = ['passenger_count', 'passengerCount', 'people', 'passengers', 'letszam'];
+        for (let i = 0; i < keys.length; i += 1) {
+          const v = body[keys[i]];
+          if (v != null && v !== '') {
+            const n = parseInt(v, 10);
+            if (!Number.isNaN(n) && n > 0) return n;
+          }
+        }
+        return body.headcount;
+      })(),
     bookingType: 'BERLES',
     booking_type: gisMode,
     vehicle: rentPickStr(body, 'vehicle', 'vehicle_id'),
@@ -2731,49 +2997,143 @@ function normalizeRentImportTimestamp(raw, fallback) {
   return d.toISOString();
 }
 
-app.post('/api/rent/import', (req, res) => {
+app.post('/api/rent/import/preview', (req, res) => {
   const body = req.body || {};
   const inquiries = Array.isArray(body.inquiries) ? body.inquiries : [];
   if (!inquiries.length) {
     return res.status(400).json({ ok: false, error: 'inquiries array is required' });
   }
   try {
+    const preview = previewRentImport(inquiries);
+    res.json({ ok: true, ...preview });
+  } catch (err) {
+    console.error('POST /api/rent/import/preview failed:', err);
+    res.status(500).json({ ok: false, error: 'Failed to preview rent import' });
+  }
+});
+
+app.post('/api/rent/import', (req, res) => {
+  const body = req.body || {};
+  const inquiries = Array.isArray(body.inquiries) ? body.inquiries : [];
+  if (!inquiries.length) {
+    return res.status(400).json({ ok: false, error: 'inquiries array is required' });
+  }
+  const mode = body.mode === 'legacy' ? 'legacy' : 'upsert';
+  try {
     let imported = 0;
+    let updated = 0;
     let skipped = 0;
+    let conflicts = 0;
+    const conflictItems = [];
+    const errors = [];
     const txn = db.transaction(() => {
       inquiries.forEach((item) => {
-        const id = item && item.id != null ? String(item.id).trim() : '';
-        if (!id) {
+        try {
+          const outcome = applyRentImportRow(item, mode);
+          if (outcome.result === 'imported') imported += 1;
+          else if (outcome.result === 'updated') updated += 1;
+          else if (outcome.result === 'conflict') {
+            conflicts += 1;
+            conflictItems.push({
+              id: outcome.id,
+              backupUpdatedAt: outcome.backupUpdatedAt,
+              dbUpdatedAt: outcome.dbUpdatedAt,
+              decision: outcome.decision,
+            });
+          } else if (outcome.result === 'error') {
+            skipped += 1;
+            errors.push({ id: outcome.id || '', error: outcome.error });
+          } else skipped += 1;
+        } catch (rowErr) {
           skipped += 1;
-          return;
+          errors.push({
+            id: item && item.id != null ? String(item.id) : '',
+            error: rowErr.message || 'row failed',
+          });
         }
-        if (getRentInquiryById.get(id)) {
-          skipped += 1;
-          return;
-        }
-        const nowIso = new Date().toISOString();
-        const createdAt = normalizeRentImportTimestamp(
-          item.createdAt || item.letrehozasDatuma || item.created_at,
-          nowIso,
-        );
-        const updatedAt = normalizeRentImportTimestamp(
-          item.updatedAt || item.updated_at,
-          createdAt,
-        );
-        const payload = buildRentInquiryPayload(item, id, createdAt);
-        payload.createdAt = createdAt;
-        payload.updatedAt = updatedAt;
-        payload.letrehozasDatuma = createdAt;
-        const row = rentInquiryDbRowFromPayload(payload, id, createdAt, updatedAt);
-        insertRentInquiry.run(row);
-        imported += 1;
       });
+      syncRentIdSequenceFromDb(db);
     });
     txn();
-    res.json({ ok: true, imported, skipped });
+    res.json({
+      ok: true,
+      mode,
+      imported,
+      updated,
+      skipped,
+      conflicts,
+      conflictItems,
+      errors,
+    });
   } catch (err) {
     console.error('POST /api/rent/import failed:', err);
     res.status(500).json({ ok: false, error: 'Failed to import rent inquiries' });
+  }
+});
+
+app.post('/api/rent/restore/preview', (req, res) => {
+  const body = req.body || {};
+  const inquiries = Array.isArray(body.inquiries) ? body.inquiries : [];
+  if (!inquiries.length) {
+    return res.status(400).json({ ok: false, error: 'inquiries array is required' });
+  }
+  try {
+    res.json({
+      ok: true,
+      backupCount: inquiries.length,
+      currentCount: selectAllRentInquiryIds.all().length,
+    });
+  } catch (err) {
+    console.error('POST /api/rent/restore/preview failed:', err);
+    res.status(500).json({ ok: false, error: 'Failed to preview rent restore' });
+  }
+});
+
+app.post('/api/rent/restore', (req, res) => {
+  const body = req.body || {};
+  const inquiries = Array.isArray(body.inquiries) ? body.inquiries : [];
+  if (!inquiries.length) {
+    return res.status(400).json({ ok: false, error: 'inquiries array is required' });
+  }
+  if (body.confirm !== true && body.confirmToken !== 'RESTORE') {
+    return res.status(400).json({ ok: false, error: 'confirm required (confirm: true or confirmToken: RESTORE)' });
+  }
+  try {
+    let restored = 0;
+    let failed = 0;
+    const errors = [];
+    const txn = db.transaction(() => {
+      deleteAllRentInquiries.run();
+      inquiries.forEach((item) => {
+        const id = item && item.id != null ? String(item.id).trim() : '';
+        if (!id) {
+          failed += 1;
+          errors.push({ id: '', error: 'missing id' });
+          return;
+        }
+        try {
+          const nowIso = new Date().toISOString();
+          const createdAt = normalizeRentImportTimestamp(
+            item.createdAt || item.letrehozasDatuma || item.created_at,
+            nowIso,
+          );
+          const updatedAt = normalizeRentImportTimestamp(item.updatedAt || item.updated_at, createdAt);
+          const payload = buildRentInquiryPayloadFromImport(item, id, createdAt, updatedAt, null);
+          const row = rentInquiryDbRowFromPayload(payload, id, createdAt, updatedAt);
+          insertRentInquiry.run(row);
+          restored += 1;
+        } catch (rowErr) {
+          failed += 1;
+          errors.push({ id, error: rowErr.message || 'insert failed' });
+        }
+      });
+      syncRentIdSequenceFromDb(db);
+    });
+    txn();
+    res.json({ ok: true, restored, failed, errors });
+  } catch (err) {
+    console.error('POST /api/rent/restore failed:', err);
+    res.status(500).json({ ok: false, error: 'Failed to restore rent inquiries' });
   }
 });
 
