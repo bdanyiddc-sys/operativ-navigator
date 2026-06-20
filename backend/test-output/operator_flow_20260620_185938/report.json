@@ -1,0 +1,7 @@
+{
+  "steps": [],
+  "verdict": "FAIL",
+  "vehicle": "KV10",
+  "driver": "DRV10",
+  "error": "page.waitForSelector: Timeout 15000ms exceeded.\nCall log:\n  - waiting for locator('#admin-login-gate[hidden]') to be visible\n    34 × locator resolved to hidden <div hidden=\"\" id=\"admin-login-gate\" class=\"admin-login-gate\" aria-label=\"Admin belépés\">…</div>\n\n    at adminLogin (D:\\cursor\\operativ-navigator_260614\\backend\\test-output\\operator_flow_run.mjs:67:14)\n    at D:\\cursor\\operativ-navigator_260614\\backend\\async file:\\D:\\cursor\\operativ-navigator_260614\\backend\\test-output\\operator_flow_run.mjs:113:3"
+}

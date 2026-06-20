@@ -2292,6 +2292,30 @@ function buildTripStartMap(events) {
   return tripStart;
 }
 
+/** Kanonikus nyitott járatok – ugyanaz a logika mint buildVehiclePositionsFromEvents / public. */
+function getOpenTripsFromFullEvents() {
+  const allEvents = selectEventsChronological.all().map(rowToClient);
+  const openIds = activeTripIdsFromEvents(allEvents);
+  return [...openIds.keys()].map((tripId) => {
+    let startEv = null;
+    allEvents.forEach((ev) => {
+      if (String(ev.trip || '').trim() !== tripId) return;
+      if (!TRIP_START_TYPES.has(String(ev.type || '').trim())) return;
+      startEv = ev;
+    });
+    const p = (startEv && startEv.payload) ? startEv.payload : (startEv || {});
+    return {
+      trip: tripId,
+      shift: (startEv && startEv.shift) || p.shift || null,
+      vehicle_id: p.vehicle_id || (startEv && startEv.vehicle_id) || null,
+      vehicle_name: p.vehicle_name || (startEv && startEv.vehicle_name) || null,
+      driver_id: p.driver_id || null,
+      driver_name: p.driver_name || null,
+      started_at: (startEv && startEv.timestamp) || p.start_time || null,
+    };
+  });
+}
+
 function ingestLatestTrack(byTrip, ev) {
   const trip = ev.trip != null ? String(ev.trip).trim() : '';
   if (!trip) return;
@@ -2600,17 +2624,21 @@ app.get('/api/admin/trips', (_req, res) => {
 app.get('/api/admin/active-drivers', (_req, res) => {
   try {
     const shifts = getActiveShiftsFromDb();
-    const drivers = shifts.length ? shifts : getActiveDriverSessions().map((s) => ({
-      ...s,
-      route: s.schedule || s.route || null,
-      status: 'ACTIVE',
-      display_status: 'ACTIVE',
-      last_gps_at: s.last_track_at || null,
-    }));
+    const drivers = shifts;
     res.json({ ok: true, count: drivers.length, drivers, shifts });
   } catch (err) {
     console.error('GET /api/admin/active-drivers failed:', err);
     res.status(500).json({ ok: false, error: 'Failed to load active drivers' });
+  }
+});
+
+app.get('/api/admin/open-trips', (_req, res) => {
+  try {
+    const trips = getOpenTripsFromFullEvents();
+    res.json({ ok: true, count: trips.length, trips });
+  } catch (err) {
+    console.error('GET /api/admin/open-trips failed:', err);
+    res.status(500).json({ ok: false, error: 'Failed to load open trips' });
   }
 });
 
@@ -2658,10 +2686,9 @@ app.post('/api/admin/active-shifts/:shiftId/close-trip', (req, res) => {
   const shiftId = String(req.params.shiftId || '').trim();
   if (!shiftId) return res.status(400).json({ ok: false, error: 'shiftId required' });
   try {
-    const trips = getActiveTrips();
-    const trip = trips.find((t) => String(t.shift || '') === shiftId) || trips[0];
+    const trip = getOpenTripsFromFullEvents().find((t) => String(t.shift || '') === shiftId);
     if (!trip) {
-      return res.status(404).json({ ok: false, error: 'Nincs aktív járat' });
+      return res.status(400).json({ ok: false, error: 'Nincs nyitott járat ehhez a műszakhoz' });
     }
     const tripEnd = normalizeIncomingEvent({
       id: `admin_trip_close_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
@@ -2701,6 +2728,26 @@ app.post('/api/admin/vehicles/:vehicleId/release', (req, res) => {
   const vehicleId = String(req.params.vehicleId || '').trim();
   if (!vehicleId) return res.status(400).json({ ok: false, error: 'vehicleId required' });
   try {
+    const openRows = db.prepare(`
+      SELECT * FROM active_shifts
+      WHERE vehicle_id = @vehicle_id AND closed_at IS NULL
+    `).all({ vehicle_id: vehicleId });
+    openRows.forEach((row) => {
+      const shiftId = String(row.shift_id || '').trim();
+      if (!shiftId) return;
+      const shiftEnd = normalizeIncomingEvent({
+        id: `admin_close_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        type: 'shift_end',
+        shift: shiftId,
+        timestamp: new Date().toISOString(),
+        driver_id: row.driver_id || null,
+        driver_name: row.driver_name || null,
+        vehicle_id: row.vehicle_id || null,
+        note: 'Admin műszak lezárás',
+        source: 'admin_close_shift',
+      });
+      if (shiftEnd) insertEvent.run(shiftEnd);
+    });
     releaseVehicleLock(vehicleId);
     res.json({ ok: true, vehicle_id: vehicleId, released: true });
   } catch (err) {
@@ -3522,12 +3569,12 @@ app.use(
   })
 );
 
-app.get(['/admin', '/admin/', '/admin.html'], (_req, res) => {
-  res.sendFile(path.join(__dirname, 'admin.html'));
-});
-
 const frontendDir = path.join(__dirname, '..', 'frontend');
 const rentDir = path.join(frontendDir, 'rent');
+
+app.get(['/admin', '/admin/', '/admin.html'], (_req, res) => {
+  res.sendFile(path.join(frontendDir, 'admin', 'index.html'));
+});
 
 app.get(['/rent/public', '/rent/public/'], (_req, res) => {
   res.sendFile(path.join(rentDir, 'public.html'));
