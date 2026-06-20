@@ -935,12 +935,12 @@
       background: rgba(15, 23, 42, 0.94) !important;
       background-color: rgba(15, 23, 42, 0.94) !important;
       border: 1px solid rgba(255, 255, 255, 0.14) !important;
-      border-radius: 6px !important;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35) !important;
+      border-radius: 6.9px !important;
+      box-shadow: 0 2.3px 6.9px rgba(0, 0, 0, 0.35) !important;
       color: #f1f5f9 !important;
-      font-size: 8px;
-      line-height: 1.25;
-      padding: 4px 6px !important;
+      font-size: 9.2px;
+      line-height: 1.44;
+      padding: 4.6px 6.9px !important;
       font-weight: 600;
       white-space: nowrap;
       pointer-events: auto;
@@ -967,11 +967,11 @@
     .leaflet-tooltip-bottom.rent-map-label-dark::before {
       border-bottom-color: rgba(15, 23, 42, 0.94) !important;
     }
-    .map-label .ml-date { font-weight: 800; font-size: 9px; color: #fb923c; }
-    .map-label .ml-time { font-size: 8px; color: #fde68a; }
-    .map-label .ml-people { font-weight: 800; font-size: 8px; color: #86efac; }
-    .map-label .ml-status { font-size: 8px; color: #93c5fd; font-weight: 700; }
-    .map-label .ml-veh { font-size: 8px; color: #7dd3fc; font-weight: 800; }
+    .map-label .ml-date { font-weight: 800; font-size: 10.35px; color: #fb923c; }
+    .map-label .ml-time { font-size: 9.2px; color: #fde68a; }
+    .map-label .ml-people { font-weight: 800; font-size: 9.2px; color: #86efac; }
+    .map-label .ml-status { font-size: 9.2px; color: #93c5fd; font-weight: 700; }
+    .map-label .ml-veh { font-size: 9.2px; color: #7dd3fc; font-weight: 800; }
     .view-toggle {
       display: flex;
       flex-direction: row;
@@ -2974,17 +2974,17 @@
 
   function markerLabelHtml(b) {
     if (!b) b = {};
-    var dateLine = '<div class="ml-date" style="font-weight:800;font-size:9px;color:#fb923c">' +
+    var dateLine = '<div class="ml-date" style="font-weight:800;font-size:10.35px;color:#fb923c">' +
       escapeHtml(formatShortDate(b.date)) + '</div>';
-    var timeLine = '<div class="ml-time" style="font-size:8px;color:#fde68a">' +
+    var timeLine = '<div class="ml-time" style="font-size:9.2px;color:#fde68a">' +
       escapeHtml(markerTimeRange(b)) + '</div>';
-    var peopleLine = '<div class="ml-people" style="font-weight:800;font-size:8px;color:#86efac">' +
+    var peopleLine = '<div class="ml-people" style="font-weight:800;font-size:9.2px;color:#86efac">' +
       escapeHtml(markerHeadcountLabel(b)) + '</div>';
-    var statusLine = '<div class="ml-status" style="font-size:8px;color:#93c5fd;font-weight:700">' +
+    var statusLine = '<div class="ml-status" style="font-size:9.2px;color:#93c5fd;font-weight:700">' +
       escapeHtml(statusShortLabel(b.status)) + '</div>';
     var veh = markerVehicleLabel(b);
     var vehLine = veh
-      ? ('<div class="ml-veh" style="font-weight:800;font-size:8px;color:#7dd3fc">' + escapeHtml(veh) + '</div>')
+      ? ('<div class="ml-veh" style="font-weight:800;font-size:9.2px;color:#7dd3fc">' + escapeHtml(veh) + '</div>')
       : '';
     return '<div class="map-label-inner">' + dateLine + timeLine + peopleLine + statusLine + vehLine + '</div>';
   }
@@ -2999,11 +2999,11 @@
     el.style.setProperty('background-color', 'rgba(15, 23, 42, 0.94)', 'important');
     el.style.setProperty('border', '1px solid rgba(255, 255, 255, 0.14)', 'important');
     el.style.setProperty('color', '#f1f5f9', 'important');
-    el.style.setProperty('box-shadow', '0 2px 6px rgba(0, 0, 0, 0.35)', 'important');
-    el.style.setProperty('border-radius', '6px', 'important');
-    el.style.setProperty('padding', '4px 6px', 'important');
-    el.style.setProperty('font-size', '8px', 'important');
-    el.style.setProperty('line-height', '1.25', 'important');
+    el.style.setProperty('box-shadow', '0 2.3px 6.9px rgba(0, 0, 0, 0.35)', 'important');
+    el.style.setProperty('border-radius', '6.9px', 'important');
+    el.style.setProperty('padding', '4.6px 6.9px', 'important');
+    el.style.setProperty('font-size', '9.2px', 'important');
+    el.style.setProperty('line-height', '1.44', 'important');
   }
 
   function activateBookingMarkerPopup(m, b) {
@@ -3150,9 +3150,9 @@
 
   function loadLabelHtml(group) {
     return '<div class="map-label-inner">' +
-      '<div class="ml-date" style="font-weight:800;font-size:9px;color:#fb923c">' + escapeHtml(formatHuDate(group.date)) + '</div>' +
-      '<div class="ml-people" style="font-weight:800;font-size:8px;color:#86efac">' + escapeHtml(String(group.count)) + ' foglalás</div>' +
-      '<div class="ml-people" style="font-weight:800;font-size:8px;color:#86efac">' + escapeHtml(String(group.headcount)) + ' fő</div>' +
+      '<div class="ml-date" style="font-weight:800;font-size:10.35px;color:#fb923c">' + escapeHtml(formatHuDate(group.date)) + '</div>' +
+      '<div class="ml-people" style="font-weight:800;font-size:9.2px;color:#86efac">' + escapeHtml(String(group.count)) + ' foglalás</div>' +
+      '<div class="ml-people" style="font-weight:800;font-size:9.2px;color:#86efac">' + escapeHtml(String(group.headcount)) + ' fő</div>' +
       '</div>';
   }
 
@@ -4503,7 +4503,7 @@
           color: color, fillColor: color, fillOpacity: 0.82, weight: 2
         }).addTo(markerLayer);
         m.bindTooltip(loadLabelHtml(g), {
-          permanent: true, direction: 'right', className: 'map-label rent-map-label-dark', offset: [8, 0], opacity: 1
+          permanent: true, direction: 'right', className: 'map-label rent-map-label-dark', offset: [9, 0], opacity: 1
         });
         applyMapLabelTooltipTheme(m);
         m.bindPopup(loadPopupHtml(g), { maxWidth: 320 });
@@ -4553,7 +4553,7 @@
         color: color, fillColor: color, fillOpacity: 0.78, weight: 2
       }).addTo(markerLayer);
       m.bindTooltip(markerLabelHtml(b), {
-        permanent: true, direction: 'right', className: 'map-label rent-map-label-dark', offset: [8, 0], opacity: 1,
+        permanent: true, direction: 'right', className: 'map-label rent-map-label-dark', offset: [9, 0], opacity: 1,
         interactive: true
       });
       applyMapLabelTooltipTheme(m);

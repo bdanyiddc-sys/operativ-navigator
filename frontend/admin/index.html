@@ -154,23 +154,35 @@
                 flex-direction: column;
             }
             .panel-trips .panel-acc {
-                flex: 1;
+                flex: 1 1 0;
                 min-height: 0;
+                max-height: 100%;
                 display: flex;
                 flex-direction: column;
                 overflow: hidden;
             }
-            .panel-trips .panel-body {
-                flex: 1;
+            .panel-trips .panel-acc > .panel-body {
+                flex: 1 1 auto;
                 min-height: 0;
+                max-height: calc(100dvh - 260px);
                 overflow: hidden;
-                display: flex;
-                flex-direction: column;
+                display: grid;
+                grid-template-rows: auto minmax(0, 1fr) auto;
+            }
+            .panel-trips .left-panel-tabs {
+                grid-row: 1;
             }
             .panel-trips .left-panel-scroll {
-                flex: 1;
+                grid-row: 2;
                 min-height: 0;
+                overflow-x: hidden;
                 overflow-y: auto;
+                overscroll-behavior: contain;
+                -webkit-overflow-scrolling: touch;
+                padding-bottom: 16px;
+            }
+            .panel-trips .operative-vehicles-acc {
+                grid-row: 3;
             }
             .panel-trips > .trips-daily-report-footer {
                 flex-shrink: 0;
@@ -196,9 +208,8 @@
             }
             .panel-map .panel-head { flex-shrink: 0; }
             .panel-map .panel-body {
-                flex: 1;
+                flex: 1 1 auto;
                 min-height: 0;
-                height: auto;
                 display: flex;
                 flex-direction: column;
                 padding: 0;
@@ -206,17 +217,25 @@
             }
             .panel-map .map-wrap {
                 position: relative;
-                flex: 1;
+                flex: 1 1 auto;
                 min-height: 0;
                 width: 100%;
-                overflow: visible;
+                overflow: hidden;
+                padding-bottom: 56px;
+                box-sizing: border-box;
             }
             .panel-map #admin-map {
                 position: absolute;
-                inset: 0;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 56px;
                 width: 100%;
-                height: 100%;
+                height: auto;
                 min-height: 0;
+            }
+            .panel-map .map-legend-fixed {
+                bottom: 12px;
             }
             .layout-col-right {
                 min-height: 0;
@@ -552,8 +571,8 @@
         .shift-tab-card {
             border: 1px solid rgba(251, 146, 60, 0.35);
             border-radius: 10px;
-            padding: 10px 12px;
-            margin-bottom: 8px;
+            padding: 10px 12px 14px;
+            margin-bottom: 12px;
             background: rgba(251, 146, 60, 0.08);
         }
         .shift-tab-name {
@@ -570,6 +589,195 @@
         .shift-tab-card .btn-driver-kick {
             margin-top: 0;
         }
+        #left-tab-panel-shifts,
+        #panel-shifts-tab,
+        #panel-shifts-tab-mobile {
+            min-height: 0;
+            padding-bottom: 56px;
+        }
+        #panel-shifts-tab .shift-tab-card:last-child {
+            margin-bottom: 4px;
+        }
+        .shift-tab-card .operative-vehicles-actions {
+            margin-top: 10px;
+            min-width: 0;
+            width: 100%;
+        }
+        .shift-tab-card .operative-vehicles-actions button {
+            width: 100%;
+            padding: 8px 10px;
+            font-size: 11px;
+            box-sizing: border-box;
+        }
+        .shift-tab-stale-badge {
+            display: inline-block;
+            margin: 6px 0 8px;
+            padding: 3px 8px;
+            font-size: 11px;
+            font-weight: 800;
+            color: #fef3c7;
+            background: #b45309;
+            border-radius: 6px;
+            letter-spacing: 0.04em;
+        }
+        .operative-vehicles-block {
+            margin-bottom: 12px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid rgba(248, 113, 113, 0.35);
+            flex-shrink: 0;
+        }
+        .operative-dashboard {
+            margin-bottom: 0;
+            flex-shrink: 0;
+        }
+        .operative-kpi-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 10px;
+        }
+        .panel-trips .operative-kpi-row,
+        .trips-sheet .operative-kpi-row {
+            display: none !important;
+        }
+        .operative-vehicles-acc {
+            flex-shrink: 0;
+            margin-top: 8px;
+            border-top: 2px solid rgba(248, 113, 113, 0.35);
+        }
+        .operative-vehicles-acc-summary {
+            list-style: none;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #fca5a5;
+            padding: 10px 4px 8px;
+            user-select: none;
+        }
+        .operative-vehicles-acc-summary::-webkit-details-marker { display: none; }
+        .operative-vehicles-acc-summary::before {
+            content: '▸ ';
+            display: inline-block;
+            transition: transform 0.15s;
+        }
+        .operative-vehicles-acc[open] .operative-vehicles-acc-summary::before {
+            transform: rotate(90deg);
+        }
+        .operative-vehicles-acc .operative-dashboard {
+            max-height: min(280px, 38vh);
+            overflow-y: auto;
+            padding-bottom: 4px;
+        }
+        .op-kpi-badge {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 2px;
+            padding: 6px 10px;
+            border-radius: 8px;
+            border: 1px solid var(--line);
+            min-width: 88px;
+        }
+        .op-kpi-badge .op-kpi-label {
+            font-size: 9px;
+            font-weight: 800;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            opacity: 0.85;
+        }
+        .op-kpi-badge strong {
+            font-size: 18px;
+            line-height: 1.1;
+        }
+        .op-kpi-active { background: rgba(34, 197, 94, 0.18); border-color: rgba(74, 222, 128, 0.45); color: #86efac; }
+        .op-kpi-public { background: rgba(59, 130, 246, 0.18); border-color: rgba(96, 165, 250, 0.45); color: #93c5fd; }
+        .op-kpi-lock { background: rgba(239, 68, 68, 0.2); border-color: rgba(248, 113, 113, 0.5); color: #fca5a5; }
+        .op-kpi-trip { background: rgba(249, 115, 22, 0.2); border-color: rgba(251, 146, 60, 0.5); color: #fdba74; }
+        .op-kpi-stale { background: rgba(234, 179, 8, 0.2); border-color: rgba(250, 204, 21, 0.5); color: #fde047; }
+        .op-kpi-drivers { background: rgba(168, 85, 247, 0.18); border-color: rgba(192, 132, 252, 0.45); color: #d8b4fe; }
+        .op-kpi-pax { background: rgba(20, 184, 166, 0.18); border-color: rgba(45, 212, 191, 0.45); color: #5eead4; }
+        .op-driver-status {
+            display: inline-block;
+            font-size: 11px;
+            font-weight: 800;
+            white-space: nowrap;
+        }
+        .op-driver-online { color: #86efac; }
+        .op-driver-stale { color: #fde047; }
+        .op-driver-offline { color: #fca5a5; }
+        .operative-vehicles-actions .btn-op-show-map {
+            background: rgba(37, 99, 235, 0.35);
+            border-color: rgba(96, 165, 250, 0.65);
+            color: #dbeafe;
+        }
+        @keyframes operative-map-pulse {
+            from { transform: scale(1); opacity: 0.85; }
+            to { transform: scale(1.35); opacity: 0.35; }
+        }
+        .operative-map-pulse {
+            animation: operative-map-pulse 0.9s ease-in-out infinite alternate;
+        }
+        .operative-vehicles-head {
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #fca5a5;
+            margin-bottom: 8px;
+        }
+        .operative-vehicles-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+        }
+        .operative-vehicles-table th,
+        .operative-vehicles-table td {
+            padding: 6px 4px;
+            border-bottom: 1px solid var(--line);
+            text-align: left;
+            vertical-align: top;
+        }
+        .operative-vehicles-table th {
+            font-size: 10px;
+            font-weight: 800;
+            color: var(--muted);
+            letter-spacing: 0.04em;
+        }
+        .op-status {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 800;
+            font-size: 10px;
+        }
+        .op-status-AKTÍV { background: rgba(34, 197, 94, 0.2); color: #86efac; }
+        .op-status-STALE { background: rgba(234, 179, 8, 0.25); color: #fde047; }
+        .op-status-BERAGADT_LOCK { background: rgba(239, 68, 68, 0.25); color: #fca5a5; }
+        .op-status-BERAGADT_TRIP { background: rgba(249, 115, 22, 0.25); color: #fdba74; }
+        .op-status-SZABAD { background: rgba(148, 163, 184, 0.2); color: #cbd5e1; }
+        .operative-vehicles-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            min-width: 118px;
+        }
+        .operative-vehicles-actions button {
+            padding: 5px 6px;
+            font-size: 10px;
+            font-weight: 700;
+            border-radius: 6px;
+            border: 1px solid var(--line);
+            background: rgba(255, 255, 255, 0.06);
+            color: var(--text);
+            cursor: pointer;
+        }
+        .operative-vehicles-actions button:hover:not(:disabled) { border-color: rgba(96, 165, 250, 0.6); }
+        .operative-vehicles-actions button:disabled { opacity: 0.35; cursor: not-allowed; }
+        .operative-vehicles-actions .btn-op-release { background: #991b1b; border-color: #f87171; color: #fff; }
+        .operative-vehicles-actions .btn-op-close-trip { background: #92400e; border-color: #fbbf24; color: #fff; }
+        .operative-vehicles-actions .btn-op-full-cleanup { background: #581c87; border-color: #c084fc; color: #fff; }
         .admin-date-filter {
             margin-bottom: 10px;
             padding-bottom: 10px;
@@ -2317,6 +2525,29 @@
             line-height: 1.4;
         }
         .report-meta-hint strong { color: #bbf7d0; }
+        .rc-section { margin: 14px 0 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+        .rc-section-head { font-size: 11px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: #93c5fd; margin-bottom: 8px; }
+        .rc-kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); gap: 6px; margin-bottom: 10px; }
+        .rc-kpi-card { padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: rgba(255,255,255,0.04); }
+        .rc-kpi-card .lbl { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+        .rc-kpi-card strong { display: block; font-size: 20px; margin-top: 4px; color: var(--text); }
+        .rc-kpi-card.rc-green { border-color: rgba(74,222,128,0.4); background: rgba(22,101,52,0.2); }
+        .rc-kpi-card.rc-blue { border-color: rgba(96,165,250,0.4); background: rgba(30,58,138,0.25); }
+        .rc-kpi-card.rc-red { border-color: rgba(248,113,113,0.45); background: rgba(127,29,29,0.25); }
+        .rc-kpi-card.rc-amber { border-color: rgba(251,191,36,0.45); background: rgba(120,53,15,0.25); }
+        .rc-kpi-card.rc-purple { border-color: rgba(192,132,252,0.4); background: rgba(88,28,135,0.22); }
+        .rc-export-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }
+        .report-table th.rc-sortable { cursor: pointer; user-select: none; }
+        .report-table th.rc-sortable:hover { color: #93c5fd; }
+        .rc-problem-note { font-size: 10px; color: var(--muted); margin-bottom: 8px; }
+        .pilot-dashboard { padding: 4px 0 12px; }
+        .pilot-kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-bottom: 16px; }
+        .pilot-kpi-card { padding: 16px 14px; border-radius: 12px; border: 1px solid var(--line); background: linear-gradient(145deg, rgba(30,58,138,0.35), rgba(15,23,42,0.85)); box-shadow: 0 8px 24px rgba(0,0,0,0.25); }
+        .pilot-kpi-card .lbl { font-size: 10px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #93c5fd; }
+        .pilot-kpi-card strong { display: block; font-size: 32px; line-height: 1.1; margin-top: 6px; color: #e0f2fe; }
+        .pilot-nav-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+        .pilot-nav-row button { padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(96,165,250,0.5); background: rgba(37,99,235,0.25); color: #dbeafe; font-weight: 800; cursor: pointer; }
+        .pilot-operative-mirror { margin-top: 12px; padding: 10px; border-radius: 10px; border: 1px dashed rgba(248,113,113,0.45); background: rgba(127,29,29,0.12); }
         .service-row {
             padding: 10px 12px;
             border-radius: 10px;
@@ -2424,6 +2655,15 @@
                             <div id="panel-route-uploads"></div>
                         </div>
                     </div>
+                    <details class="operative-vehicles-acc" id="operative-vehicles-acc">
+                        <summary class="operative-vehicles-acc-summary">Operatív járművek</summary>
+                        <div class="operative-dashboard" id="operative-dashboard">
+                            <div id="operative-kpi-row" class="operative-kpi-row" aria-label="Operatív KPI" aria-hidden="true"></div>
+                            <div class="operative-vehicles-block" id="operative-vehicles-block">
+                                <div id="operative-vehicles-list"></div>
+                            </div>
+                        </div>
+                    </details>
                 </div>
             </details>
             <div class="trips-daily-report-footer" aria-label="Napi riport">
@@ -2497,12 +2737,21 @@
                         <div id="panel-ops-operations">
                             <div class="ops-subtabs" role="tablist" aria-label="Üzemeltetés alfülek">
                                 <button type="button" class="ops-subtab is-active" data-ops-subtab="live">Aktuális napi adatok</button>
+                                <button type="button" class="ops-subtab" data-ops-subtab="report-center">Riport Központ</button>
+                                <button type="button" class="ops-subtab" data-ops-subtab="pilot">Pilot Dashboard</button>
                                 <button type="button" class="ops-subtab" data-ops-subtab="query">Report lekérdezés</button>
                             </div>
                             <div id="panel-ops-live">
                                 <p class="ops-live-date" id="ops-live-date">—</p>
                                 <div class="ops-live-summary" id="ops-live-summary"></div>
                                 <div id="panel-live-table"></div>
+                            </div>
+                            <div id="panel-ops-report-center" hidden>
+                                <p class="report-meta-hint">Üzemeltetési Riport Központ · report-center-v1 · meglévő events / bookings / active-drivers adatokból</p>
+                                <div id="panel-report-center-content"></div>
+                            </div>
+                            <div id="panel-ops-pilot" hidden>
+                                <div id="panel-pilot-dashboard" class="pilot-dashboard"></div>
                             </div>
                             <div id="panel-ops-query" hidden>
                                 <p class="report-meta-hint" id="report-meta-hint">Kapacitás: <strong>56 fő</strong> · Jegyár: <strong>2800 Ft/fő</strong> · visszamenőleges, lezárt járatok (trip_summary)</p>
@@ -2670,6 +2919,15 @@
                 <div class="left-tab-panel geojson-tab-panel" data-left-tab-panel="geojson" role="tabpanel" hidden>
                     <div id="panel-route-uploads-mobile"></div>
                 </div>
+                <details class="operative-vehicles-acc" id="operative-vehicles-acc-mobile">
+                    <summary class="operative-vehicles-acc-summary">Operatív járművek</summary>
+                    <div class="operative-dashboard" id="operative-dashboard-mobile">
+                        <div id="operative-kpi-row-mobile" class="operative-kpi-row" aria-label="Operatív KPI" aria-hidden="true"></div>
+                        <div class="operative-vehicles-block" id="operative-vehicles-block-mobile">
+                            <div id="operative-vehicles-list-mobile"></div>
+                        </div>
+                    </div>
+                </details>
             </div>
             <div class="trips-sheet-csv-footer" aria-label="Napi riport">
                 <button type="button" class="btn-csv-report hit" data-csv-daily>Mai riport (CSV)</button>
@@ -2722,12 +2980,21 @@
             <div class="mobile-sheet-body">
                 <div class="ops-subtabs" role="tablist">
                     <button type="button" class="ops-subtab is-active" data-ops-subtab-mobile="live">Aktuális napi adatok</button>
+                    <button type="button" class="ops-subtab" data-ops-subtab-mobile="report-center">Riport Központ</button>
+                    <button type="button" class="ops-subtab" data-ops-subtab-mobile="pilot">Pilot Dashboard</button>
                     <button type="button" class="ops-subtab" data-ops-subtab-mobile="query">Report lekérdezés</button>
                 </div>
                 <div id="panel-ops-live-mobile">
                     <p class="ops-live-date" id="ops-live-date-mobile">—</p>
                     <div class="ops-live-summary" id="ops-live-summary-mobile"></div>
                     <div id="panel-live-table-mobile"></div>
+                </div>
+                <div id="panel-ops-report-center-mobile" hidden>
+                    <p class="report-meta-hint">Üzemeltetési Riport Központ · report-center-v1</p>
+                    <div id="panel-report-center-content-mobile"></div>
+                </div>
+                <div id="panel-ops-pilot-mobile" hidden>
+                    <div id="panel-pilot-dashboard-mobile" class="pilot-dashboard"></div>
                 </div>
                 <div id="panel-ops-query-mobile" hidden>
                     <p class="report-meta-hint" id="report-meta-hint-mobile">Kapacitás: <strong>56 fő</strong> · Jegyár: <strong>2800 Ft/fő</strong></p>
@@ -2913,6 +3180,7 @@
     var tripLayerPrefs = {};
     var lastTrips = [];
     var lastEvents = [];
+    var lastOpenTripsCanonical = [];
     var map = null;
     var plannedRouteLayer = null;
     var trackPolylinesLayer = null;
@@ -2922,6 +3190,9 @@
     var tasksLayer = null;
     var vehicleTripLayer = null;
     var tripLabelsLayer = null;
+    var operativeHighlightLayer = null;
+    var operativeHighlightTimer = null;
+    var lastOperativeRows = [];
     var lastPublicVehiclePositions = [];
     var lastTasks = [];
     var lastBookings = { scheduled: [], boarding: [], custom: [] };
@@ -2955,6 +3226,8 @@
     var elReportVehicleMobile = document.getElementById('report-vehicle-mobile');
     var activeOpsTab = 'operations';
     var activeOpsSubTab = 'live';
+    var lastReportCenterSnapshot = null;
+    var reportCenterSort = { city: { col: 'passengers', dir: -1 }, trip: { col: 'passengers', dir: -1 }, vehicle: { col: 'passengers', dir: -1 } };
     var DEFAULT_CAPACITY = 56;
     var DEFAULT_TICKET_PRICE = 2800;
     var lastReportData = null;
@@ -3002,6 +3275,7 @@
     var elActiveDrivers = document.getElementById('panel-active-drivers');
     var elActiveDriversMobile = document.getElementById('panel-active-drivers-mobile');
     var lastActiveDrivers = [];
+    var lastPublicVehiclePositionsApi = [];
     var adminUsers = [];
     var adminLoggedUser = null;
     var adminDateFilter = { mode: 'day', date: '' };
@@ -4881,6 +5155,7 @@
         tasksLayer = L.layerGroup().addTo(map);
         vehicleTripLayer = L.layerGroup().addTo(map);
         tripLabelsLayer = L.layerGroup().addTo(map);
+        operativeHighlightLayer = L.layerGroup().addTo(map);
         map.on('click', onAdminMapClickForTask);
         setTimeout(function () { if (map) map.invalidateSize(); }, 100);
     }
@@ -5382,6 +5657,11 @@
     function findShiftIdForTrip(tripId) {
         if (!tripId) return null;
         var i;
+        for (i = 0; i < (lastOpenTripsCanonical || []).length; i++) {
+            if (lastOpenTripsCanonical[i].trip === tripId && lastOpenTripsCanonical[i].shift) {
+                return lastOpenTripsCanonical[i].shift;
+            }
+        }
         for (i = 0; i < lastTrips.length; i++) {
             if (lastTrips[i].trip === tripId) {
                 if (lastTrips[i].shift) return lastTrips[i].shift;
@@ -5412,20 +5692,535 @@
             });
     }
 
+    var OPERATIVE_STALE_MS = 30 * 60 * 1000;
+
+    /** Operátori KPI feliratok – képernyő + CSV egységesen */
+    var OP_KPI_LABELS = {
+        freshActiveTrains: 'Friss aktív vonatok',
+        publicVisible: 'Public látható járművek',
+        stuckShifts: 'Beragadt műszakok',
+        stuckTrips: 'Beragadt járatok',
+        staleVehicles: 'Inaktív járművek (30+ perc)',
+        openShifts: 'Nyitott műszakok',
+        livePassengers: 'Utasok a public térképen',
+        paxDay: 'Mai utasok',
+        paxWeek: 'Heti utasok',
+        paxMonth: 'Havi utasok',
+        tripsDay: 'Mai járatok',
+        tripsWeek: 'Heti járatok',
+        tripsMonth: 'Havi járatok',
+        bookings: 'Foglalások',
+        customOrders: 'Különjárat érdeklődések'
+    };
+
+    function normalizeOperativeVehicleId(v) {
+        return String(v || '').trim().toUpperCase();
+    }
+
+    function collectAllOpenTrips(events) {
+        var open = {};
+        var chrono = (events || []).slice().sort(function (a, b) {
+            return String(a.timestamp || '').localeCompare(String(b.timestamp || ''));
+        });
+        chrono.forEach(function (ev) {
+            var id = eventTrip(ev);
+            if (!id) return;
+            if (isTripStartEvent(ev)) {
+                open[id] = findTripStartInEvents(id, events) || {
+                    trip: id,
+                    shift: ev.shift || payloadOf(ev).shift || null,
+                    vehicle_id: payloadOf(ev).vehicle_id || null,
+                    driver_id: payloadOf(ev).driver_id || null
+                };
+            }
+            if (isTripEndEvent(ev)) delete open[id];
+        });
+        return Object.keys(open).map(function (k) { return open[k]; });
+    }
+
+    function isOperativeStale(lastIso, shiftMeta) {
+        if (shiftMeta && isShiftStaleForDisplay(shiftMeta)) return true;
+        if (!lastIso) return !!shiftMeta;
+        return (Date.now() - new Date(lastIso).getTime()) >= OPERATIVE_STALE_MS;
+    }
+
+    function deriveOperativeStatus(row) {
+        var stale = isOperativeStale(row.last_gps_at || row.last_heartbeat_at, row.shift_meta);
+        if (row.has_shift && stale) return 'BERAGADT_LOCK';
+        if (row.has_open_trip && (stale || (row.public_live && !row.has_shift))) return 'BERAGADT_TRIP';
+        if (stale && (row.has_shift || row.has_open_trip || row.public_live)) return 'STALE';
+        if (row.has_shift || row.has_open_trip || row.public_live) return 'AKTÍV';
+        return 'SZABAD';
+    }
+
+    function deriveDriverHeartbeatStatus(row) {
+        var hb = row.last_heartbeat_at;
+        if (!hb) {
+            return { code: 'OFFLINE', label: '🔴 OFFLINE', css: 'op-driver-offline' };
+        }
+        var hbMeta = {
+            last_heartbeat_at: hb,
+            last_gps_at: null,
+            last_track_at: null,
+            started_at: null,
+            display_status: row.shift_meta ? row.shift_meta.display_status : null,
+            status: row.shift_meta ? row.shift_meta.status : null
+        };
+        if (isShiftStaleForDisplay(hbMeta)) {
+            return { code: 'STALE', label: '🟡 STALE', css: 'op-driver-stale' };
+        }
+        return { code: 'ONLINE', label: '🟢 ONLINE', css: 'op-driver-online' };
+    }
+
+    function computeOperativeKpis(rows, drivers, publicVehicles) {
+        var kpis = {
+            activeTrains: 0,
+            publicVisible: 0,
+            stuckLocks: 0,
+            stuckTrips: 0,
+            staleVehicles: 0,
+            activeDrivers: 0,
+            activePassengers: null
+        };
+        (rows || []).forEach(function (r) {
+            if (r.status === 'AKTÍV') kpis.activeTrains += 1;
+            if (r.public_live) kpis.publicVisible += 1;
+            if (r.status === 'BERAGADT_LOCK') kpis.stuckLocks += 1;
+            if (r.status === 'BERAGADT_TRIP') kpis.stuckTrips += 1;
+            if (r.status === 'STALE') kpis.staleVehicles += 1;
+        });
+        var driverSet = {};
+        (drivers || []).forEach(function (d) {
+            var id = d.driver_id ? String(d.driver_id).trim() : '';
+            if (id) driverSet[id] = true;
+        });
+        kpis.activeDrivers = Object.keys(driverSet).length;
+        var paxSum = 0;
+        var hasPax = false;
+        (publicVehicles || []).forEach(function (p) {
+            if (p.passengers != null) {
+                paxSum += Math.max(0, parseInt(p.passengers, 10) || 0);
+                hasPax = true;
+            }
+        });
+        kpis.activePassengers = hasPax ? paxSum : null;
+        return kpis;
+    }
+
+    function renderOperativeKpiHtml(kpis) {
+        function badge(cls, label, val) {
+            return '<span class="op-kpi-badge op-kpi-' + cls + '">' +
+                '<span class="op-kpi-label">' + escapeHtml(label) + '</span>' +
+                '<strong>' + escapeHtml(String(val)) + '</strong></span>';
+        }
+        var paxVal = kpis.activePassengers != null ? kpis.activePassengers : '—';
+        return badge('active', OP_KPI_LABELS.freshActiveTrains, kpis.activeTrains) +
+            badge('public', OP_KPI_LABELS.publicVisible, kpis.publicVisible) +
+            badge('lock', OP_KPI_LABELS.stuckShifts, kpis.stuckLocks) +
+            badge('trip', OP_KPI_LABELS.stuckTrips, kpis.stuckTrips) +
+            badge('stale', OP_KPI_LABELS.staleVehicles, kpis.staleVehicles) +
+            badge('drivers', OP_KPI_LABELS.openShifts, kpis.activeDrivers) +
+            badge('pax', OP_KPI_LABELS.livePassengers, paxVal);
+    }
+
+    function renderOperativeKpiRow(rows, drivers, publicVehicles) {
+        var html = renderOperativeKpiHtml(computeOperativeKpis(rows, drivers, publicVehicles));
+        var el = document.getElementById('operative-kpi-row');
+        var elM = document.getElementById('operative-kpi-row-mobile');
+        if (el) el.innerHTML = html;
+        if (elM) elM.innerHTML = html;
+    }
+
+    function showOperativeMapHighlight(lat, lng) {
+        initMap();
+        if (!map || !operativeHighlightLayer || lat == null || lng == null) return;
+        operativeHighlightLayer.clearLayers();
+        if (operativeHighlightTimer) clearTimeout(operativeHighlightTimer);
+        var pulse = L.circleMarker([lat, lng], {
+            radius: 16,
+            color: '#fbbf24',
+            weight: 4,
+            fillColor: '#f59e0b',
+            fillOpacity: 0.4,
+            className: 'operative-map-pulse'
+        });
+        operativeHighlightLayer.addLayer(pulse);
+        var ring = L.circleMarker([lat, lng], {
+            radius: 22,
+            color: '#fde047',
+            weight: 2,
+            fillOpacity: 0,
+            className: 'operative-map-pulse'
+        });
+        operativeHighlightLayer.addLayer(ring);
+        operativeHighlightTimer = setTimeout(function () {
+            if (operativeHighlightLayer) operativeHighlightLayer.clearLayers();
+        }, 4000);
+    }
+
+    function focusOperativeVehicleOnMap(vehicleId) {
+        var vid = normalizeOperativeVehicleId(vehicleId);
+        var row = null;
+        for (var i = 0; i < lastOperativeRows.length; i++) {
+            if (lastOperativeRows[i].vehicle_id === vid) {
+                row = lastOperativeRows[i];
+                break;
+            }
+        }
+        if (!row || row.map_lat == null || row.map_lng == null) {
+            showAdminToast('Nincs ismert pozíció');
+            return;
+        }
+        if (row.focus_trip_id) {
+            selectedClosedSummaryTrip = null;
+            selectedTripId = row.focus_trip_id;
+            ensureTripLayerPrefs([row.focus_trip_id]);
+        }
+        initMap();
+        if (!map) return;
+        requestMapFocus();
+        renderSidebarControls(lastTrips, lastEvents);
+        renderTrips(lastTrips, lastEvents);
+        renderDetail(lastTrips, lastEvents);
+        renderMap(lastTrips, lastEvents);
+        map.setView([row.map_lat, row.map_lng], MAP_FOCUS_ZOOM, { animate: true });
+        showOperativeMapHighlight(row.map_lat, row.map_lng);
+        var mapPanel = document.querySelector('.panel-map');
+        if (mapPanel && mapPanel.scrollIntoView) {
+            mapPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+        setTimeout(function () { if (map) map.invalidateSize(); }, 120);
+    }
+
+    function buildOperativeVehicleRows(events, drivers, publicVehicles) {
+        var byVehicle = {};
+        function ensure(rawId) {
+            var vid = normalizeOperativeVehicleId(rawId);
+            if (!vid) return null;
+            if (!byVehicle[vid]) {
+                byVehicle[vid] = {
+                    vehicle_id: vid,
+                    driver_id: null,
+                    shift_id: null,
+                    has_shift: false,
+                    has_open_trip: false,
+                    public_live: false,
+                    open_trips: [],
+                    last_gps_at: null,
+                    last_heartbeat_at: null,
+                    shift_meta: null,
+                    map_lat: null,
+                    map_lng: null,
+                    focus_trip_id: null,
+                    status: 'SZABAD'
+                };
+            }
+            return byVehicle[vid];
+        }
+
+        (drivers || []).forEach(function (d) {
+            var row = ensure(d.vehicle_id || d.vehicle_name);
+            if (!row) return;
+            row.has_shift = true;
+            row.shift_id = d.shift_id || row.shift_id;
+            row.shift_meta = d;
+            row.driver_id = d.driver_id || row.driver_id;
+            row.last_gps_at = d.last_gps_at || d.last_track_at || row.last_gps_at;
+            row.last_heartbeat_at = d.last_heartbeat_at || row.last_heartbeat_at;
+        });
+
+        (lastOpenTripsCanonical || []).forEach(function (t) {
+            var row = ensure(t.vehicle_id);
+            if (!row) return;
+            row.has_open_trip = true;
+            if (row.open_trips.indexOf(t.trip) < 0) row.open_trips.push(t.trip);
+            row.driver_id = t.driver_id || row.driver_id;
+            if (t.shift && !row.shift_id) row.shift_id = t.shift;
+        });
+
+        (publicVehicles || []).forEach(function (p) {
+            var row = ensure(p.vehicle || p.vehicle_id);
+            if (!row) return;
+            row.public_live = true;
+            if (p.last_gps && (!row.last_gps_at || new Date(p.last_gps) > new Date(row.last_gps_at))) {
+                row.last_gps_at = p.last_gps;
+            }
+            if (p.lat != null && p.lng != null) {
+                row.map_lat = Number(p.lat);
+                row.map_lng = Number(p.lng);
+            }
+            if (p.trip) row.focus_trip_id = p.trip;
+        });
+
+        collectTripLastFromTracks(events).forEach(function (tr) {
+            var meta = findTripStartInEvents(tr.trip, events);
+            var row = ensure(meta && meta.vehicle_id);
+            if (!row || !tr.lastTime) return;
+            if (!row.last_gps_at || new Date(tr.lastTime) > new Date(row.last_gps_at)) {
+                row.last_gps_at = tr.lastTime;
+            }
+            if (tr.lastLat != null && tr.lastLng != null) {
+                if (row.map_lat == null) {
+                    row.map_lat = tr.lastLat;
+                    row.map_lng = tr.lastLng;
+                }
+                if (!row.focus_trip_id) row.focus_trip_id = tr.trip;
+            }
+        });
+
+        var now = Date.now();
+        var result = [];
+        Object.keys(byVehicle).forEach(function (vid) {
+            var row = byVehicle[vid];
+            var recentGps = row.last_gps_at && (now - new Date(row.last_gps_at).getTime() < OPERATIVE_STALE_MS);
+            var recentHb = row.last_heartbeat_at && (now - new Date(row.last_heartbeat_at).getTime() < OPERATIVE_STALE_MS);
+            var stale = isOperativeStale(row.last_gps_at || row.last_heartbeat_at, row.shift_meta);
+            var include = row.has_shift || row.has_open_trip || row.public_live || recentGps || recentHb || stale;
+            if (!include) return;
+            row.status = deriveOperativeStatus(row);
+            result.push(row);
+        });
+        result.sort(function (a, b) {
+            var order = { BERAGADT_LOCK: 0, BERAGADT_TRIP: 1, STALE: 2, AKTÍV: 3, SZABAD: 4 };
+            var da = order[a.status] != null ? order[a.status] : 9;
+            var db = order[b.status] != null ? order[b.status] : 9;
+            if (da !== db) return da - db;
+            return a.vehicle_id.localeCompare(b.vehicle_id);
+        });
+        return result;
+    }
+
+    function ynFlag(v) {
+        return v ? 'IGEN' : 'NEM';
+    }
+
+    function operativeRowForVehicle(vehicleId) {
+        var vid = normalizeOperativeVehicleId(vehicleId);
+        if (!vid) return { vehicle_id: '', has_shift: false, has_open_trip: false, map_lat: null, map_lng: null };
+        var i;
+        for (i = 0; i < lastOperativeRows.length; i++) {
+            if (lastOperativeRows[i].vehicle_id === vid) return lastOperativeRows[i];
+        }
+        var openTrips = getOpenTripsForVehicle(vid);
+        var hasShift = (lastActiveDrivers || []).some(function (d) {
+            return normalizeOperativeVehicleId(d.vehicle_id || d.vehicle_name) === vid;
+        });
+        var pub = null;
+        (lastPublicVehiclePositionsApi || []).forEach(function (p) {
+            if (normalizeOperativeVehicleId(p.vehicle || p.vehicle_id) === vid) pub = p;
+        });
+        return {
+            vehicle_id: vid,
+            has_shift: hasShift,
+            has_open_trip: openTrips.length > 0,
+            map_lat: pub && pub.lat != null ? Number(pub.lat) : null,
+            map_lng: pub && pub.lng != null ? Number(pub.lng) : null,
+        };
+    }
+
+    function renderOperativeVehicleActionsHtml(row) {
+        var hasMapPos = row.map_lat != null && row.map_lng != null;
+        return '<div class="operative-vehicles-actions">' +
+            '<button type="button" class="btn-op-show-map" data-op-show-map="' + escapeHtml(row.vehicle_id) + '"' + (hasMapPos ? '' : ' title="Nincs ismert pozíció"') + '>📍 Térképen mutat</button>' +
+            '<button type="button" class="btn-op-release" data-op-release="' + escapeHtml(row.vehicle_id) + '"' + (row.has_shift ? '' : ' disabled') + '>🚫 Vonat felszabadítása</button>' +
+            '<button type="button" class="btn-op-close-trip" data-op-close-trips="' + escapeHtml(row.vehicle_id) + '"' + (row.has_open_trip ? '' : ' disabled') + '>🛑 Járat lezárása</button>' +
+            '<button type="button" class="btn-op-full-cleanup" data-op-full-cleanup="' + escapeHtml(row.vehicle_id) + '"' + (row.has_shift || row.has_open_trip ? '' : ' disabled') + '>🧹 Teljes takarítás</button>' +
+            '</div>';
+    }
+
+    function renderOperativeVehicleRowHtml(row) {
+        var statusClass = 'op-status op-status-' + String(row.status || 'SZABAD').replace(/\s/g, '_');
+        var driverHb = deriveDriverHeartbeatStatus(row);
+        return '<tr data-op-vehicle="' + escapeHtml(row.vehicle_id) + '">' +
+            '<td><strong>' + escapeHtml(row.vehicle_id) + '</strong></td>' +
+            '<td>' + escapeHtml(row.driver_id || '—') + '</td>' +
+            '<td><span class="op-driver-status ' + driverHb.css + '">' + escapeHtml(driverHb.label) + '</span></td>' +
+            '<td>' + ynFlag(row.has_shift) + '</td>' +
+            '<td>' + ynFlag(row.has_open_trip) + (row.open_trips.length ? '<br><span style="color:var(--muted)">' + escapeHtml(row.open_trips.join(', ')) + '</span>' : '') + '</td>' +
+            '<td>' + ynFlag(row.public_live) + '</td>' +
+            '<td>' + escapeHtml(formatDateTime(row.last_gps_at)) + '</td>' +
+            '<td>' + escapeHtml(formatDateTime(row.last_heartbeat_at)) + '</td>' +
+            '<td><span class="' + statusClass + '">' + escapeHtml(row.status) + '</span></td>' +
+            '<td>' + renderOperativeVehicleActionsHtml(row) + '</td></tr>';
+    }
+
+    function renderOperativeVehiclesPanel(events, drivers, publicVehicles) {
+        var rows = buildOperativeVehicleRows(events, drivers, publicVehicles);
+        lastOperativeRows = rows;
+        renderOperativeKpiRow(rows, drivers, publicVehicles);
+        var html = !rows.length
+            ? '<p class="empty">Nincs operatív / problémás jármű.</p>'
+            : '<table class="operative-vehicles-table"><thead><tr>' +
+                '<th>Jármű</th><th>Sofőr</th><th>Sofőr állapot</th><th>Shift</th><th>Trip</th><th>Public</th><th>Utolsó GPS</th><th>Heartbeat</th><th>Állapot</th><th>Műveletek</th>' +
+                '</tr></thead><tbody>' +
+                rows.map(renderOperativeVehicleRowHtml).join('') +
+                '</tbody></table>';
+        var el = document.getElementById('operative-vehicles-list');
+        var elM = document.getElementById('operative-vehicles-list-mobile');
+        if (el) { el.innerHTML = html; bindOperativeVehicleButtons(el); }
+        if (elM) { elM.innerHTML = html; bindOperativeVehicleButtons(elM); }
+    }
+
+    function getOpenTripsForVehicle(vehicleId) {
+        var vid = normalizeOperativeVehicleId(vehicleId);
+        return (lastOpenTripsCanonical || []).filter(function (t) {
+            return normalizeOperativeVehicleId(t.vehicle_id) === vid;
+        });
+    }
+
+    function adminCloseVehicleTrips(vehicleId) {
+        var trips = getOpenTripsForVehicle(vehicleId);
+        if (!trips.length) {
+            showAdminToast('Nincs nyitott járat ehhez a járműhöz.');
+            return Promise.reject(new Error('no trips'));
+        }
+        if (!window.confirm('Lezárod az összes nyitott járatot?\n' + vehicleId + '\n(' + trips.map(function (t) { return t.trip; }).join(', ') + ')')) {
+            return Promise.reject(new Error('cancelled'));
+        }
+        var chain = Promise.resolve();
+        trips.forEach(function (t) {
+            chain = chain.then(function () {
+                var shiftId = findShiftIdForTrip(t.trip);
+                if (!shiftId) {
+                    showAdminToast('Shift ID hiányzik – járat lezárás nem biztonságos: ' + t.trip);
+                    return Promise.reject(new Error('no shift for ' + t.trip));
+                }
+                return postJson('/api/admin/active-shifts/' + encodeURIComponent(shiftId) + '/close-trip', {});
+            });
+        });
+        return chain.then(function () {
+            setStatus(true, 'Járat(ok) lezárva');
+            showAdminToast('Járat lezárva');
+            return refresh();
+        });
+    }
+
+    function adminFullCleanupVehicle(vehicleId) {
+        var vid = normalizeOperativeVehicleId(vehicleId);
+        var trips = getOpenTripsForVehicle(vid);
+        var hasShift = (lastActiveDrivers || []).some(function (d) {
+            return normalizeOperativeVehicleId(d.vehicle_id || d.vehicle_name) === vid;
+        });
+        if (!hasShift && !trips.length) {
+            showAdminToast('Nincs takarítandó lock vagy járat.');
+            return Promise.reject(new Error('nothing to clean'));
+        }
+        if (!window.confirm(
+            'Teljes takarítás (megerősítés után):\n' +
+            '1) Vonat felszabadítása (active_shifts)\n' +
+            '2) Nyitott járatok lezárása (trip_end)\n\n' +
+            'Jármű: ' + vid +
+            (trips.length ? '\nJáratok: ' + trips.map(function (t) { return t.trip; }).join(', ') : '')
+        )) {
+            return Promise.reject(new Error('cancelled'));
+        }
+        var chain = Promise.resolve();
+        if (hasShift) {
+            chain = chain.then(function () {
+                return postJson('/api/admin/vehicles/' + encodeURIComponent(vid) + '/release', {});
+            });
+        }
+        trips.forEach(function (t) {
+            chain = chain.then(function () {
+                var shiftId = findShiftIdForTrip(t.trip);
+                if (!shiftId) {
+                    /* TODO: vehicle_id alapú trip lezárás – nincs dedikált backend endpoint shift nélkül */
+                    showAdminToast('Részleges takarítás: shift nélküli trip nem zárható biztonságosan: ' + t.trip);
+                    return Promise.reject(new Error('no shift for ' + t.trip));
+                }
+                return postJson('/api/admin/active-shifts/' + encodeURIComponent(shiftId) + '/close-trip', {});
+            });
+        });
+        return chain.then(function () {
+            showAdminToast('Teljes takarítás kész');
+            setStatus(true, 'Teljes takarítás kész');
+            return refresh();
+        });
+    }
+
+    function bindOperativeVehicleButtons(root) {
+        if (!root) return;
+        root.querySelectorAll('[data-op-show-map]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var vehicleId = btn.getAttribute('data-op-show-map');
+                if (!vehicleId) return;
+                focusOperativeVehicleOnMap(vehicleId);
+            });
+        });
+        root.querySelectorAll('[data-op-release]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var vehicleId = btn.getAttribute('data-op-release');
+                if (!vehicleId || !window.confirm('Felszabadítod a vonat lockját (active_shifts)?\n' + vehicleId)) return;
+                btn.disabled = true;
+                postJson('/api/admin/vehicles/' + encodeURIComponent(vehicleId) + '/release', {})
+                    .then(function () {
+                        showAdminToast('Vonat felszabadítva');
+                        setStatus(true, 'Vonat felszabadítva');
+                        return refresh();
+                    })
+                    .catch(function (err) { btn.disabled = false; setStatus(false, err.message || err); });
+            });
+        });
+        root.querySelectorAll('[data-op-close-trips]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var vehicleId = btn.getAttribute('data-op-close-trips');
+                if (!vehicleId) return;
+                btn.disabled = true;
+                adminCloseVehicleTrips(vehicleId)
+                    .catch(function (err) { if (err && err.message !== 'cancelled') setStatus(false, err.message || err); })
+                    .finally(function () { btn.disabled = false; });
+            });
+        });
+        root.querySelectorAll('[data-op-full-cleanup]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var vehicleId = btn.getAttribute('data-op-full-cleanup');
+                if (!vehicleId) return;
+                btn.disabled = true;
+                adminFullCleanupVehicle(vehicleId)
+                    .catch(function (err) { if (err && err.message !== 'cancelled') setStatus(false, err.message || err); })
+                    .finally(function () { btn.disabled = false; });
+            });
+        });
+    }
+
+    function isShiftStaleForDisplay(d) {
+        if (!d) return false;
+        var status = String(d.display_status || d.status || '').toUpperCase();
+        if (status === 'STALE') return true;
+        var last = d.last_gps_at || d.last_heartbeat_at || d.last_track_at || d.started_at;
+        if (!last) return false;
+        var age = Date.now() - new Date(last).getTime();
+        return age >= 30 * 60 * 1000;
+    }
+
     function renderShiftTabCardHtml(d) {
         var status = (d.display_status || d.status || 'ACTIVE');
-        var vehicle = d.vehicle_id || d.vehicle_name || '—';
-        var driver = d.driver_name || d.driver_id || '—';
-        var route = d.route || d.city || '—';
+        var vehicleId = d.vehicle_id || d.vehicle_name || '—';
+        var driverId = d.driver_id || '—';
+        var driverName = d.driver_name || '';
+        var driverLabel = driverName && driverName !== driverId
+            ? (driverName + ' (' + driverId + ')')
+            : (driverId || '—');
+        var shiftId = d.shift_id || '—';
         var lastGps = d.last_gps_at || d.last_track_at || null;
-        return '<article class="shift-tab-card" data-shift-id="' + escapeHtml(d.shift_id || '') + '">' +
-            '<div class="shift-tab-name">' + escapeHtml(vehicle) + '</div>' +
-            '<div class="shift-tab-line">Sofőr: <strong>' + escapeHtml(driver) + '</strong></div>' +
-            '<div class="shift-tab-line">Útvonal: <strong>' + escapeHtml(route) + '</strong></div>' +
-            '<div class="shift-tab-line">Kezdés: <strong>' + escapeHtml(formatTimeShort(d.started_at)) + '</strong></div>' +
+        var lastHb = d.last_heartbeat_at || null;
+        var stale = isShiftStaleForDisplay(d);
+        var staleBadge = stale
+            ? '<div class="shift-tab-stale-badge">STALE – 30+ perc inaktív (lock beragadhat)</div>'
+            : '';
+        var opRow = operativeRowForVehicle(d.vehicle_id || d.vehicle_name);
+        return '<article class="shift-tab-card" data-shift-id="' + escapeHtml(d.shift_id || '') + '" data-vehicle-id="' + escapeHtml(d.vehicle_id || '') + '">' +
+            '<div class="shift-tab-name">' + escapeHtml(vehicleId) + '</div>' +
+            staleBadge +
+            '<div class="shift-tab-line">Vonat: <strong>' + escapeHtml(vehicleId) + '</strong></div>' +
+            '<div class="shift-tab-line">Sofőr ID: <strong>' + escapeHtml(driverId) + '</strong></div>' +
+            '<div class="shift-tab-line">Sofőr: <strong>' + escapeHtml(driverLabel) + '</strong></div>' +
+            '<div class="shift-tab-line">Műszak ID: <strong>' + escapeHtml(shiftId) + '</strong></div>' +
+            '<div class="shift-tab-line">Kezdés: <strong>' + escapeHtml(formatDateTime(d.started_at)) + '</strong></div>' +
+            '<div class="shift-tab-line">Utolsó GPS: <strong>' + escapeHtml(formatDateTime(lastGps)) + '</strong></div>' +
+            '<div class="shift-tab-line">Utolsó heartbeat: <strong>' + escapeHtml(formatDateTime(lastHb)) + '</strong></div>' +
             '<div class="shift-tab-line">Státusz: <strong>' + escapeHtml(status) + '</strong></div>' +
-            '<div class="shift-tab-line">Utolsó GPS: <strong>' + escapeHtml(formatTimeShort(lastGps)) + '</strong></div>' +
-            '<button type="button" class="btn-driver-kick" data-shift-close="' + escapeHtml(d.shift_id || '') + '">Műszak zárása</button>' +
+            renderOperativeVehicleActionsHtml(opRow) +
             '</article>';
     }
 
@@ -5435,10 +6230,8 @@
             : drivers.map(renderShiftTabCardHtml).join('');
         var el = document.getElementById('panel-shifts-tab');
         var elM = document.getElementById('panel-shifts-tab-mobile');
-        if (el) el.innerHTML = html;
-        if (elM) elM.innerHTML = html;
-        bindActiveShiftAdminButtons(el);
-        bindActiveShiftAdminButtons(elM);
+        if (el) { el.innerHTML = html; bindOperativeVehicleButtons(el); }
+        if (elM) { elM.innerHTML = html; bindOperativeVehicleButtons(elM); }
     }
 
     function setClosedStatsHtml(html) {
@@ -5719,10 +6512,14 @@
         root.querySelectorAll('[data-vehicle-release]').forEach(function (btn) {
             btn.addEventListener('click', function () {
                 var vehicleId = btn.getAttribute('data-vehicle-release');
-                if (!vehicleId || !window.confirm('Felszabadítod a járművet?\n' + vehicleId)) return;
+                if (!vehicleId || !window.confirm('Felszabadítod a vonat lockját (active_shifts)?\n' + vehicleId)) return;
                 btn.disabled = true;
                 postJson('/api/admin/vehicles/' + encodeURIComponent(vehicleId) + '/release', {})
-                    .then(function () { setStatus(true, 'Jármű felszabadítva'); return refresh(); })
+                    .then(function () {
+                        showAdminToast('Vonat felszabadítva');
+                        setStatus(true, 'Vonat felszabadítva');
+                        return refresh();
+                    })
                     .catch(function (err) { btn.disabled = false; setStatus(false, err.message || err); });
             });
         });
@@ -6589,7 +7386,7 @@
     }
 
     function setActiveOpsSubTab(tab) {
-        activeOpsSubTab = tab === 'query' ? 'query' : 'live';
+        activeOpsSubTab = (tab === 'query' || tab === 'report-center' || tab === 'pilot') ? tab : 'live';
         document.querySelectorAll('.ops-subtab[data-ops-subtab]').forEach(function (btn) {
             btn.classList.toggle('is-active', btn.getAttribute('data-ops-subtab') === activeOpsSubTab);
         });
@@ -6598,14 +7395,24 @@
         });
         var live = document.getElementById('panel-ops-live');
         var query = document.getElementById('panel-ops-query');
+        var rc = document.getElementById('panel-ops-report-center');
+        var pilot = document.getElementById('panel-ops-pilot');
         var liveM = document.getElementById('panel-ops-live-mobile');
         var queryM = document.getElementById('panel-ops-query-mobile');
+        var rcM = document.getElementById('panel-ops-report-center-mobile');
+        var pilotM = document.getElementById('panel-ops-pilot-mobile');
         if (live) live.hidden = activeOpsSubTab !== 'live';
         if (query) query.hidden = activeOpsSubTab !== 'query';
+        if (rc) rc.hidden = activeOpsSubTab !== 'report-center';
+        if (pilot) pilot.hidden = activeOpsSubTab !== 'pilot';
         if (liveM) liveM.hidden = activeOpsSubTab !== 'live';
         if (queryM) queryM.hidden = activeOpsSubTab !== 'query';
+        if (rcM) rcM.hidden = activeOpsSubTab !== 'report-center';
+        if (pilotM) pilotM.hidden = activeOpsSubTab !== 'pilot';
         if (activeOpsSubTab === 'live') renderLiveDailyPanel();
-        else fetchDailyReport();
+        else if (activeOpsSubTab === 'query') fetchDailyReport();
+        else if (activeOpsSubTab === 'report-center') renderReportCenterPanel();
+        else if (activeOpsSubTab === 'pilot') renderPilotDashboard();
     }
 
     function setActiveOpsTab(tab) {
@@ -6619,7 +7426,9 @@
         if (svc) svc.hidden = activeOpsTab !== 'service';
         if (activeOpsTab === 'operations') {
             if (activeOpsSubTab === 'live') renderLiveDailyPanel();
-            else fetchDailyReport();
+            else if (activeOpsSubTab === 'query') fetchDailyReport();
+            else if (activeOpsSubTab === 'report-center') renderReportCenterPanel();
+            else if (activeOpsSubTab === 'pilot') renderPilotDashboard();
         } else {
             fetchServiceData();
         }
@@ -6939,6 +7748,466 @@
         window.open(url, '_blank');
     }
 
+    var RC_CITY_LABELS = {
+        Tata: 'Tata', Tata1: 'Tata', Vac: 'Vác', Vác: 'Vác', Eger: 'Eger',
+        Szfv: 'Székesfehérvár', Szekesfehervar: 'Székesfehérvár'
+    };
+
+    function rcCityLabel(raw) {
+        var k = String(raw || '').trim();
+        if (!k) return 'Egyéb';
+        return RC_CITY_LABELS[k] || k;
+    }
+
+    function rcDateKeyFromSummary(rec, ev) {
+        return localDateKeyFromIso(rec.end_time || ev.timestamp);
+    }
+
+    function rcInPeriod(dateKey, period) {
+        if (!dateKey) return false;
+        var today = todayDateInputValue();
+        if (period === 'day') return dateKey === today;
+        if (period === 'week') {
+            var d = new Date(dateKey + 'T12:00:00');
+            var t = new Date(today + 'T12:00:00');
+            var diff = (t.getTime() - d.getTime()) / 86400000;
+            return diff >= 0 && diff < 7;
+        }
+        if (period === 'month') return dateKey.slice(0, 7) === today.slice(0, 7);
+        return false;
+    }
+
+    function rcVehicleCapacity(vid, vehicles) {
+        var row = (vehicles || []).find(function (v) { return v.vehicle_id === vid; });
+        if (!row) return null;
+        var cap = parseInt(row.capacity, 10);
+        return cap > 0 ? cap : null;
+    }
+
+    function rcCountBookings(bookings) {
+        var b = bookings || { scheduled: [], boarding: [], custom: [] };
+        return (b.scheduled || []).length + (b.boarding || []).length + (b.custom || []).length;
+    }
+
+    function buildReportCenterSnapshot(events, trips, vehicles, drivers, publicVehicles, bookings, operativeRows) {
+        var summaries = [];
+        (events || []).forEach(function (ev) {
+            if (normalizeEventType(ev.type) !== 'trip_summary') return;
+            var rec = parseTripSummaryRecord(ev);
+            if (!rec.trip) return;
+            var dk = rcDateKeyFromSummary(rec, ev);
+            var meta = findTripStartInEvents(rec.trip, events) || {};
+            var sched = parseScheduleFromTripId(rec.trip) || meta.schedule || '—';
+            var cityRaw = meta.city || parseCityFromTripId(rec.trip);
+            summaries.push({
+                dateKey: dk,
+                trip: rec.trip,
+                schedule: sched,
+                vehicle_id: rec.vehicle_id || meta.vehicle_id || '—',
+                city: rcCityLabel(cityRaw),
+                cityRaw: cityRaw,
+                passengers: Math.max(0, parseInt(rec.passenger_total, 10) || 0),
+                end_time: rec.end_time || ev.timestamp,
+                start_time: rec.start_time
+            });
+        });
+
+        function sumPax(period) {
+            var s = 0;
+            summaries.forEach(function (r) { if (rcInPeriod(r.dateKey, period)) s += r.passengers; });
+            return s;
+        }
+        function countTrips(period) {
+            var n = 0;
+            summaries.forEach(function (r) { if (rcInPeriod(r.dateKey, period)) n += 1; });
+            return n;
+        }
+
+        var kpi = {
+            paxDay: sumPax('day'),
+            paxWeek: sumPax('week'),
+            paxMonth: sumPax('month'),
+            tripsDay: countTrips('day'),
+            tripsWeek: countTrips('week'),
+            tripsMonth: countTrips('month'),
+            activeTrains: 0,
+            activeDrivers: 0,
+            stuckLocks: 0,
+            stuckTrips: 0
+        };
+        (operativeRows || []).forEach(function (r) {
+            if (r.status === 'AKTÍV') kpi.activeTrains += 1;
+            if (r.status === 'BERAGADT_LOCK') kpi.stuckLocks += 1;
+            if (r.status === 'BERAGADT_TRIP') kpi.stuckTrips += 1;
+        });
+        var driverSet = {};
+        (drivers || []).forEach(function (d) {
+            var id = d.driver_id ? String(d.driver_id).trim() : '';
+            if (id) driverSet[id] = true;
+        });
+        kpi.activeDrivers = Object.keys(driverSet).length;
+
+        var cityMap = {};
+        summaries.forEach(function (r) {
+            if (!cityMap[r.city]) cityMap[r.city] = { city: r.city, passengers: 0, trips: 0, bookings: 0 };
+            cityMap[r.city].passengers += r.passengers;
+            cityMap[r.city].trips += 1;
+        });
+        ((bookings || {}).scheduled || []).forEach(function (b) {
+            var c = rcCityLabel(b.city || 'Egyéb');
+            if (!cityMap[c]) cityMap[c] = { city: c, passengers: 0, trips: 0, bookings: 0 };
+            cityMap[c].bookings += 1;
+        });
+        ((bookings || {}).boarding || []).forEach(function (b) {
+            var c = rcCityLabel(b.city || 'Egyéb');
+            if (!cityMap[c]) cityMap[c] = { city: c, passengers: 0, trips: 0, bookings: 0 };
+            cityMap[c].bookings += 1;
+        });
+        ((bookings || {}).custom || []).forEach(function (b) {
+            var c = rcCityLabel(b.city || b.departure_place || 'Egyéb');
+            if (!cityMap[c]) cityMap[c] = { city: c, passengers: 0, trips: 0, bookings: 0 };
+            cityMap[c].bookings += 1;
+        });
+        var cities = Object.keys(cityMap).map(function (k) { return cityMap[k]; });
+
+        var tripMap = {};
+        summaries.forEach(function (r) {
+            var key = r.schedule || r.trip;
+            if (!tripMap[key]) tripMap[key] = { schedule: key, departures: 0, passengers: 0 };
+            tripMap[key].departures += 1;
+            tripMap[key].passengers += r.passengers;
+        });
+        var tripRows = Object.keys(tripMap).map(function (k) {
+            var t = tripMap[k];
+            t.avgPassengers = t.departures ? Math.round((t.passengers / t.departures) * 10) / 10 : 0;
+            return t;
+        }).sort(function (a, b) { return b.passengers - a.passengers; }).slice(0, 10);
+
+        var vehMap = {};
+        summaries.forEach(function (r) {
+            var vid = r.vehicle_id || '—';
+            if (!vehMap[vid]) vehMap[vid] = { vehicle_id: vid, runs: 0, passengers: 0, lastActivity: null };
+            vehMap[vid].runs += 1;
+            vehMap[vid].passengers += r.passengers;
+            var ts = r.end_time || r.start_time;
+            if (ts && (!vehMap[vid].lastActivity || ts > vehMap[vid].lastActivity)) vehMap[vid].lastActivity = ts;
+        });
+        (operativeRows || []).forEach(function (r) {
+            var vid = r.vehicle_id;
+            if (!vehMap[vid]) vehMap[vid] = { vehicle_id: vid, runs: 0, passengers: 0, lastActivity: null };
+            var ts = r.last_gps_at || r.last_heartbeat_at;
+            if (ts && (!vehMap[vid].lastActivity || ts > vehMap[vid].lastActivity)) vehMap[vid].lastActivity = ts;
+        });
+        var vehicleRows = Object.keys(vehMap).map(function (k) { return vehMap[k]; });
+
+        var utilRows = [];
+        var utilVehicle = {};
+        summaries.forEach(function (r) {
+            var cap = rcVehicleCapacity(r.vehicle_id, vehicles);
+            if (!cap) return;
+            var pct = Math.round((r.passengers / cap) * 1000) / 10;
+            utilRows.push({ kind: 'trip', id: r.trip, vehicle_id: r.vehicle_id, passengers: r.passengers, capacity: cap, utilization: pct });
+            if (!utilVehicle[r.vehicle_id]) utilVehicle[r.vehicle_id] = { sum: 0, n: 0, capacity: cap };
+            utilVehicle[r.vehicle_id].sum += pct;
+            utilVehicle[r.vehicle_id].n += 1;
+        });
+        var utilByVehicle = Object.keys(utilVehicle).map(function (vid) {
+            var u = utilVehicle[vid];
+            return { vehicle_id: vid, capacity: u.capacity, utilization: u.n ? Math.round((u.sum / u.n) * 10) / 10 : 0 };
+        });
+        var avgUtil = utilRows.length
+            ? Math.round((utilRows.reduce(function (s, r) { return s + r.utilization; }, 0) / utilRows.length) * 10) / 10
+            : null;
+
+        var problems = [];
+        (operativeRows || []).forEach(function (r) {
+            if (r.status === 'STALE' || r.status === 'BERAGADT_LOCK' || r.status === 'BERAGADT_TRIP') {
+                problems.push({
+                    at: r.last_gps_at || r.last_heartbeat_at || new Date().toISOString(),
+                    type: 'STALE / ' + r.status,
+                    detail: r.vehicle_id + ' · shift=' + (r.has_shift ? 'IGEN' : 'NEM') + ' · trip=' + (r.has_open_trip ? 'IGEN' : 'NEM'),
+                    source: 'operatív lista (aktuális)'
+                });
+            }
+        });
+        (events || []).forEach(function (ev) {
+            var p = payloadOf(ev);
+            var src = String(p.source || p.note || '').toLowerCase();
+            var t = normalizeEventType(ev.type);
+            if (t === 'trip_end' && (src.indexOf('admin_close_trip') >= 0 || String(p.note || '').indexOf('Admin járat') >= 0)) {
+                problems.push({
+                    at: ev.timestamp,
+                    type: 'Close-trip (admin)',
+                    detail: (ev.trip || '—') + ' · ' + (p.vehicle_id || p.note || ''),
+                    source: 'events.trip_end'
+                });
+            }
+            if (src.indexOf('admin_close_shift') >= 0 || String(ev.id || '').indexOf('admin_close_') === 0) {
+                problems.push({
+                    at: ev.timestamp,
+                    type: 'Műszak lezárás (admin)',
+                    detail: (ev.shift || ev.trip || '—'),
+                    source: 'events'
+                });
+            }
+        });
+        problems.sort(function (a, b) { return String(b.at || '').localeCompare(String(a.at || '')); });
+
+        var livePax = 0;
+        (publicVehicles || []).forEach(function (p) {
+            livePax += Math.max(0, parseInt(p.passengers, 10) || 0);
+        });
+
+        return {
+            builtAt: new Date().toISOString(),
+            kpi: kpi,
+            cities: cities,
+            tripTop: tripRows,
+            vehicles: vehicleRows,
+            utilization: { avg: avgUtil, byVehicle: utilByVehicle, byTrip: utilRows.slice(0, 20) },
+            problems: problems.slice(0, 100),
+            pilot: {
+                activeTrains: kpi.activeTrains,
+                activePassengers: livePax,
+                paxDay: kpi.paxDay,
+                bookings: rcCountBookings(bookings),
+                customOrders: (bookings && bookings.custom) ? bookings.custom.length : 0
+            }
+        };
+    }
+
+    function rcSortRows(rows, sortState) {
+        var col = sortState.col;
+        var dir = sortState.dir || 1;
+        return rows.slice().sort(function (a, b) {
+            var va = a[col];
+            var vb = b[col];
+            if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * dir;
+            return String(va || '').localeCompare(String(vb || ''), 'hu') * dir;
+        });
+    }
+
+    function rcKpiCard(cls, label, val) {
+        return '<div class="rc-kpi-card ' + cls + '"><span class="lbl">' + escapeHtml(label) + '</span><strong>' + escapeHtml(String(val)) + '</strong></div>';
+    }
+
+    function buildReportCenterHtml(snapshot) {
+        if (!snapshot) return '<p class="empty">Nincs riport adat.</p>';
+        var k = snapshot.kpi || {};
+        var html = '<div class="rc-section"><div class="rc-section-head">T4.1 KPI összesítők</div><div class="rc-kpi-grid">' +
+            rcKpiCard('rc-green', OP_KPI_LABELS.paxDay, k.paxDay || 0) +
+            rcKpiCard('rc-green', OP_KPI_LABELS.paxWeek, k.paxWeek || 0) +
+            rcKpiCard('rc-green', OP_KPI_LABELS.paxMonth, k.paxMonth || 0) +
+            rcKpiCard('rc-blue', OP_KPI_LABELS.tripsDay, k.tripsDay || 0) +
+            rcKpiCard('rc-blue', OP_KPI_LABELS.tripsWeek, k.tripsWeek || 0) +
+            rcKpiCard('rc-blue', OP_KPI_LABELS.tripsMonth, k.tripsMonth || 0) +
+            rcKpiCard('rc-purple', OP_KPI_LABELS.freshActiveTrains, k.activeTrains || 0) +
+            rcKpiCard('rc-purple', OP_KPI_LABELS.openShifts, k.activeDrivers || 0) +
+            rcKpiCard('rc-red', OP_KPI_LABELS.stuckShifts, k.stuckLocks || 0) +
+            rcKpiCard('rc-amber', OP_KPI_LABELS.stuckTrips, k.stuckTrips || 0) +
+            '</div></div>';
+
+        html += '<div class="rc-export-row">' +
+            '<button type="button" class="btn-ops-action btn-ops-csv" data-rc-export="daily">Napi riport CSV</button>' +
+            '<button type="button" class="btn-ops-action btn-ops-csv" data-rc-export="city">Városi riport CSV</button>' +
+            '<button type="button" class="btn-ops-action btn-ops-csv" data-rc-export="trip">Járat riport CSV</button>' +
+            '</div>';
+
+        var cities = rcSortRows(snapshot.cities || [], reportCenterSort.city);
+        html += '<div class="rc-section"><div class="rc-section-head">T4.2 Városonkénti összesítő</div>';
+        if (!cities.length) html += '<p class="empty">0</p>';
+        else {
+            html += '<table class="report-table" data-rc-table="city"><thead><tr>' +
+                '<th class="rc-sortable" data-rc-sort="city" data-rc-table="city">Város</th>' +
+                '<th class="rc-sortable" data-rc-sort="passengers" data-rc-table="city">Utas</th>' +
+                '<th class="rc-sortable" data-rc-sort="trips" data-rc-table="city">Járat</th>' +
+                '<th class="rc-sortable" data-rc-sort="bookings" data-rc-table="city">Foglalás</th>' +
+                '</tr></thead><tbody>';
+            cities.forEach(function (c) {
+                html += '<tr><td>' + escapeHtml(c.city) + '</td><td>' + c.passengers + '</td><td>' + c.trips + '</td><td>' + c.bookings + '</td></tr>';
+            });
+            html += '</tbody></table>';
+        }
+        html += '</div>';
+
+        var trips = rcSortRows(snapshot.tripTop || [], reportCenterSort.trip);
+        html += '<div class="rc-section"><div class="rc-section-head">T4.3 Járat analitika · TOP 10</div>';
+        if (!trips.length) html += '<p class="empty">0</p>';
+        else {
+            html += '<table class="report-table" data-rc-table="trip"><thead><tr>' +
+                '<th class="rc-sortable" data-rc-sort="schedule" data-rc-table="trip">Járat</th>' +
+                '<th class="rc-sortable" data-rc-sort="departures" data-rc-table="trip">Indulások</th>' +
+                '<th class="rc-sortable" data-rc-sort="passengers" data-rc-table="trip">Összes utas</th>' +
+                '<th class="rc-sortable" data-rc-sort="avgPassengers" data-rc-table="trip">Átlag utas</th>' +
+                '</tr></thead><tbody>';
+            trips.forEach(function (t) {
+                html += '<tr><td>' + escapeHtml(t.schedule) + '</td><td>' + t.departures + '</td><td>' + t.passengers + '</td><td>' + t.avgPassengers + '</td></tr>';
+            });
+            html += '</tbody></table>';
+        }
+        html += '</div>';
+
+        var vehs = rcSortRows(snapshot.vehicles || [], reportCenterSort.vehicle);
+        html += '<div class="rc-section"><div class="rc-section-head">T4.4 Vonat analitika</div>';
+        if (!vehs.length) html += '<p class="empty">0</p>';
+        else {
+            html += '<table class="report-table" data-rc-table="vehicle"><thead><tr>' +
+                '<th class="rc-sortable" data-rc-sort="vehicle_id" data-rc-table="vehicle">Jármű</th>' +
+                '<th class="rc-sortable" data-rc-sort="runs" data-rc-table="vehicle">Futások</th>' +
+                '<th class="rc-sortable" data-rc-sort="passengers" data-rc-table="vehicle">Utas</th>' +
+                '<th class="rc-sortable" data-rc-sort="lastActivity" data-rc-table="vehicle">Utolsó aktivitás</th>' +
+                '</tr></thead><tbody>';
+            vehs.forEach(function (v) {
+                html += '<tr><td>' + escapeHtml(v.vehicle_id) + '</td><td>' + v.runs + '</td><td>' + v.passengers + '</td><td>' + escapeHtml(formatDateTime(v.lastActivity)) + '</td></tr>';
+            });
+            html += '</tbody></table>';
+        }
+        html += '</div>';
+
+        html += '<div class="rc-section"><div class="rc-section-head">T4.5 Kihasználtság</div>';
+        if (snapshot.utilization.avg == null) html += '<p class="empty">Nincs elegendő adat</p>';
+        else {
+            html += '<p><strong>Átlag kihasználtság:</strong> ' + snapshot.utilization.avg + ' %</p>';
+            if (snapshot.utilization.byVehicle.length) {
+                html += '<table class="report-table"><thead><tr><th>Vonat</th><th>Kapacitás</th><th>Átlag %</th></tr></thead><tbody>';
+                snapshot.utilization.byVehicle.forEach(function (u) {
+                    html += '<tr><td>' + escapeHtml(u.vehicle_id) + '</td><td>' + u.capacity + '</td><td>' + u.utilization + ' %</td></tr>';
+                });
+                html += '</tbody></table>';
+            }
+        }
+        html += '</div>';
+
+        html += '<div class="rc-section"><div class="rc-section-head">T4.6 Probléma napló</div>' +
+            '<p class="rc-problem-note">Megjegyzés: vehicle release nem ír events rekordot (csak active_shifts UPDATE). Close-trip és admin műszak zárás events-ből.</p>';
+        var probs = snapshot.problems || [];
+        if (!probs.length) html += '<p class="empty">0</p>';
+        else {
+            html += '<table class="report-table"><thead><tr><th>Időpont</th><th>Típus</th><th>Részlet</th><th>Forrás</th></tr></thead><tbody>';
+            probs.forEach(function (p) {
+                html += '<tr><td>' + escapeHtml(formatDateTime(p.at)) + '</td><td>' + escapeHtml(p.type) + '</td><td>' + escapeHtml(p.detail) + '</td><td>' + escapeHtml(p.source) + '</td></tr>';
+            });
+            html += '</tbody></table>';
+        }
+        html += '</div>';
+        return html;
+    }
+
+    function buildPilotDashboardHtml(snapshot) {
+        if (!snapshot) return '<p class="empty">Nincs pilot adat.</p>';
+        var p = snapshot.pilot || {};
+        var html = '<div class="pilot-kpi-grid">' +
+            '<div class="pilot-kpi-card"><span class="lbl">' + escapeHtml(OP_KPI_LABELS.freshActiveTrains) + '</span><strong>' + (p.activeTrains || 0) + '</strong></div>' +
+            '<div class="pilot-kpi-card"><span class="lbl">' + escapeHtml(OP_KPI_LABELS.livePassengers) + '</span><strong>' + (p.activePassengers || 0) + '</strong></div>' +
+            '<div class="pilot-kpi-card"><span class="lbl">' + escapeHtml(OP_KPI_LABELS.paxDay) + '</span><strong>' + (p.paxDay || 0) + '</strong></div>' +
+            '<div class="pilot-kpi-card"><span class="lbl">' + escapeHtml(OP_KPI_LABELS.bookings) + '</span><strong>' + (p.bookings || 0) + '</strong></div>' +
+            '<div class="pilot-kpi-card"><span class="lbl">' + escapeHtml(OP_KPI_LABELS.customOrders) + '</span><strong>' + (p.customOrders || 0) + '</strong></div>' +
+            '</div>';
+        html += '<div class="pilot-nav-row">' +
+            '<button type="button" data-pilot-scroll="map">📍 Térkép megnyitása</button>' +
+            '<button type="button" data-pilot-scroll="operative">🚌 Operatív járművek</button>' +
+            '</div>';
+        html += '<div class="pilot-operative-mirror"><div class="rc-section-head">Operatív pillanatkép (read-only)</div>';
+        if (!lastOperativeRows.length) html += '<p class="empty">Nincs operatív jármű.</p>';
+        else {
+            html += '<table class="report-table"><thead><tr><th>Jármű</th><th>Állapot</th><th>' + escapeHtml(OP_KPI_LABELS.publicVisible) + '</th></tr></thead><tbody>';
+            lastOperativeRows.forEach(function (r) {
+                html += '<tr><td>' + escapeHtml(r.vehicle_id) + '</td><td>' + escapeHtml(r.status) + '</td><td>' + (r.public_live ? 'IGEN' : 'NEM') + '</td></tr>';
+            });
+            html += '</tbody></table>';
+        }
+        html += '</div>';
+        return html;
+    }
+
+    function reportCsvFilename(suffix) {
+        var d = todayDateInputValue().replace(/-/g, '');
+        return 'report_' + d + (suffix ? '_' + suffix : '') + '.csv';
+    }
+
+    function exportReportCenterCsv(kind) {
+        var snap = lastReportCenterSnapshot;
+        if (!snap) { showAdminToast('Nincs riport adat'); return; }
+        var lines = [];
+        if (kind === 'daily') {
+            lines.push('METRIKA;ÉRTÉK');
+            var k = snap.kpi || {};
+            [
+                ['paxDay', OP_KPI_LABELS.paxDay],
+                ['paxWeek', OP_KPI_LABELS.paxWeek],
+                ['paxMonth', OP_KPI_LABELS.paxMonth],
+                ['tripsDay', OP_KPI_LABELS.tripsDay],
+                ['tripsWeek', OP_KPI_LABELS.tripsWeek],
+                ['tripsMonth', OP_KPI_LABELS.tripsMonth],
+                ['activeTrains', OP_KPI_LABELS.freshActiveTrains],
+                ['activeDrivers', OP_KPI_LABELS.openShifts],
+                ['stuckLocks', OP_KPI_LABELS.stuckShifts],
+                ['stuckTrips', OP_KPI_LABELS.stuckTrips]
+            ].forEach(function (pair) {
+                lines.push(csvCell(pair[1]) + ';' + csvCell(k[pair[0]] || 0));
+            });
+            downloadText(reportCsvFilename('napi'), '\uFEFF' + lines.join('\r\n'), 'text/csv;charset=utf-8');
+            return;
+        }
+        if (kind === 'city') {
+            lines.push('VÁROS;UTAS;JÁRAT;FOGLALÁS');
+            (snap.cities || []).forEach(function (c) {
+                lines.push([c.city, c.passengers, c.trips, c.bookings].map(csvCell).join(';'));
+            });
+            downloadText(reportCsvFilename('varos'), '\uFEFF' + lines.join('\r\n'), 'text/csv;charset=utf-8');
+            return;
+        }
+        if (kind === 'trip') {
+            lines.push('JÁRAT;INDULÁS;ÖSSZES_UTAS;ÁTLAG_UTAS');
+            (snap.tripTop || []).forEach(function (t) {
+                lines.push([t.schedule, t.departures, t.passengers, t.avgPassengers].map(csvCell).join(';'));
+            });
+            downloadText(reportCsvFilename('jarat'), '\uFEFF' + lines.join('\r\n'), 'text/csv;charset=utf-8');
+        }
+    }
+
+    function bindReportCenterUi(root) {
+        if (!root) return;
+        root.querySelectorAll('[data-rc-export]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                exportReportCenterCsv(btn.getAttribute('data-rc-export'));
+            });
+        });
+        root.querySelectorAll('.rc-sortable').forEach(function (th) {
+            th.addEventListener('click', function () {
+                var table = th.getAttribute('data-rc-table');
+                var col = th.getAttribute('data-rc-sort');
+                if (!table || !col || !reportCenterSort[table]) return;
+                if (reportCenterSort[table].col === col) reportCenterSort[table].dir *= -1;
+                else { reportCenterSort[table].col = col; reportCenterSort[table].dir = -1; }
+                renderReportCenterPanel();
+            });
+        });
+        root.querySelectorAll('[data-pilot-scroll]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var target = btn.getAttribute('data-pilot-scroll') === 'map' ? '.panel-map' : '#operative-vehicles-block';
+                var el = document.querySelector(target);
+                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+        });
+    }
+
+    function renderReportCenterPanel() {
+        var html = buildReportCenterHtml(lastReportCenterSnapshot);
+        ['panel-report-center-content', 'panel-report-center-content-mobile'].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) { el.innerHTML = html; bindReportCenterUi(el); }
+        });
+    }
+
+    function renderPilotDashboard() {
+        var html = buildPilotDashboardHtml(lastReportCenterSnapshot);
+        ['panel-pilot-dashboard', 'panel-pilot-dashboard-mobile'].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) { el.innerHTML = html; bindReportCenterUi(el); }
+        });
+    }
+
     function mergeServiceEntries(records, notes) {
         var items = [];
         (records || []).forEach(function (r) {
@@ -7118,7 +8387,9 @@
         fillServiceVehicleSelects();
         fillReportVehicleSelects();
         if (activeOpsTab === 'operations' && activeOpsSubTab === 'live') renderLiveDailyPanel();
-        else if (activeOpsTab === 'operations') fetchDailyReport();
+        else if (activeOpsTab === 'operations' && activeOpsSubTab === 'query') fetchDailyReport();
+        else if (activeOpsTab === 'operations' && activeOpsSubTab === 'report-center') renderReportCenterPanel();
+        else if (activeOpsTab === 'operations' && activeOpsSubTab === 'pilot') renderPilotDashboard();
         fetchServiceData();
     }
 
@@ -7459,7 +8730,9 @@
             fetchJson('/api/tasks?limit=200'),
             fetchJson('/api/vehicles'),
             fetchJson('/api/admin/bookings'),
-            fetchJson('/api/admin/route-uploads')
+            fetchJson('/api/admin/route-uploads'),
+            fetchJson('/api/vehicle-positions?limit=500'),
+            fetchJson('/api/admin/open-trips')
         ])
             .then(function (results) {
                 var tripsData = results[0];
@@ -7469,10 +8742,16 @@
                 var vehiclesData = results[4];
                 var bookingsData = results[5];
                 var routeUploadsData = results[6];
+                var vehiclePositionsData = results[7];
+                var openTripsData = results[8];
                 renderActiveDriversPanel((activeDriversData && activeDriversData.drivers) ? activeDriversData.drivers : []);
                 renderRouteUploadsPanel((routeUploadsData && routeUploadsData.uploads) ? routeUploadsData.uploads : []);
                 lastTrips = (tripsData && tripsData.trips) ? tripsData.trips : [];
                 lastEvents = normalizeEvents((eventsData && eventsData.events) ? eventsData.events : []);
+                lastOpenTripsCanonical = (openTripsData && openTripsData.trips) ? openTripsData.trips : [];
+                lastPublicVehiclePositionsApi = (vehiclePositionsData && vehiclePositionsData.vehicles)
+                    ? vehiclePositionsData.vehicles
+                    : [];
                 notifyNewPassengerEvents(lastEvents);
                 lastTasks = (tasksData && tasksData.tasks) ? tasksData.tasks : [];
                 var nextBookings = {
@@ -7501,6 +8780,23 @@
                 }
 
                 applyDefaultTripVisibilityOnRefresh(lastTrips, lastEvents);
+                renderOperativeVehiclesPanel(
+                    lastEvents,
+                    lastActiveDrivers,
+                    lastPublicVehiclePositionsApi
+                );
+                renderShiftsTabPanel(lastActiveDrivers);
+                lastReportCenterSnapshot = buildReportCenterSnapshot(
+                    lastEvents,
+                    lastTrips,
+                    adminVehicles,
+                    lastActiveDrivers,
+                    lastPublicVehiclePositionsApi,
+                    lastBookings,
+                    lastOperativeRows
+                );
+                if (activeOpsTab === 'operations' && activeOpsSubTab === 'report-center') renderReportCenterPanel();
+                else if (activeOpsTab === 'operations' && activeOpsSubTab === 'pilot') renderPilotDashboard();
                 renderTrips(lastTrips, lastEvents);
                 renderDetail(lastTrips, lastEvents);
                 renderEvents(lastEvents);
