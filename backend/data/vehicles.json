@@ -1,8 +1,0 @@
-[
-  { "id": "KV01", "name": "Kisvonat 1", "capacity": 56, "local": "Tata" },
-  { "id": "KV02", "name": "Kisvonat 2", "capacity": 56, "local": "Tata" },
-  { "id": "KV03", "name": "Kisvonat 3", "capacity": 56, "local": "Tata" },
-  { "id": "KV04", "name": "Kisvonat 4", "capacity": 56, "local": "Székesfehérvár" },
-  { "id": "KV05", "name": "Kisvonat 5", "capacity": 56, "local": "Eger" },
-  { "id": "KV06", "name": "Kisvonat 6", "capacity": 56, "local": "Győr" }
-]

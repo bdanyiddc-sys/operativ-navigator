@@ -1,7 +1,0 @@
-[
-  { "username": "ZF", "pin": "kisvonat", "role": "admin" },
-  { "username": "ZFR", "pin": "kisvonat", "role": "admin" },
-  { "username": "Lili", "pin": "kisvonat", "role": "dispatcher" },
-  { "username": "Service", "pin": "kisvonat", "role": "service" },
-  { "username": "Admin", "pin": "kisvonat", "role": "admin" }
-]
