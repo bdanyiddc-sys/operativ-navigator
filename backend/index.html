@@ -1,0 +1,341 @@
+```html
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Operatív Navigator</title>
+
+<style>
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+body{
+    font-family:Segoe UI,Arial,sans-serif;
+    background:
+        radial-gradient(circle at top,#17304f,#08131f 70%);
+    color:white;
+    min-height:100vh;
+}
+
+.header{
+    text-align:center;
+    padding:50px 20px 30px;
+}
+
+.logo{
+    font-size:52px;
+    margin-bottom:10px;
+}
+
+h1{
+    font-size:42px;
+    font-weight:700;
+}
+
+.subtitle{
+    color:#b8c6d8;
+    margin-top:12px;
+    font-size:18px;
+}
+
+.status{
+    margin-top:18px;
+    display:inline-block;
+    padding:8px 16px;
+    border-radius:30px;
+    background:#1c8f4f;
+    font-weight:bold;
+}
+
+.container{
+    max-width:1400px;
+    margin:auto;
+    padding:20px;
+}
+
+.grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(300px,1fr));
+    gap:25px;
+}
+
+.card{
+    background:rgba(255,255,255,0.06);
+    backdrop-filter:blur(10px);
+    border:1px solid rgba(255,255,255,0.1);
+    border-radius:24px;
+    padding:28px;
+    transition:.25s;
+}
+
+.card:hover{
+    transform:translateY(-6px);
+    border-color:#48a3ff;
+}
+
+.icon{
+    font-size:48px;
+    margin-bottom:15px;
+}
+
+.card h2{
+    margin-bottom:12px;
+}
+
+.card p{
+    color:#d1dbe8;
+    line-height:1.5;
+    min-height:90px;
+}
+
+.btn{
+    display:block;
+    text-align:center;
+    margin-top:20px;
+    padding:14px;
+    border-radius:12px;
+    text-decoration:none;
+    color:white;
+    font-weight:bold;
+    background:#2c7dff;
+}
+
+.btn:hover{
+    background:#4a93ff;
+}
+
+.badge{
+    display:inline-block;
+    padding:5px 12px;
+    border-radius:20px;
+    font-size:12px;
+    margin-bottom:10px;
+}
+
+.green{background:#1e8c4d;}
+.blue{background:#1565c0;}
+.orange{background:#f57c00;}
+.red{background:#c62828;}
+.purple{background:#6a1b9a;}
+
+.footer{
+    text-align:center;
+    margin-top:50px;
+    padding:20px;
+    color:#9fb0c7;
+}
+
+.stats{
+    margin-top:40px;
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+    gap:15px;
+}
+
+.stat{
+    background:rgba(255,255,255,0.05);
+    padding:20px;
+    border-radius:18px;
+    text-align:center;
+}
+
+.stat-value{
+    font-size:28px;
+    font-weight:bold;
+}
+
+.stat-label{
+    color:#b8c6d8;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="header">
+
+<div class="logo">🚂</div>
+
+<h1>Operatív Navigator</h1>
+
+<div class="subtitle">
+Valós idejű térinformatikai üzemeltetési rendszer
+</div>
+
+<div class="status">
+🟢 DEMO RENDSZER ONLINE
+</div>
+
+</div>
+
+<div class="container">
+
+<div class="stats">
+
+<div class="stat">
+<div class="stat-value">6</div>
+<div class="stat-label">Város</div>
+</div>
+
+<div class="stat">
+<div class="stat-value">20+</div>
+<div class="stat-label">Jármű</div>
+</div>
+
+<div class="stat">
+<div class="stat-value">LIVE</div>
+<div class="stat-label">GPS</div>
+</div>
+
+<div class="stat">
+<div class="stat-value">24/7</div>
+<div class="stat-label">Operatív felügyelet</div>
+</div>
+
+</div>
+
+<br><br>
+
+<div class="grid">
+
+<div class="card">
+
+<div class="badge green">UTAS</div>
+
+<div class="icon">🎟️</div>
+
+<h2>Public oldal</h2>
+
+<p>
+Menetrend, szabad helyek,
+járatinformációk,
+utas foglalások,
+felszállási igények.
+</p>
+
+<a class="btn"
+href="/public/"
+target="_blank">
+Megnyitás
+</a>
+
+</div>
+
+<div class="card">
+
+<div class="badge blue">SOFŐR</div>
+
+<div class="icon">🚂</div>
+
+<h2>Driver</h2>
+
+<p>
+GPS nyomkövetés,
+utaslétszám kezelés,
+feladatok,
+értesítések,
+útvonal követés.
+</p>
+
+<a class="btn"
+href="/driver/"
+target="_blank">
+Megnyitás
+</a>
+
+</div>
+
+<div class="card">
+
+<div class="badge red">ADMIN</div>
+
+<div class="icon">🖥️</div>
+
+<h2>Operatív központ</h2>
+
+<p>
+Járatkövetés,
+utasforgalom,
+riportok,
+foglalások,
+teljes rendszerfelügyelet.
+</p>
+
+<a class="btn"
+href="/admin/"
+target="_blank">
+Megnyitás
+</a>
+
+</div>
+
+<div class="card">
+
+<div class="badge orange">CSOPORTOS</div>
+
+<div class="icon">🗺️</div>
+
+<h2>Csoportos tervező</h2>
+
+<p>
+Egyedi járatok,
+helyszínek,
+útvonalak,
+előzetes szervezés.
+</p>
+
+<a class="btn"
+href="https://reservmap.netlify.app/admin/"
+target="_blank">
+Megnyitás
+</a>
+
+</div>
+
+<div class="card">
+
+<div class="badge purple">FOGLALÁS</div>
+
+<div class="icon">📍</div>
+
+<h2>Csoportos Public</h2>
+
+<p>
+Helyszín alapú
+csoportos foglalások,
+útvonal választás,
+kapcsolattartás.
+</p>
+
+<a class="btn"
+href="https://reservmap.netlify.app/"
+target="_blank">
+Megnyitás
+</a>
+
+</div>
+
+</div>
+
+</div>
+
+<div class="footer">
+
+Operatív Navigator © 2026
+
+<br>
+
+Valós idejű helyzetkép • GPS • Foglalás • Operatív irányítás
+
+</div>
+
+</body>
+</html>
+```
