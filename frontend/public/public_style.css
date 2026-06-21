@@ -1583,9 +1583,14 @@ html:has(#app.public-ui-shell-v1) {
     position: absolute;
     border-radius: 50%;
     cursor: default;
-    background: transparent;
+    background: transparent !important;
+    background-color: transparent !important;
     border: 0;
+    outline: 0;
+    box-shadow: none;
     padding: 0;
+    appearance: none;
+    -webkit-appearance: none;
     pointer-events: none;
 }
 
@@ -1946,17 +1951,17 @@ html.kv-splash-skip #kv-splash {
     background:
         radial-gradient(circle at 50% 48%, rgba(255, 208, 135, 0.22), rgba(0, 0, 0, 0.10) 33%, rgba(0, 0, 0, 0.32) 100%),
         radial-gradient(circle at 50% 25%, #3a2115 0%, #17100c 34%, #090604 100%);
-    animation: kv-splash-fade 4.2s ease forwards;
+    animation: kv-splash-fade 5.5s ease forwards;
 }
 
 .kv-splash.kv-splash--out {
-    animation: kv-splash-fade-out 0.42s ease forwards;
+    animation: kv-splash-fade-out 0.55s ease forwards;
 }
 
 .kv-splash-train-wrap {
     width: min(92vw, 760px);
     transform-origin: 50% 66%;
-    animation: kv-splash-train 4.2s cubic-bezier(0.2, 0.9, 0.18, 1) forwards;
+    animation: kv-splash-train 5.5s cubic-bezier(0.2, 0.9, 0.18, 1) forwards;
     filter:
         drop-shadow(0 32px 28px rgba(0, 0, 0, 0.45))
         drop-shadow(0 0 30px rgba(255, 210, 130, 0.22));
@@ -1978,7 +1983,7 @@ html.kv-splash-skip #kv-splash {
     text-align: center;
     opacity: 0;
     transform: translateY(16px);
-    animation: kv-splash-caption 4.2s ease forwards;
+    animation: kv-splash-caption 5.5s ease forwards;
     text-shadow: 0 6px 22px rgba(0, 0, 0, 0.7);
     pointer-events: none;
 }

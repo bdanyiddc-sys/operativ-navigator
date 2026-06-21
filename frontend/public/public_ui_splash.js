@@ -2,7 +2,7 @@
     'use strict';
 
     var SPLASH_KEY = 'splash_seen';
-    var SPLASH_MS = 4200;
+    var SPLASH_MS = 5500;
 
     if (document.documentElement.classList.contains('kv-splash-skip')) return;
 
@@ -19,12 +19,12 @@
         window.setTimeout(function () {
             splash.remove();
             document.documentElement.classList.add('kv-splash-skip');
-        }, 420);
+        }, 550);
     }
 
     splash.addEventListener('animationend', function (e) {
         if (e.target === splash && e.animationName === 'kv-splash-fade') finish();
     });
 
-    window.setTimeout(finish, SPLASH_MS + 80);
+    window.setTimeout(finish, SPLASH_MS + 105);
 })();
