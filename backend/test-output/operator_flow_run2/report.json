@@ -1,0 +1,305 @@
+{
+  "steps": [
+    {
+      "name": "1 — Új sofőr belépés / műszak indítás",
+      "api": {
+        "shiftStart": {
+          "status": 201,
+          "ok": true,
+          "data": {
+            "ok": true,
+            "shift_id": "shift_KV10_2026-06-20T17-09-06-555Z",
+            "vehicle_id": "KV10"
+          }
+        },
+        "muszakEvent": {
+          "status": 201,
+          "ok": true,
+          "data": {
+            "ok": true,
+            "received": 1,
+            "saved": 1,
+            "ids": [
+              "evt_muszak_1781975346606"
+            ]
+          }
+        },
+        "activeDrivers": {
+          "status": 200,
+          "ok": true,
+          "data": {
+            "ok": true,
+            "count": 1,
+            "drivers": [
+              {
+                "shift_id": "shift_KV10_2026-06-20T17-09-06-555Z",
+                "vehicle_id": "KV10",
+                "driver_id": "DRV10",
+                "driver_name": "NEV10",
+                "route": "Teszt01",
+                "city": "Teszt01",
+                "status": "ACTIVE",
+                "display_status": "ACTIVE",
+                "started_at": "2026-06-20T17:09:06.604Z",
+                "last_gps_at": null,
+                "last_track_at": null,
+                "last_heartbeat_at": "2026-06-20T17:09:06.604Z",
+                "closed_at": null
+              }
+            ],
+            "shifts": [
+              {
+                "shift_id": "shift_KV10_2026-06-20T17-09-06-555Z",
+                "vehicle_id": "KV10",
+                "driver_id": "DRV10",
+                "driver_name": "NEV10",
+                "route": "Teszt01",
+                "city": "Teszt01",
+                "status": "ACTIVE",
+                "display_status": "ACTIVE",
+                "started_at": "2026-06-20T17:09:06.604Z",
+                "last_gps_at": null,
+                "last_track_at": null,
+                "last_heartbeat_at": "2026-06-20T17:09:06.604Z",
+                "closed_at": null
+              }
+            ]
+          }
+        }
+      },
+      "db": {
+        "shift": {
+          "shift_id": "shift_KV10_2026-06-20T17-09-06-555Z",
+          "vehicle_id": "KV10",
+          "driver_id": "DRV10",
+          "driver_name": "NEV10",
+          "route": "Teszt01",
+          "city": "Teszt01",
+          "status": "ACTIVE",
+          "started_at": "2026-06-20T17:09:06.604Z",
+          "last_gps_at": null,
+          "last_heartbeat_at": "2026-06-20T17:09:06.604Z",
+          "closed_at": null
+        },
+        "openShifts": [
+          {
+            "shift_id": "shift_KV10_2026-06-20T17-09-06-555Z",
+            "vehicle_id": "KV10",
+            "closed_at": null
+          }
+        ],
+        "tripEnd": null
+      },
+      "screenshot": "d:\\cursor\\operativ-navigator_260614\\backend\\test-output\\operator_flow_run2\\01_muszakok_after_shift_start.png",
+      "pass": true,
+      "notes": [
+        "active_shifts létrejött: true",
+        "MŰSZAKOK tab KV10: true"
+      ]
+    },
+    {
+      "name": "2 — Új járat indítás",
+      "api": {
+        "tripStart": {
+          "status": 201,
+          "ok": true,
+          "data": {
+            "ok": true,
+            "received": 2,
+            "saved": 2,
+            "ids": [
+              "evt_trip_start_1781975350663",
+              "evt_track_1781975350663"
+            ]
+          }
+        },
+        "openTrips": {
+          "status": 200,
+          "ok": true,
+          "data": {
+            "ok": true,
+            "count": 1,
+            "trips": [
+              {
+                "trip": "trip_KV10_2026-06-20T17-09-06-556Z",
+                "shift": "shift_KV10_2026-06-20T17-09-06-555Z",
+                "vehicle_id": "KV10",
+                "vehicle_name": "KV10",
+                "driver_id": "DRV10",
+                "driver_name": "NEV10",
+                "started_at": "2026-06-20T17:09:10.663Z"
+              }
+            ]
+          }
+        },
+        "vehiclePositions": {
+          "status": 200,
+          "ok": true,
+          "data": {
+            "ok": true,
+            "count": 1,
+            "vehicles": [
+              {
+                "vehicle": "KV10",
+                "vehicle_name": "KV10",
+                "trip": "trip_KV10_2026-06-20T17-09-06-556Z",
+                "city": "Teszt01",
+                "city_id": "vac",
+                "vehicle_local": "Teszt01",
+                "passengers": 0,
+                "free": 56,
+                "free_seats": 56,
+                "capacity": 56,
+                "lat": 47.4985,
+                "lng": 19.041,
+                "last_gps": "2026-06-20T17:09:10.663Z",
+                "speed_kmh": null,
+                "live": true
+              }
+            ]
+          }
+        }
+      },
+      "db": {
+        "shift": {
+          "shift_id": "shift_KV10_2026-06-20T17-09-06-555Z",
+          "vehicle_id": "KV10",
+          "driver_id": "DRV10",
+          "driver_name": "NEV10",
+          "route": "Teszt01",
+          "city": "Teszt01",
+          "status": "ACTIVE",
+          "started_at": "2026-06-20T17:09:06.604Z",
+          "last_gps_at": "2026-06-20T17:09:10.663Z",
+          "last_heartbeat_at": "2026-06-20T17:09:06.604Z",
+          "closed_at": null
+        },
+        "openShifts": [
+          {
+            "shift_id": "shift_KV10_2026-06-20T17-09-06-555Z",
+            "vehicle_id": "KV10",
+            "closed_at": null
+          }
+        ]
+      },
+      "screenshot": "d:\\cursor\\operativ-navigator_260614\\backend\\test-output\\operator_flow_run2\\02_aktiv_after_trip_start.png",
+      "pass": true,
+      "notes": [
+        "open trip: true",
+        "AKTÍV tab trip: true",
+        "public vehicle-positions KV10: false"
+      ]
+    },
+    {
+      "name": "3 — Járat lezárás (AKTÍV → Járat zárása)",
+      "api": {
+        "openTripsAfter": {
+          "status": 200,
+          "ok": true,
+          "data": {
+            "ok": true,
+            "count": 0,
+            "trips": []
+          }
+        },
+        "vehiclePositions": {
+          "status": 200,
+          "ok": true,
+          "data": {
+            "ok": true,
+            "count": 0,
+            "vehicles": []
+          }
+        }
+      },
+      "db": {
+        "shift": {
+          "shift_id": "shift_KV10_2026-06-20T17-09-06-555Z",
+          "vehicle_id": "KV10",
+          "driver_id": "DRV10",
+          "driver_name": "NEV10",
+          "route": "Teszt01",
+          "city": "Teszt01",
+          "status": "ACTIVE",
+          "started_at": "2026-06-20T17:09:06.604Z",
+          "last_gps_at": "2026-06-20T17:09:10.663Z",
+          "last_heartbeat_at": "2026-06-20T17:09:06.604Z",
+          "closed_at": null
+        },
+        "openShifts": [
+          {
+            "shift_id": "shift_KV10_2026-06-20T17-09-06-555Z",
+            "vehicle_id": "KV10",
+            "closed_at": null
+          }
+        ],
+        "tripEnd": {
+          "id": "admin_trip_close_1781975352957_zute5w",
+          "type": "trip_end",
+          "trip": "trip_KV10_2026-06-20T17-09-06-556Z",
+          "timestamp": "2026-06-20T17:09:12.957Z"
+        }
+      },
+      "screenshots": [
+        "d:\\cursor\\operativ-navigator_260614\\backend\\test-output\\operator_flow_run2\\03_aktiv_after_trip_close.png",
+        "d:\\cursor\\operativ-navigator_260614\\backend\\test-output\\operator_flow_run2\\03_public_after_trip_close.png"
+      ],
+      "pass": true,
+      "notes": [
+        "trip_end létrejött: true",
+        "AKTÍV tabból eltűnt: true",
+        "public vehicle-positions üres KV10: true"
+      ]
+    },
+    {
+      "name": "4 — Műszak lezárás (MŰSZAKOK → Vonat felszabadítása)",
+      "api": {
+        "activeDriversAfter": {
+          "status": 200,
+          "ok": true,
+          "data": {
+            "ok": true,
+            "count": 0,
+            "drivers": [],
+            "shifts": []
+          }
+        }
+      },
+      "db": {
+        "shift": {
+          "shift_id": "shift_KV10_2026-06-20T17-09-06-555Z",
+          "vehicle_id": "KV10",
+          "driver_id": "DRV10",
+          "driver_name": "NEV10",
+          "route": "Teszt01",
+          "city": "Teszt01",
+          "status": "CLOSED",
+          "started_at": "2026-06-20T17:09:06.604Z",
+          "last_gps_at": "2026-06-20T17:09:10.663Z",
+          "last_heartbeat_at": "2026-06-20T17:09:06.604Z",
+          "closed_at": "2026-06-20T17:09:19.954Z"
+        },
+        "openShifts": [],
+        "tripEnd": {
+          "id": "admin_trip_close_1781975352957_zute5w",
+          "type": "trip_end",
+          "trip": "trip_KV10_2026-06-20T17-09-06-556Z",
+          "timestamp": "2026-06-20T17:09:12.957Z"
+        }
+      },
+      "screenshot": "d:\\cursor\\operativ-navigator_260614\\backend\\test-output\\operator_flow_run2\\04_muszakok_after_shift_close.png",
+      "pass": true,
+      "notes": [
+        "active_shifts.closed_at kitöltve: true",
+        "shift_end event: false (release nem ír shift_end-et)",
+        "MŰSZAKOK tabból eltűnt: true",
+        "UI megjegyzés: MŰSZAKOK tabon nincs „Műszak lezárása” gomb — csak „Vonat felszabadítása”."
+      ]
+    }
+  ],
+  "verdict": "PASS",
+  "vehicle": "KV10",
+  "driver": "DRV10",
+  "shiftId": "shift_KV10_2026-06-20T17-09-06-555Z",
+  "tripId": "trip_KV10_2026-06-20T17-09-06-556Z"
+}
