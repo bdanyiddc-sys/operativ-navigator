@@ -460,18 +460,54 @@
             font-weight: 700;
             color: #fbbf24;
         }
-        .trip-layer-live-badge {
+        .trip-layer-live-badge,
+        .trip-layer-status-badge {
             display: inline-block;
             margin-left: 6px;
             padding: 1px 6px;
             border-radius: 4px;
-            border: 1px solid rgba(74, 222, 128, 0.45);
-            background: rgba(22, 101, 52, 0.45);
-            color: #bbf7d0;
             font-size: 9px;
             font-weight: 800;
             letter-spacing: 0.04em;
             vertical-align: middle;
+        }
+        .trip-layer-live-badge,
+        .trip-layer-status-badge.is-active {
+            border: 1px solid rgba(74, 222, 128, 0.45);
+            background: rgba(22, 101, 52, 0.45);
+            color: #bbf7d0;
+        }
+        .trip-layer-status-badge.is-closed {
+            border: 1px solid rgba(148, 163, 184, 0.45);
+            background: rgba(51, 65, 85, 0.55);
+            color: #cbd5e1;
+        }
+        .jaratok-status-filter {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 10px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+        }
+        .jaratok-filter-btn {
+            padding: 4px 10px;
+            border-radius: 6px;
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            background: rgba(15, 23, 42, 0.6);
+            color: #94a3b8;
+            font-size: 11px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .jaratok-filter-btn.is-active {
+            border-color: rgba(96, 165, 250, 0.55);
+            background: rgba(30, 58, 138, 0.45);
+            color: #dbeafe;
+        }
+        .jaratok-filter-btn:hover:not(.is-active) {
+            border-color: rgba(148, 163, 184, 0.55);
+            color: #cbd5e1;
         }
         .btn-trip-pos {
             flex-shrink: 0;
@@ -3279,6 +3315,7 @@
     var adminUsers = [];
     var adminLoggedUser = null;
     var adminDateFilter = { mode: 'day', date: '' };
+    var jaratokShowClosedTrips = false;
     var activeDesktopModule = 'ops';
     var elClosedToday = document.getElementById('panel-closed-today');
     var elClosedTodaySheet = document.getElementById('panel-closed-today-sheet');
@@ -3597,6 +3634,31 @@
             return tb - ta;
         });
         return list;
+    }
+
+    function getJaratokSidebarTripsList(trips, events) {
+        var all = getAdminFilteredTripsList(trips, events);
+        if (jaratokShowClosedTrips) return all;
+        return all.filter(function (t) { return !hasTripEnded(t.trip, events); });
+    }
+
+    function renderJaratokStatusFilterHtml(trips, events) {
+        var all = getAdminFilteredTripsList(trips, events);
+        var activeCount = 0;
+        var closedCount = 0;
+        all.forEach(function (t) {
+            if (hasTripEnded(t.trip, events)) closedCount += 1;
+            else activeCount += 1;
+        });
+        var activeLabel = 'Aktív' + (activeCount ? ' (' + activeCount + ')' : '');
+        var allLabel = 'Összes' + (all.length ? ' (' + all.length + ')' : '');
+        if (closedCount && !jaratokShowClosedTrips) {
+            allLabel = 'Lezártak is (+' + closedCount + ')';
+        }
+        return '<div class="jaratok-status-filter" role="group" aria-label="Járat állapot szűrő">' +
+            '<button type="button" class="jaratok-filter-btn' + (jaratokShowClosedTrips ? '' : ' is-active') + '" data-jaratok-filter="active">' + escapeHtml(activeLabel) + '</button>' +
+            '<button type="button" class="jaratok-filter-btn' + (jaratokShowClosedTrips ? ' is-active' : '') + '" data-jaratok-filter="all">' + escapeHtml(allLabel) + '</button>' +
+            '</div>';
     }
 
     function getActiveTripsCurrent(trips, events) {
@@ -4514,6 +4576,13 @@
                 ev.stopPropagation();
                 var expandTripId = expandBtn.getAttribute('data-trip');
                 expandedLayerTripId = (expandedLayerTripId === expandTripId) ? null : expandTripId;
+                renderSidebarControls(lastTrips, lastEvents);
+                return;
+            }
+            var jaratokFilterBtn = ev.target.closest('[data-jaratok-filter]');
+            if (jaratokFilterBtn) {
+                ev.stopPropagation();
+                jaratokShowClosedTrips = jaratokFilterBtn.getAttribute('data-jaratok-filter') === 'all';
                 renderSidebarControls(lastTrips, lastEvents);
                 return;
             }
@@ -5968,16 +6037,12 @@
             }
         });
 
-        var now = Date.now();
         var result = [];
         Object.keys(byVehicle).forEach(function (vid) {
             var row = byVehicle[vid];
-            var recentGps = row.last_gps_at && (now - new Date(row.last_gps_at).getTime() < OPERATIVE_STALE_MS);
-            var recentHb = row.last_heartbeat_at && (now - new Date(row.last_heartbeat_at).getTime() < OPERATIVE_STALE_MS);
-            var stale = isOperativeStale(row.last_gps_at || row.last_heartbeat_at, row.shift_meta);
-            var include = row.has_shift || row.has_open_trip || row.public_live || recentGps || recentHb || stale;
-            if (!include) return;
+            if (!row.has_shift && !row.has_open_trip && !row.public_live) return;
             row.status = deriveOperativeStatus(row);
+            if (!row.has_shift && !row.has_open_trip && !row.public_live && row.status === 'SZABAD') return;
             result.push(row);
         });
         result.sort(function (a, b) {
@@ -6392,12 +6457,18 @@
 
     function renderSidebarControls(trips, events) {
         if (!elSidebarControls && !elSidebarControlsMobile) return;
-        var tripList = getAdminFilteredTripsList(trips, events);
+        var allForDay = getAdminFilteredTripsList(trips, events);
+        var tripList = getJaratokSidebarTripsList(trips, events);
         ensureTripLayerPrefs(tripList.map(function (t) { return t.trip; }));
 
-        var html = '';
+        var html = renderJaratokStatusFilterHtml(trips, events);
         if (!tripList.length) {
-            html += '<p class="empty">Nincs járat a kiválasztott napon.</p>';
+            var closedHidden = allForDay.filter(function (t) { return hasTripEnded(t.trip, events); }).length;
+            if (!jaratokShowClosedTrips && closedHidden > 0) {
+                html += '<p class="empty">Nincs aktív járat. ' + closedHidden + ' lezárt járat rejtve.</p>';
+            } else {
+                html += '<p class="empty">Nincs járat a kiválasztott napon.</p>';
+            }
             setSidebarControlsHtml(html);
             return;
         }
@@ -6409,7 +6480,10 @@
             var mapVis = p.visible !== false;
             var paxLabel = tripRowPassengerLabel(trip, events);
             var isLive = !hasTripEnded(trip.trip, events);
-            html += '<div class="trip-layer-block' + (isLive ? ' is-live-trip' : '') + '" data-trip-block="' + escapeHtml(trip.trip) + '">';
+            var statusBadge = isLive
+                ? '<span class="trip-layer-status-badge is-active">AKTÍV</span>'
+                : '<span class="trip-layer-status-badge is-closed">LEZÁRT</span>';
+            html += '<div class="trip-layer-block' + (isLive ? ' is-live-trip' : ' is-closed-trip') + '" data-trip-block="' + escapeHtml(trip.trip) + '">';
             html += '<div class="trip-layer-head">';
             html += '<label class="ctrl-row trip-master-vis" title="Járat megjelenítése a térképen">';
             html += '<input type="checkbox" class="trip-master-vis-cb" data-trip="' + escapeHtml(trip.trip) + '"' +
@@ -6418,9 +6492,7 @@
             html += '<button type="button" class="trip-layer-expand hit" data-trip="' + escapeHtml(trip.trip) + '" aria-expanded="' + (expanded ? 'true' : 'false') + '">';
             html += '<span class="trip-layer-arrow" aria-hidden="true">' + arrow + '</span>';
             html += '<span class="trip-layer-title-inhead">';
-            html += '<span class="trip-layer-name">' + escapeHtml(trip.trip);
-            if (isLive) html += '<span class="trip-layer-live-badge">AKTÍV</span>';
-            html += '</span>';
+            html += '<span class="trip-layer-name">' + escapeHtml(trip.trip) + statusBadge + '</span>';
             html += '<span class="trip-layer-pax">' + escapeHtml(paxLabel) + '</span>';
             html += '</span>';
             html += '</button>';
