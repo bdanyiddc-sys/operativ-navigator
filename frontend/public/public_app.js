@@ -23,10 +23,15 @@
         gpsWatchId: null,
         devGis: false,
         routeBoardMode: false,
+        bookPickMode: false,
+        vehicleDataReady: false,
         popupContext: { stopId: '', selectedTime: '', showBoard: false }
     };
 
     var map, routeLayers, vehicleLayer, stopLayer, poiLayer, userLayer;
+    var baseMapLayers = {};
+    var activeBaseMapKey = 'Voyager';
+    var geojsonAudit = { loaded: [], missing: [], total: 0, baseMaps: [] };
     var stopMarkers = {};
     var openPopupStopId = null;
 
@@ -64,8 +69,8 @@
     }
 
     function stopIconDimensions() {
-        if (isMobileUi()) return { size: [48, 48], anchor: [24, 24] };
-        return { size: [44, 44], anchor: [22, 22] };
+        if (isMobileUi()) return { size: [26, 26], anchor: [13, 13] };
+        return { size: [24, 24], anchor: [12, 12] };
     }
 
     function refreshRouteHitLayer() {
@@ -185,7 +190,8 @@
 
     function popupSeatsLine() {
         var v = state.activeVehicle;
-        if (!v || !v.active || v.freeSeats == null) return '🟢 Van hely';
+        if (!state.vehicleDataReady) return 'Adat betöltése…';
+        if (!v || !v.active || v.freeSeats == null) return '— szabad hely';
         var st = seatStatus(v.freeSeats, v.capacity);
         if (st.cls === 'bad') return '🔴 Betelt';
         if (st.cls === 'warn') return '🟡 Kevés hely';
@@ -317,9 +323,27 @@
             maxZoom: 22,
             maxNativeZoom: 19
         });
+        var cartoDark = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '© CARTO · © OpenStreetMap',
+            maxZoom: 22,
+            maxNativeZoom: 19
+        });
+        var satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            attribution: '© Esri · © OpenStreetMap',
+            maxZoom: 22,
+            maxNativeZoom: 19
+        });
 
         var defCity = DATA.CITIES.find(function (c) { return c.default; }) || DATA.CITIES[0];
         var startCenter = defCity && defCity.center ? defCity.center : [47.649, 18.318];
+
+        baseMapLayers = {
+            Voyager: cartoLight,
+            OSM: osm,
+            Dark: cartoDark,
+            'Műhold': satellite
+        };
+        activeBaseMapKey = 'Voyager';
 
         map = L.map('map', {
             center: startCenter,
@@ -329,9 +353,7 @@
             layers: [cartoLight]
         });
 
-        L.control.layers({ Voyager: cartoLight, OSM: osm }, null, { position: 'bottomleft', collapsed: true }).addTo(map);
-
-        routeLayers = { black: null, red: null, hit: null };
+        routeLayers = { black: null, gold: null, red: null, highlight: null, hit: null };
         vehicleLayer = L.layerGroup().addTo(map);
         stopLayer = L.layerGroup().addTo(map);
         poiLayer = L.layerGroup().addTo(map);
@@ -366,16 +388,32 @@
     }
 
     function styleOutline() {
-        return { color: '#111111', weight: 9, opacity: 1, lineCap: 'round', lineJoin: 'round' };
+        return { color: '#2A1C1C', weight: 5.5, opacity: 0.25, lineCap: 'round', lineJoin: 'round' };
+    }
+
+    function styleGoldRail() {
+        return {
+            color: '#c9a04a',
+            weight: 5,
+            opacity: 0,
+            lineCap: 'round',
+            lineJoin: 'round'
+        };
     }
 
     function styleRed() {
-        return { color: '#e53935', weight: 5, opacity: 1, lineCap: 'round', lineJoin: 'round' };
+        return { color: '#6B1520', weight: 4, opacity: 0.75, lineCap: 'round', lineJoin: 'round' };
+    }
+
+    function styleHighlight() {
+        return { color: '#A84552', weight: 1.5, opacity: 0.55, lineCap: 'round', lineJoin: 'round' };
     }
 
     function clearRoute() {
         if (routeLayers.black) { map.removeLayer(routeLayers.black); routeLayers.black = null; }
+        if (routeLayers.gold) { map.removeLayer(routeLayers.gold); routeLayers.gold = null; }
         if (routeLayers.red) { map.removeLayer(routeLayers.red); routeLayers.red = null; }
+        if (routeLayers.highlight) { map.removeLayer(routeLayers.highlight); routeLayers.highlight = null; }
         if (routeLayers.hit) { map.removeLayer(routeLayers.hit); routeLayers.hit = null; }
     }
 
@@ -385,10 +423,6 @@
         }
         state.routeBoardMode = false;
         updateRouteBoardModeUi();
-        if (isMobileUi()) {
-            openMobileBoardSheet({ type: 'route', latlng: e.latlng });
-            return;
-        }
         openRouteBoardingPopup(e.latlng);
     }
 
@@ -407,6 +441,15 @@
             }
         }).addTo(map);
 
+        routeLayers.gold = L.geoJSON(geoData, {
+            interactive: false,
+            style: function (feature) {
+                var g = feature.geometry;
+                if (g.type === 'LineString' || g.type === 'MultiLineString') return styleGoldRail();
+                return { opacity: 0, fillOpacity: 0 };
+            }
+        }).addTo(map);
+
         routeLayers.red = L.geoJSON(geoData, {
             interactive: true,
             style: function (feature) {
@@ -418,6 +461,15 @@
                 var g = feature.geometry;
                 if (!g || (g.type !== 'LineString' && g.type !== 'MultiLineString')) return;
                 bindRouteLineClicks(layer);
+            }
+        }).addTo(map);
+
+        routeLayers.highlight = L.geoJSON(geoData, {
+            interactive: false,
+            style: function (feature) {
+                var g = feature.geometry;
+                if (g.type === 'LineString' || g.type === 'MultiLineString') return styleHighlight();
+                return { opacity: 0, fillOpacity: 0 };
             }
         }).addTo(map);
 
@@ -446,24 +498,51 @@
     function syncRouteLayerOrder() {
         if (!map) return;
         if (routeLayers.black) routeLayers.black.bringToBack();
+        if (routeLayers.gold) routeLayers.gold.bringToFront();
         if (routeLayers.red) routeLayers.red.bringToFront();
+        if (routeLayers.highlight) routeLayers.highlight.bringToFront();
         if (routeLayers.hit) routeLayers.hit.bringToFront();
         if (state.routeBoardMode && routeLayers.hit) {
             routeLayers.hit.bringToFront();
         }
     }
 
+    function countBookableStops() {
+        return state.stops.filter(function (s) { return s.lat != null && s.lng != null; }).length;
+    }
+
+    function updateBookPickModeUi() {
+        var app = $('app');
+        if (app) app.classList.toggle('is-book-pick-mode', !!state.bookPickMode);
+        var shellBtn = $('btn-shell-reserve');
+        if (shellBtn) shellBtn.classList.toggle('is-stop-pick', !!state.bookPickMode);
+        var legacyBtn = $('btn-peek-reserve');
+        if (legacyBtn) legacyBtn.classList.toggle('is-stop-pick', !!state.bookPickMode);
+    }
+
+    function setBookPickMode(on) {
+        state.bookPickMode = !!on;
+        if (state.bookPickMode) {
+            state.routeBoardMode = false;
+            updateRouteBoardModeUi();
+        }
+        updateBookPickModeUi();
+    }
+
     function updateRouteBoardModeUi() {
         var btn = $('btn-peek-board');
         if (btn) btn.classList.toggle('is-route-pick', !!state.routeBoardMode);
+        var shellBtn = $('btn-shell-board');
+        if (shellBtn) shellBtn.classList.toggle('is-route-pick', !!state.routeBoardMode);
         syncRouteLayerOrder();
     }
 
     function setRouteBoardMode(on) {
         state.routeBoardMode = !!on;
+        if (state.routeBoardMode) setBookPickMode(false);
         updateRouteBoardModeUi();
         if (state.routeBoardMode) {
-            toast('Koppints az útvonalra vagy egy megállóra');
+            toast('Kattints az útvonalra vagy egy megállóra');
         }
     }
 
@@ -490,6 +569,61 @@
             .catch(function () {
                 if (state.devGis) toast('Útvonal jelenleg nem érhető el');
             });
+    }
+
+    function auditGeoJsonLayers() {
+        var cities = DATA.CITIES || [];
+        geojsonAudit.total = cities.length;
+        geojsonAudit.baseMaps = Object.keys(baseMapLayers);
+        return Promise.all(cities.map(function (city) {
+            var url = new URL(city.file, window.location.href).href;
+            return fetch(url, { method: 'HEAD', cache: 'no-store' })
+                .then(function (r) {
+                    if (r.ok) return { id: city.id, label: city.label, file: city.file, ok: true };
+                    if (r.status === 405 || r.status === 501) {
+                        return fetch(url, { cache: 'no-store' }).then(function (r2) {
+                            return { id: city.id, label: city.label, file: city.file, ok: r2.ok };
+                        });
+                    }
+                    return { id: city.id, label: city.label, file: city.file, ok: false };
+                })
+                .catch(function () {
+                    return { id: city.id, label: city.label, file: city.file, ok: false };
+                });
+        })).then(function (results) {
+            geojsonAudit.loaded = results.filter(function (r) { return r.ok; });
+            geojsonAudit.missing = results.filter(function (r) { return !r.ok; });
+            console.log('[LAYERS]', {
+                baseLayerCount: geojsonAudit.baseMaps.length,
+                baseLayerNames: geojsonAudit.baseMaps.slice(),
+                geojsonTotal: geojsonAudit.total,
+                geojsonLoaded: geojsonAudit.loaded.length,
+                geojsonLoadedFiles: geojsonAudit.loaded.map(function (r) { return r.file; }),
+                geojsonMissing: geojsonAudit.missing.map(function (r) { return r.file; })
+            });
+            return geojsonAudit;
+        });
+    }
+
+    function setBaseMap(key) {
+        if (!map || !baseMapLayers[key]) return false;
+        Object.keys(baseMapLayers).forEach(function (name) {
+            var layer = baseMapLayers[name];
+            if (map.hasLayer(layer)) map.removeLayer(layer);
+        });
+        baseMapLayers[key].addTo(map);
+        activeBaseMapKey = key;
+        return true;
+    }
+
+    function getLayersPanelModel() {
+        var baseMaps = Object.keys(baseMapLayers).map(function (name) {
+            return { id: name, label: name, active: name === activeBaseMapKey };
+        });
+        return {
+            baseMaps: baseMaps,
+            hasAny: baseMaps.length > 0
+        };
     }
 
     var TRIP_SLUG_TO_ROUTE = {
@@ -521,6 +655,7 @@
         if (st && st.cls === 'warn') freeCls = 'tm-free-warn';
         if (st && st.cls === 'bad') freeCls = 'tm-free-bad';
         return '<div class="train-marker-wrap">' +
+            '<div class="train-marker-aura" aria-hidden="true"></div>' +
             '<div class="train-marker-min" aria-hidden="true">🚂</div>' +
             '<div class="train-marker-seats ' + freeCls + '">' +
             '<span class="tm-free-num">' + escapeHtml(String(free)) + '</span>' +
@@ -580,8 +715,28 @@
         updateUi();
     }
 
+    function isShellUi() {
+        var app = $('app');
+        return !!(app && app.classList.contains('public-ui-shell-v1'));
+    }
+
     function popupChromePadding() {
         var style = getComputedStyle(document.documentElement);
+        if (isShellUi()) {
+            var top = (parseFloat(style.getPropertyValue('--status-panel-h')) || 286) + 12;
+            var right = parseFloat(style.getPropertyValue('--popup-pad-right'));
+            if (!right || isNaN(right)) {
+                right = Math.ceil(window.innerWidth * 0.50 + 12);
+            }
+            var bottom = parseFloat(style.getPropertyValue('--popup-pad-bottom'));
+            if (!bottom || isNaN(bottom)) {
+                bottom = (parseFloat(style.getPropertyValue('--stop-bar-h')) || 88) + 320;
+            }
+            return {
+                topLeft: L.point(12, Math.ceil(top)),
+                bottomRight: L.point(Math.ceil(right), Math.ceil(bottom))
+            };
+        }
         var top = (parseFloat(style.getPropertyValue('--status-panel-h')) || 88) +
             (parseFloat(style.getPropertyValue('--city-strip-h')) || 52) + 12;
         var bottom = (parseFloat(style.getPropertyValue('--stop-bar-h')) || 58) + 10;
@@ -591,16 +746,46 @@
         };
     }
 
+    function shellPopupOffset() {
+        var w = window.innerWidth;
+        return L.point(-Math.round(Math.min(150, Math.max(90, w * 0.34))), -56);
+    }
+
     function stopPopupLeafletOptions() {
         var pad = popupChromePadding();
-        return {
-            maxWidth: Math.min(300, window.innerWidth - 20),
+        var shell = isShellUi();
+        var opts = {
+            maxWidth: shell
+                ? Math.min(300, Math.max(160, Math.floor(window.innerWidth * 0.46)))
+                : Math.min(300, window.innerWidth - 20),
             className: 'stop-popup-wrap',
             autoPan: true,
             autoPanPaddingTopLeft: pad.topLeft,
             autoPanPaddingBottomRight: pad.bottomRight,
             keepInView: true
         };
+        if (shell) {
+            opts.offset = shellPopupOffset();
+        }
+        return opts;
+    }
+
+    function routePopupLeafletOptions(className) {
+        var pad = popupChromePadding();
+        var shell = isShellUi();
+        var opts = {
+            maxWidth: shell
+                ? Math.min(300, Math.max(160, Math.floor(window.innerWidth * 0.46)))
+                : 300,
+            className: className,
+            autoPan: true,
+            autoPanPaddingTopLeft: pad.topLeft,
+            autoPanPaddingBottomRight: pad.bottomRight,
+            keepInView: true,
+            closeButton: true
+        };
+        if (shell) opts.offset = shellPopupOffset();
+        return opts;
     }
 
     function setStopPopupOpenClass(on) {
@@ -726,10 +911,14 @@
             if (stop.lat == null || stop.lng == null) return;
             var enriched = enrichStopDistance(stop) || stop;
             var isNear = display && display.id === stop.id;
+            var isActive = state.selectedStopId === stop.id || openPopupStopId === stop.id;
             var iconDim = stopIconDimensions();
             var icon = L.divIcon({
                 className: '',
-                html: '<div class="stop-marker' + (isNear ? ' is-near' : '') + '">🚏</div>',
+                html: '<div class="stop-marker' +
+                    (isNear ? ' is-near' : '') +
+                    (isActive ? ' is-active' : '') +
+                    '">🚏</div>',
                 iconSize: iconDim.size,
                 iconAnchor: iconDim.anchor
             });
@@ -744,12 +933,21 @@
                     showBoard: !!state.routeBoardMode
                 };
                 state.popupContext = clickCtx;
-                if (!isMobileUi()) openPopupStopId = stop.id;
+                if (state.bookPickMode) {
+                    setBookPickMode(false);
+                    clickCtx.showBoard = false;
+                    if (!isMobileUi() || clickCtx.showBoard) openPopupStopId = stop.id;
+                    setStopPopup(stop.id, clickCtx, true);
+                    if (stop && map) map.panTo([stop.lat, stop.lng], { animate: true });
+                    updateUi();
+                    return;
+                }
+                if (!isMobileUi() || clickCtx.showBoard) openPopupStopId = stop.id;
                 if (state.routeBoardMode) {
                     state.routeBoardMode = false;
                     updateRouteBoardModeUi();
                 }
-                if (isMobileUi()) {
+                if (isMobileUi() && !clickCtx.showBoard) {
                     openMobileBoardSheet({
                         type: 'stop',
                         stopId: stop.id,
@@ -764,7 +962,7 @@
             m.addTo(stopLayer);
             stopMarkers[stop.id] = m;
         });
-        if (reopenId && stopMarkers[reopenId] && !isMobileUi()) {
+        if (reopenId && stopMarkers[reopenId]) {
             setStopPopup(reopenId, reopenCtx, true);
         }
     }
@@ -773,19 +971,37 @@
         ctx = ctx || {};
         state.selectedStopId = stopId;
         var stop = state.stops.find(function (s) { return s.id === stopId; });
-        if (isMobileUi() && !ctx.selectedTime) {
+
+        if (isMobileUi() && ctx.showBoard && !ctx.selectedTime) {
+            if (map) map.closePopup();
+            openPopupStopId = null;
+            setStopPopupOpenClass(false);
             if (openMobileBoardSheet({
                 type: 'stop',
                 stopId: stopId,
                 stopName: stop ? stop.name : ''
             })) {
                 if (stop && map) map.panTo([stop.lat, stop.lng], { animate: true });
-                updateUi();
+                findNearestStop();
+                updateStatusLine();
+                updateStopBar();
+                renderStops();
                 return;
             }
         }
-        setStopPopup(stopId, ctx, true);
-        updateUi();
+
+        closeMobileBoardSheet();
+        state.popupContext = {
+            stopId: stopId,
+            selectedTime: ctx.selectedTime || '',
+            showBoard: !!ctx.showBoard
+        };
+        openPopupStopId = stopId;
+        if (stop && map) map.panTo([stop.lat, stop.lng], { animate: true });
+        findNearestStop();
+        updateStatusLine();
+        updateStopBar();
+        renderStops();
     }
 
     function openMobileBoardSheet(ctx) {
@@ -944,20 +1160,25 @@
     }
 
     function openQuickBook() {
-        var stop = getDisplayStop();
+        setRouteBoardMode(false);
+        closeMobileBoardSheet();
+        var bookable = countBookableStops();
+        if (!bookable) { toast('Válassz megállót a térképen'); return; }
+        if (bookable > 1) {
+            setBookPickMode(true);
+            toast('Koppints arra a megállóra, ahol foglalni szeretnél.');
+            return;
+        }
+        var stop = state.stops.find(function (s) { return s.lat != null && s.lng != null; });
         if (!stop) { toast('Válassz megállót a térképen'); return; }
         openStopOnMap(stop.id, { selectedTime: '', showBoard: false });
     }
 
     function openQuickBoard() {
+        setBookPickMode(false);
         setRouteBoardMode(true);
         var stop = getDisplayStop();
-        if (stop) {
-            map.panTo([stop.lat, stop.lng], { animate: true });
-        }
-        if (isMobileUi()) {
-            toast('Érints egy megállót vagy az útvonalat');
-        }
+        if (stop && map) map.panTo([stop.lat, stop.lng], { animate: true });
     }
 
     function getSelectedTimeFromPopup(popupEl) {
@@ -1032,7 +1253,7 @@
     function openRouteBoardingPopup(latlng) {
         if (!map || !latlng) return;
         map.closePopup();
-        var popup = L.popup({ className: 'route-board-wrap', maxWidth: 300, closeButton: true })
+        var popup = L.popup(routePopupLeafletOptions('route-board-wrap'))
             .setLatLng(latlng)
             .setContent(routeBoardingPopupHtml())
             .openOn(map);
@@ -1150,14 +1371,18 @@
     function updateStatusLine() {
         if (!elStatusLine) return;
         var v = state.activeVehicle;
-        var st = v && v.active ? seatStatus(v.freeSeats, v.capacity) : null;
-        var emoji = seatEmoji(st);
-        var seatCls = st && st.cls ? ' seat-' + st.cls : '';
-        var freeNum = (v && v.active && v.freeSeats != null) ? String(v.freeSeats) : '—';
+        var seatLoading = !state.vehicleDataReady;
+        var st = (!seatLoading && v && v.active) ? seatStatus(v.freeSeats, v.capacity) : null;
+        var emoji = seatLoading ? '' : seatEmoji(st);
+        var seatCls = seatLoading ? ' seat-loading' : (st && st.cls ? ' seat-' + st.cls : '');
+        var freeNum = seatLoading
+            ? 'Adat betöltése…'
+            : ((v && v.active && v.freeSeats != null) ? String(v.freeSeats) : '—');
         var nextDep = getNextDepartureInfo();
         elStatusLine.innerHTML =
             '<span class="status-city">🚂 ' + escapeHtml(state.cityLabel) + '</span>' +
-            '<span class="status-seats">' + emoji + ' <span class="seat-free-num' + seatCls + '">' + escapeHtml(freeNum) + '</span> szabad hely</span>' +
+            '<span class="status-seats">' + (emoji ? emoji + ' ' : '') +
+            '<span class="seat-free-num' + seatCls + '">' + escapeHtml(freeNum) + '</span> szabad hely</span>' +
             '<span class="status-next-dep">🕒 Következő indulás: ' + escapeHtml(nextDep.text) + '</span>';
     }
 
@@ -1189,9 +1414,12 @@
         state.activeVehicle = state.vehicles.find(function (v) { return v.active; }) || state.vehicles[0] || null;
         state.selectedStopId = null;
         state.routeBoardMode = false;
+        state.bookPickMode = false;
+        state.vehicleDataReady = false;
         state.popupContext = { stopId: '', selectedTime: '', showBoard: false };
         openPopupStopId = null;
         updateRouteBoardModeUi();
+        updateBookPickModeUi();
         if (map && city.center) map.setView(city.center, 14, { animate: false });
         findNearestStop();
         renderStops();
@@ -1219,10 +1447,14 @@
             state.vehicles = results[0] || [];
             state.schedule = results[1] || [];
             state.stops = results[2] || [];
+            state.vehicleDataReady = true;
             findNearestStop();
             renderVehicles();
             renderStops();
             renderScheduleList();
+            updateStatusLine();
+        }).catch(function () {
+            state.vehicleDataReady = true;
             updateStatusLine();
         });
     }
@@ -1290,19 +1522,82 @@
         );
     }
 
-    function startMyLocation() {
-        if (!navigator.geolocation) { toast('GPS nem elérhető'); return; }
+    function isGpsDevMode() {
+        var h = window.location.hostname;
+        return h === 'localhost' || h === '127.0.0.1' || h === '[::1]';
+    }
+
+    function gpsQaLog() {
+        if (!isGpsDevMode()) return;
+        var args = ['[KV GPS QA]'].concat(Array.prototype.slice.call(arguments));
+        console.log.apply(console, args);
+    }
+
+    function gpsDeniedToast() {
+        toast('A helymeghatározás tiltva van ennél az oldalnál. Engedélyezd a böngésző címsorában a lakat/hely ikon alatt.');
+    }
+
+    function startMyLocation(sourceButtonId) {
         var btn = $('btn-my-location');
-        if (btn) btn.classList.add('is-on');
-        navigator.geolocation.getCurrentPosition(
-            function (pos) {
-                updateUserMarker(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
-                map.setView([pos.coords.latitude, pos.coords.longitude], Math.max(map.getZoom(), 16), { animate: true });
-                startGpsWatch();
-            },
-            function () { toast('Engedélyezd a helymeghatározást'); },
-            { enableHighAccuracy: true, maximumAge: 0, timeout: 12000 }
-        );
+        gpsQaLog('clicked button id:', sourceButtonId || 'unknown');
+        gpsQaLog('geolocation support:', !!navigator.geolocation);
+
+        if (!navigator.geolocation) {
+            toast('Ez a böngésző nem támogatja a helymeghatározást.');
+            return;
+        }
+
+        function onSuccess(pos) {
+            gpsQaLog('success', {
+                lat: pos.coords.latitude,
+                lng: pos.coords.longitude,
+                accuracy: pos.coords.accuracy
+            });
+            updateUserMarker(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
+            map.setView([pos.coords.latitude, pos.coords.longitude], Math.max(map.getZoom(), 16), { animate: true });
+            startGpsWatch();
+        }
+
+        function onError(err) {
+            if (btn) btn.classList.remove('is-on');
+            gpsQaLog('error code:', err && err.code, err && err.message ? err.message : '');
+            if (err && err.code === 1) {
+                gpsDeniedToast();
+                return;
+            }
+            if (err && err.code === 3) {
+                toast('GPS időtúllépés – próbáld újra');
+                return;
+            }
+            toast('Engedélyezd a helymeghatározást');
+        }
+
+        function runGetCurrentPosition() {
+            if (btn) btn.classList.add('is-on');
+            navigator.geolocation.getCurrentPosition(onSuccess, onError, {
+                enableHighAccuracy: true,
+                maximumAge: 0,
+                timeout: 15000
+            });
+        }
+
+        if (navigator.permissions && navigator.permissions.query) {
+            navigator.permissions.query({ name: 'geolocation' }).then(function (result) {
+                gpsQaLog('permission state:', result.state);
+                if (result.state === 'denied') {
+                    gpsDeniedToast();
+                    return;
+                }
+                runGetCurrentPosition();
+            }).catch(function (err) {
+                gpsQaLog('permission query failed:', err && err.message ? err.message : err);
+                runGetCurrentPosition();
+            });
+            return;
+        }
+
+        gpsQaLog('permission API unavailable, fallback getCurrentPosition');
+        runGetCurrentPosition();
     }
 
     /* ── Schedule (mini overlay) ── */
@@ -1381,7 +1676,9 @@
         elVersion = $('version-footer');
         initBoardSheet();
 
-        $('btn-my-location').addEventListener('click', startMyLocation, { passive: true });
+        $('btn-my-location').addEventListener('click', function () {
+            startMyLocation('btn-my-location');
+        }, { passive: true });
         $('btn-schedule-fab').addEventListener('click', function () { openOverlay('schedule-panel'); }, { passive: true });
         $('btn-peek-reserve').addEventListener('click', openQuickBook, { passive: true });
         $('btn-peek-board').addEventListener('click', openQuickBoard, { passive: true });
@@ -1402,7 +1699,12 @@
             var boardToggle = e.target.closest('.sp-board-toggle');
             if (boardToggle) {
                 var popupB = boardToggle.closest('.stop-popup');
-                if (popupB) setStopPopup(popupB.dataset.stopId, { selectedTime: '', showBoard: true }, true);
+                if (popupB) {
+                    setStopPopup(popupB.dataset.stopId, {
+                        selectedTime: getSelectedTimeFromPopup(popupB) || state.popupContext.selectedTime || '',
+                        showBoard: true
+                    }, true);
+                }
                 return;
             }
             var bookBtn = e.target.closest('.sp-book-submit');
@@ -1436,6 +1738,18 @@
         bindUi();
         if (elVersion) elVersion.textContent = DATA.PUBLIC_VERSION;
         initDevToggle();
+
+        window.KVN_SHELL = {
+            startMyLocation: startMyLocation,
+            openQuickBook: openQuickBook,
+            openQuickBoard: openQuickBoard,
+            selectCity: selectCity,
+            setBaseMap: setBaseMap,
+            getLayersPanelModel: getLayersPanelModel,
+            refreshLayersAudit: auditGeoJsonLayers
+        };
+
+        auditGeoJsonLayers();
 
         DATA.loadPoiCatalog().then(function (pois) { state.pois = pois; });
 

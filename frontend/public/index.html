@@ -1,93 +1,337 @@
 <!DOCTYPE html>
+
 <html lang="hu">
+
 <head>
+
     <meta charset="UTF-8" />
+
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=5" />
-    <meta name="theme-color" content="#1a237e" />
+
+    <meta name="theme-color" content="#090807" />
+
     <meta name="description" content="KisvonatNavigator – élő utasinformáció, menetrend, foglalás" />
+
     <title>KisvonatNavigator – Utasinformáció</title>
+
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
     <link rel="stylesheet" href="public_style.css" />
+
+    <script>
+      (function () {
+        try {
+          if (sessionStorage.getItem('splash_seen') === 'true') {
+            document.documentElement.classList.add('kv-splash-skip');
+          }
+        } catch (e) { /* ignore */ }
+      })();
+    </script>
+
 </head>
+
 <body>
-    <div id="app">
-        <div id="map" aria-label="Kisvonat megállók és útvonal térképe"></div>
 
-        <header class="status-bar" aria-live="polite">
-            <p id="status-line">🚂 Tata • — • 🟢 — hely</p>
-        </header>
+    <!-- build: public-ui-header-compact-v1 -->
 
-        <nav class="city-strip" id="city-strip" aria-label="Város választás"></nav>
-
-        <div class="fab-col right">
-            <button type="button" class="fab fab-sm" id="btn-my-location" aria-label="Saját helyzet">📍</button>
-            <button type="button" class="fab fab-sm" id="btn-schedule-fab" aria-label="Menetrend">🕒</button>
+    <div id="kv-splash" class="kv-splash" aria-label="Induló animáció" role="presentation">
+        <div class="kv-splash-train-wrap">
+            <img src="assets/ui/kisvonat_splash_train.png" alt="" width="760" height="760" decoding="async" />
         </div>
-
-        <section class="stop-bar" id="stop-bar" aria-label="Legközelebbi megálló">
-            <div class="stop-bar-info" id="stop-bar-info">
-                <span class="stop-bar-name" id="peek-stop">🚏 —</span>
-                <span class="stop-bar-meta" id="peek-stop-meta">🚶 —</span>
-            </div>
-            <div class="stop-bar-actions">
-                <button type="button" class="bar-btn bar-book" id="btn-peek-reserve">Foglalok</button>
-                <button type="button" class="bar-btn bar-board" id="btn-peek-board">Felszállnánk</button>
-            </div>
-        </section>
-
-        <p class="version-footer" id="version-footer" title="Public UI">Public UI v0.7 - 2026.06.05</p>
-        <div id="toast" role="status" aria-live="polite"></div>
+        <div class="kv-splash-brand">
+            <div class="kv-splash-title"><b>kis</b>vonatok.hu</div>
+            <div class="kv-splash-small">ÉLŐ JÁRAT • FOGLALÁS • VÁROSOK</div>
+        </div>
     </div>
 
+    <div id="app" class="public-ui-shell-v1 kv-buttons-v1 wheel-d3-b" data-build="public-ui-header-compact-v1" data-wheel-scale="d3-b">
+
+        <div id="map" aria-label="Kisvonat megállók és útvonal térképe"></div>
+
+
+
+        <!-- legacy chrome (backup – JS továbbra is ide ír) -->
+
+        <header class="status-bar status-bar--legacy" aria-live="polite" aria-hidden="true">
+
+            <p id="status-line">🚂 Tata • — • 🟢 — hely</p>
+
+        </header>
+
+
+
+        <nav class="city-strip city-strip--legacy" id="city-strip" aria-label="Város választás" hidden></nav>
+
+
+
+        <section class="stop-bar stop-bar--legacy" id="stop-bar" aria-label="Legközelebbi megálló" hidden aria-hidden="true">
+
+            <div class="stop-bar-info" id="stop-bar-info">
+
+                <span class="stop-bar-name" id="peek-stop">🚏 —</span>
+
+                <span class="stop-bar-meta" id="peek-stop-meta">🚶 —</span>
+
+            </div>
+
+            <div class="stop-bar-actions">
+
+                <button type="button" class="bar-btn bar-book" id="btn-peek-reserve">Foglalok</button>
+
+                <button type="button" class="bar-btn bar-board" id="btn-peek-board">Felszállnánk</button>
+
+            </div>
+
+        </section>
+
+
+
+        <!-- premium shell v1 (vizuális váz, nincs logikai kötés) -->
+
+        <section class="kv-top" aria-label="Kisvonat fejléc">
+
+            <div class="kv-brand-row">
+
+                <a class="kv-logo" href="/" title="Kisvonatok.hu főoldal">
+
+                    <img src="assets/ui/logo_alap_11.png" alt="kisvonatok.hu – ONLINE FOGLALÁSI FELÜLET" width="1774" height="887" decoding="async" />
+
+                </a>
+
+                <div class="kv-top-crest" aria-hidden="true">
+
+                    <img id="kv-shell-top-crest" src="assets/ui/crest_tata.png" alt="" onerror="this.style.display='none'" />
+
+                </div>
+
+                <button type="button" class="kv-menu-btn" aria-label="Menü" tabindex="-1">☰</button>
+
+            </div>
+
+
+
+            <article class="kv-city-card" aria-label="Aktuális város">
+
+                <div class="kv-main-crest" aria-hidden="true">
+
+                    <img id="kv-shell-crest" src="assets/ui/crest_tata.png" alt="" onerror="this.style.display='none'" />
+
+                </div>
+
+                <div class="kv-city-card-body">
+
+                    <div class="kv-city-name" id="kv-shell-city-name">Tata</div>
+
+                    <div class="kv-city-meta">
+
+                        <span class="kv-led" aria-hidden="true"></span>
+
+                        <span class="kv-seat-line"><span id="kv-shell-seat-count">—</span><span class="kv-seat-suffix"> szabad hely</span></span>
+
+                    </div>
+
+                    <div class="kv-route-title" id="kv-shell-route-title">Tata városnéző járat</div>
+
+                </div>
+
+                <div class="kv-dep">
+
+                    <div class="kv-dep-label">Következő indulás:</div>
+
+                    <div class="kv-dep-time" id="kv-shell-dep-time">—</div>
+
+                </div>
+
+            </article>
+
+        </section>
+
+
+
+        <div class="kv-float-actions kv-btn-col" aria-label="Gyors eszközök">
+
+            <button type="button" class="kv-btn-png kv-btn-png--72 kv-top-action" id="btn-shell-layers" aria-label="Rétegek"><img src="assets/ui/buttons/but_retegek.png" alt="" width="72" height="72" decoding="async" /></button>
+
+            <button type="button" class="kv-btn-png kv-btn-png--72 kv-top-action" id="btn-shell-train" aria-label="Vonat"><img src="assets/ui/buttons/but_vonat.png" alt="" width="72" height="72" decoding="async" /></button>
+
+            <button type="button" class="kv-btn-png kv-btn-png--72 kv-top-action" id="btn-shell-here" aria-label="Itt állok"><img src="assets/ui/buttons/but_ittallok.png" alt="" width="72" height="72" decoding="async" /></button>
+
+        </div>
+
+
+
+        <div id="kv-layers-panel" class="kv-layers-panel" hidden aria-label="Térképrétegek">
+
+            <div class="kv-layers-panel-inner">
+
+                <p class="kv-layers-title">Rétegek</p>
+
+                <div id="kv-layers-list" class="kv-layers-list"></div>
+
+            </div>
+
+        </div>
+
+
+
+        <section class="wheel-wrap closed" id="wheelWrap" aria-label="Városkerék">
+
+            <img class="wheel-img" src="assets/ui/varos110.png" alt="Városkerék" width="338" height="338" />
+
+            <button type="button" id="hs-gyor" class="hotspot hotspot--shell" data-city="gyor" aria-label="Győr"></button>
+
+            <button type="button" id="hs-szfv" class="hotspot hotspot--shell" data-city="szfv" aria-label="Székesfehérvár"></button>
+
+            <button type="button" id="hs-papa" class="hotspot hotspot--shell" data-city="papa" aria-label="Pápa"></button>
+
+            <button type="button" id="hs-tata" class="hotspot hotspot--shell" data-city="tata" aria-label="Tata"></button>
+
+            <button type="button" id="hs-eger" class="hotspot hotspot--shell" data-city="eger" aria-label="Eger"></button>
+
+            <button type="button" id="hs-vac" class="hotspot hotspot--shell" data-city="vac" aria-label="Vác"></button>
+
+            <button type="button" id="hs-center" class="hotspot hotspot--shell" data-city="center" aria-label="Városkerék ki/be"></button>
+
+        </section>
+
+
+
+        <section class="bottom-actions kv-bottom-actions kv-btn-dock" aria-label="Gyors műveletek">
+
+            <button type="button" class="kv-btn-png kv-btn-png--dock-side kv-action-shell" id="btn-shell-reserve" aria-label="Foglalok"><img src="assets/ui/buttons/but_foglalok.png" alt="Foglalok" width="170" height="60" decoding="async" /></button>
+
+            <button type="button" class="kv-btn-png kv-btn-png--dock-center kv-action-shell" id="toggleWheelShell" aria-expanded="false" aria-controls="wheelWrap" aria-label="Városaink"><img src="assets/ui/buttons/but_kisvonat_varosaink.png" alt="Városaink" width="110" height="110" decoding="async" /></button>
+
+            <button type="button" class="kv-btn-png kv-btn-png--dock-side kv-action-shell" id="btn-shell-board" aria-label="Felszállnék"><img src="assets/ui/buttons/but_felszallnek.png" alt="Felszállnék" width="170" height="60" decoding="async" /></button>
+
+        </section>
+
+
+
+        <div class="fab-col right">
+
+            <button type="button" class="fab fab-sm" id="btn-my-location" aria-label="Saját helyzet">📍</button>
+
+            <button type="button" class="fab fab-sm" id="btn-schedule-fab" aria-label="Menetrend">🕒</button>
+
+        </div>
+
+
+
+        <p class="version-footer" id="version-footer" title="Public UI">public-ui-header-compact-v1</p>
+
+        <div id="toast" role="status" aria-live="polite"></div>
+
+    </div>
+
+
+
     <section class="overlay-panel overlay-mini" id="schedule-panel" aria-label="Menetrend">
+
         <div class="overlay-head overlay-head-mini">
+
             <h2>Menetrend</h2>
-            <button type="button" class="sheet-close" data-close="schedule-panel" aria-label="Bezárás">×</button>
+
+            <button type="button" class="kv-btn-close sheet-close" data-close="schedule-panel" aria-label="Bezárás"><img src="assets/ui/buttons/but_bezar.png" alt="" width="40" height="40" decoding="async" /></button>
+
         </div>
+
         <div class="overlay-body overlay-body-mini">
+
             <ul class="schedule-list" id="schedule-list"></ul>
+
         </div>
+
     </section>
+
+
 
     <section class="board-sheet" id="board-sheet" aria-label="Felszállás jelzése" hidden>
+
         <button type="button" class="board-sheet-scrim" id="board-sheet-scrim" aria-label="Bezárás"></button>
+
         <div class="board-sheet-panel" role="dialog" aria-modal="true" aria-labelledby="board-sheet-stop-name">
-            <button type="button" class="board-sheet-close" id="board-sheet-close" aria-label="Bezárás">×</button>
+
+            <button type="button" class="kv-btn-close board-sheet-close" id="board-sheet-close" aria-label="Bezárás"><img src="assets/ui/buttons/but_bezar.png" alt="" width="40" height="40" decoding="async" /></button>
+
             <h2 class="board-sheet-stop" id="board-sheet-stop-name">—</h2>
+
             <p class="board-sheet-arrival" id="board-sheet-arrival">Következő érkezés: —</p>
+
             <p class="board-sheet-meta" id="board-sheet-meta"></p>
+
             <label class="board-sheet-phone-wrap" id="board-sheet-phone-wrap" hidden>
+
                 <span class="board-sheet-phone-lbl">Telefon (egyszer megadva, később emlékezünk)</span>
+
                 <input type="tel" id="board-sheet-phone" inputmode="tel" autocomplete="tel" placeholder="+36 30 123 4567" />
+
             </label>
+
             <button type="button" class="board-sheet-cta" id="board-sheet-cta">FELSZÁLLNÉK ITT</button>
+
         </div>
+
     </section>
 
+
+
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
     <script src="/opnav-config.js"></script>
+
     <script src="public_data.js"></script>
+
+    <script src="public_ui_splash.js"></script>
+
     <script src="public_app.js"></script>
+
+    <script src="public_ui_shell_bind.js"></script>
+
     <script>
+
       window.KV_ANALYTICS_CONFIG = {
+
         firebaseConfig: {
+
           apiKey: "AIzaSyBxUxHjqx-9PX8PpgW05wZW7yR30wNBOaM",
+
           authDomain: "ddc-analitika.firebaseapp.com",
+
           projectId: "ddc-analitika"
+
         },
+
         tenant: "kisvonat",
+
         project: "route_public",
+
         collectionName: "analytics_events",
+
         cellSizeM: 50,
+
         maxRepresentativeAccuracyM: 500,
+
         sampleIntervalMs: 30 * 60 * 1000,
+
         privacyPolicyUrl: "/adatvedelem.html",
+
         debug: false
+
       };
+
     </script>
+
     <script
+
       type="module"
+
       src="js/kv_analytics_sender.js">
+
     </script>
+
 </body>
+
 </html>
+
+
