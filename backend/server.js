@@ -2200,6 +2200,88 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
 
+const NOMINATIM_BASE = 'https://nominatim.openstreetmap.org';
+const NOMINATIM_USER_AGENT = 'OperativNavigator-Rent/1.0 (geocode-proxy)';
+
+async function nominatimFetch(url) {
+  return fetch(url, {
+    headers: {
+      Accept: 'application/json',
+      'Accept-Language': 'hu',
+      'User-Agent': NOMINATIM_USER_AGENT,
+    },
+  });
+}
+
+app.get('/api/geocode/search', async (req, res) => {
+  try {
+    const q = req.query.q != null ? String(req.query.q).trim() : '';
+    const city = req.query.city != null ? String(req.query.city).trim() : '';
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 8, 1), 50);
+    if (!q && !city) {
+      return res.status(400).json({ ok: false, error: 'Missing q or city parameter' });
+    }
+    const url = city
+      ? NOMINATIM_BASE + '/search?format=json&limit=' + limit + '&countrycodes=hu&addressdetails=1&city=' + encodeURIComponent(city)
+      : NOMINATIM_BASE + '/search?format=json&limit=' + limit + '&countrycodes=hu&addressdetails=1&q=' + encodeURIComponent(q);
+    const r = await nominatimFetch(url);
+    const text = await r.text();
+    if (!r.ok) {
+      console.error('Nominatim search failed:', r.status, text.slice(0, 200));
+      return res.status(r.status === 429 ? 429 : 502).json({ ok: false, error: 'Geocode search failed', status: r.status });
+    }
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (parseErr) {
+      return res.status(502).json({ ok: false, error: 'Invalid geocode response' });
+    }
+    res.json(Array.isArray(data) ? data : []);
+  } catch (err) {
+    console.error('GET /api/geocode/search failed:', err);
+    res.status(500).json({ ok: false, error: 'Geocode search failed' });
+  }
+});
+
+app.get('/api/geocode/reverse', async (req, res) => {
+  console.log('REQUEST START');
+  try {
+    const lat = Number(req.query.lat);
+    const lng = Number(req.query.lng);
+    const zoom = Math.min(Math.max(parseInt(req.query.zoom, 10) || 18, 1), 19);
+    console.log('lat:', lat);
+    console.log('lng:', lng);
+    console.log('zoom:', zoom);
+    if (!isFinite(lat) || !isFinite(lng)) {
+      return res.status(400).json({ ok: false, error: 'Invalid lat/lng' });
+    }
+    const url = NOMINATIM_BASE + '/reverse?format=jsonv2&lat=' + encodeURIComponent(lat) +
+      '&lon=' + encodeURIComponent(lng) +
+      '&addressdetails=1&zoom=' + zoom + '&accept-language=hu&countrycodes=hu';
+    console.log('Nominatim URL:', url);
+    const r = await nominatimFetch(url);
+    const text = await r.text();
+    console.log('Nominatim response.status:', r.status);
+    console.log('Nominatim response body (first 300 chars):', text.slice(0, 300));
+    if (!r.ok) {
+      console.error('Nominatim reverse failed:', r.status, text.slice(0, 200));
+      return res.status(r.status === 429 ? 429 : 502).json({ ok: false, error: 'Geocode reverse failed', status: r.status });
+    }
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (parseErr) {
+      return res.status(502).json({ ok: false, error: 'Invalid geocode response' });
+    }
+    res.json(data);
+  } catch (err) {
+    console.error('GET /api/geocode/reverse failed:', err);
+    res.status(500).json({ ok: false, error: 'Geocode reverse failed' });
+  } finally {
+    console.log('REQUEST END');
+  }
+});
+
 app.post('/api/events', (req, res) => {
   const body = req.body;
   const items = Array.isArray(body) ? body : [body];
@@ -3576,6 +3658,9 @@ app.get(['/admin', '/admin/', '/admin.html'], (_req, res) => {
   res.sendFile(path.join(frontendDir, 'admin', 'index.html'));
 });
 
+app.get(['/rent', '/rent/'], (_req, res) => {
+  res.sendFile(path.join(rentDir, 'index.html'));
+});
 app.get(['/rent/public', '/rent/public/'], (_req, res) => {
   res.sendFile(path.join(rentDir, 'public.html'));
 });
