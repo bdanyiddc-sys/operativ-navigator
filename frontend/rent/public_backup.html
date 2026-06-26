@@ -2342,9 +2342,13 @@
   }
 
   function collectCitySearchRows(typed) {
-    return nominatimSearch(typed, 30).then(function (rows) {
+    return Promise.all([
+      nominatimSearch(typed, 30),
+      nominatimSearch(typed + ', Magyarország', 30),
+      nominatimCityParamSearch(typed, 30)
+    ]).then(function (parts) {
       var local = getLocalCityFallback(typed);
-      return mergeCityRows([rows, local]);
+      return mergeCityRows([parts[0], parts[1], parts[2], local]);
     });
   }
 

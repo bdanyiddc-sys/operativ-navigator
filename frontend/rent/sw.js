@@ -2,8 +2,9 @@
  * PWA előkészítés – offline cache váz (nem telepíthető alkalmazás még).
  * Későbbi Operatív Navigator mobil használathoz.
  */
-var CACHE_NAME = 'opnav-rent-v7';
+var CACHE_NAME = 'opnav-rent-v8';
 var PRECACHE = [
+  '/rent/',
   '/rent/public',
   '/rent/admin',
   '/rent/booking_storage.js',

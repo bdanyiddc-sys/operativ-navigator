@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<!-- BUILD: lkg-splash-v1 -->
+<html lang="hu">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kisvonatok.hu – betöltés</title>
+  <style>
+    :root{
+      --gold:#f3cf82;
+      --red:#b82418;
+      --dark:#030507;
+    }
+    *{box-sizing:border-box}
+    html,body{
+      margin:0;
+      width:100%;
+      height:100%;
+      overflow:hidden;
+      background:#030507;
+      font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
+      color:#fff;
+    }
+    .splash{
+      position:fixed;
+      inset:0;
+      display:grid;
+      place-items:center;
+      background:
+        radial-gradient(circle at 50% 35%, rgba(243,207,130,.16), transparent 34%),
+        linear-gradient(180deg,#06111a 0%,#020304 100%);
+      animation:fadeOut .9s ease forwards;
+      animation-delay:5.2s;
+    }
+    .bg-map{
+      position:absolute;
+      inset:0;
+      background:url("assets/Kisvonat_Rent.png") center/cover no-repeat;
+      opacity:.22;
+      filter:saturate(1.15) contrast(1.08);
+      transform:scale(1.05);
+      animation:mapReveal 5.2s ease-out forwards;
+    }
+    .veil{
+      position:absolute;
+      inset:0;
+      background:
+        linear-gradient(90deg,rgba(0,0,0,.84),rgba(0,0,0,.18),rgba(0,0,0,.84)),
+        linear-gradient(180deg,rgba(0,0,0,.08),rgba(0,0,0,.78));
+      animation:veilLighten 4.8s ease forwards;
+    }
+    .content{
+      position:relative;
+      z-index:2;
+      width:min(980px,92vw);
+      text-align:center;
+      padding:28px 18px;
+    }
+    .logo{
+      font-size:clamp(34px,6vw,74px);
+      font-weight:900;
+      letter-spacing:.02em;
+      line-height:1;
+      text-shadow:0 0 24px rgba(243,207,130,.35);
+    }
+    .logo .kis{color:#d3261c;font-style:italic}
+    .logo .vonat{color:#fff;font-style:italic}
+    .logo .domain{color:var(--gold);font-style:italic}
+    .sub{
+      margin:12px 0 26px;
+      color:var(--gold);
+      text-transform:uppercase;
+      letter-spacing:.32em;
+      font-size:clamp(11px,1.6vw,17px);
+      font-weight:700;
+    }
+    .train{
+      width:min(780px,92vw);
+      max-height:42vh;
+      object-fit:contain;
+      filter:drop-shadow(0 22px 30px rgba(0,0,0,.8)) drop-shadow(0 0 28px rgba(243,207,130,.22));
+      animation:trainIn 1.15s cubic-bezier(.2,.8,.2,1) both, trainFade .9s ease forwards;
+      animation-delay:0s, 2.75s;
+    }
+    .title{
+      margin:18px 0 18px;
+      font-size:clamp(18px,2.8vw,34px);
+      text-transform:uppercase;
+      letter-spacing:.16em;
+      font-weight:800;
+      color:#fff4d6;
+      animation:titleMove 1s ease forwards;
+      animation-delay:3.05s;
+    }
+    .loader{
+      width:min(520px,72vw);
+      height:12px;
+      margin:0 auto;
+      border:1px solid rgba(243,207,130,.65);
+      border-radius:999px;
+      overflow:hidden;
+      background:rgba(0,0,0,.46);
+      box-shadow:0 0 18px rgba(243,207,130,.22);
+    }
+    .bar{
+      height:100%;
+      width:0;
+      background:linear-gradient(90deg,#8e211a,#f3cf82,#fff2b8);
+      animation:load 4.8s ease forwards;
+    }
+    .loading{
+      margin-top:12px;
+      color:#f3cf82;
+      letter-spacing:.26em;
+      text-transform:uppercase;
+      font-size:12px;
+      font-weight:700;
+    }
+    @keyframes load{to{width:100%}}
+    @keyframes trainIn{
+      from{opacity:0;transform:translateY(36px) scale(.94)}
+      to{opacity:1;transform:translateY(0) scale(1)}
+    }
+    @keyframes trainFade{
+      to{opacity:.16;transform:translateY(-18px) scale(.92)}
+    }
+    @keyframes mapReveal{
+      0%{opacity:.18;transform:scale(1.08)}
+      45%{opacity:.28;transform:scale(1.04)}
+      100%{opacity:.72;transform:scale(1.01)}
+    }
+    @keyframes veilLighten{
+      to{
+        background:
+          linear-gradient(90deg,rgba(0,0,0,.68),rgba(0,0,0,.08),rgba(0,0,0,.68)),
+          linear-gradient(180deg,rgba(0,0,0,.04),rgba(0,0,0,.48));
+      }
+    }
+    @keyframes titleMove{
+      to{transform:translateY(-6px)}
+    }
+    @keyframes fadeOut{
+      to{opacity:0;visibility:hidden}
+    }
+    @media(max-width:700px){
+      .content{padding:18px 12px}
+      .train{max-height:34vh}
+      .sub{letter-spacing:.18em}
+      .title{letter-spacing:.08em}
+    }
+  </style>
+</head>
+<body>
+  <div class="splash" id="splash">
+    <div class="bg-map"></div>
+    <div class="veil"></div>
+    <main class="content">
+      <div class="logo">
+        <span class="kis">kis</span><span class="vonat">vonatok</span><span class="domain">.hu</span>
+      </div>
+      <div class="sub">online foglalási felület</div>
+      <img class="train" src="assets/kisvonat_splash_train.png" alt="Kisvonat" />
+      <div class="title">Kisvonat bérlés – árajánlatkérés</div>
+      <div class="loader"><div class="bar"></div></div>
+      <div class="loading">Betöltés...</div>
+    </main>
+  </div>
+
+  <script>
+    const TARGET_PAGE = '/rent/public';
+    setTimeout(function () {
+      window.location.href = TARGET_PAGE;
+    }, 5900);
+  </script>
+</body>
+</html>
