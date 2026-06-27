@@ -1,0 +1,353 @@
+/**
+ * Rent public – mobil bottom sheet (max-width: 900px)
+ * Desktop elrendezés érintetlen marad.
+ */
+
+.rent-mobile-sheet-handle {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  html.rent-mobile-sheet,
+  html.rent-mobile-sheet body {
+    height: 100%;
+    min-height: 100%;
+    overflow: hidden;
+  }
+
+  html.rent-mobile-sheet .shell-wrap {
+    height: 100dvh;
+    min-height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  html.rent-mobile-sheet .conv-bar {
+    flex-shrink: 0;
+  }
+
+  html.rent-mobile-sheet .app {
+    flex: 1;
+    min-height: 0;
+    position: relative;
+    display: block !important;
+    grid-template-columns: unset !important;
+    grid-template-rows: unset !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: hidden;
+  }
+
+  html.rent-mobile-sheet .map-panel {
+    position: absolute;
+    inset: 0;
+    order: unset !important;
+    min-height: 0 !important;
+    height: 100% !important;
+    border-right: 0 !important;
+    border-bottom: 0 !important;
+    z-index: 1;
+  }
+
+  html.rent-mobile-sheet #map,
+  html.rent-mobile-sheet body.mode-single .map-panel,
+  html.rent-mobile-sheet body.mode-single #map,
+  html.rent-mobile-sheet body.mode-route .map-panel,
+  html.rent-mobile-sheet body.mode-route #map {
+    min-height: 100% !important;
+    height: 100% !important;
+  }
+
+  html.rent-mobile-sheet .side {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 900;
+    order: unset !important;
+    height: var(--rent-sheet-height, 30vh);
+    min-height: 28%;
+    max-height: 95%;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    padding: 0 10px calc(12px + env(safe-area-inset-bottom, 0px));
+    border-radius: 18px 18px 0 0;
+    border-top: 1px solid rgba(215, 166, 74, 0.38);
+    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.55);
+    background: linear-gradient(160deg, rgba(12, 8, 6, 0.96) 0%, rgba(5, 4, 3, 0.98) 42%);
+    touch-action: pan-y;
+  }
+
+  html.rent-mobile-sheet.rent-sheet-animating .side {
+    transition: height 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+
+  html.rent-mobile-sheet .rent-mobile-sheet-handle {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: calc(100% + 20px);
+    margin: 0 -10px 8px;
+    min-height: 44px;
+    padding: 10px 16px 8px;
+    border: 0;
+    border-bottom: 1px solid rgba(215, 166, 74, 0.22);
+    border-radius: 18px 18px 0 0;
+    background: rgba(8, 6, 5, 0.92);
+    color: var(--gold2, #f3cf82);
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    flex-shrink: 0;
+  }
+
+  html.rent-mobile-sheet .rent-mobile-sheet-handle-row {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 24px;
+  }
+
+  html.rent-mobile-sheet .rent-mobile-sheet-handle-label {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    line-height: 1.2;
+  }
+
+  html.rent-mobile-sheet .rent-mobile-sheet-handle-arrow {
+    font-size: 14px;
+    line-height: 1;
+    font-weight: 700;
+  }
+
+  html.rent-mobile-sheet .leaflet-control-zoom {
+    display: none !important;
+  }
+
+  html.rent-mobile-sheet .map-tools {
+    z-index: 850;
+    left: 8px;
+    right: 8px;
+  }
+
+  html.rent-mobile-sheet .mode-toggle {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    gap: 7px;
+    width: 100%;
+  }
+
+  html.rent-mobile-sheet .mode-toggle .btn {
+    width: 100%;
+    min-height: 44px;
+    font-size: 12px;
+    padding: 8px 6px;
+    text-align: center;
+    white-space: normal;
+    line-height: 1.25;
+    justify-content: center;
+  }
+
+  html.rent-mobile-sheet .map-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 7px;
+    width: 100%;
+  }
+
+  html.rent-mobile-sheet .map-actions .btn {
+    width: 100%;
+    min-height: 44px;
+    font-size: 12px;
+    padding: 8px 6px;
+    text-align: center;
+    white-space: normal;
+    line-height: 1.25;
+    justify-content: center;
+  }
+
+  html.rent-mobile-sheet .map-actions:not(:has(.btn:not([hidden]) ~ .btn:not([hidden]))) .btn:not([hidden]) {
+    grid-column: 1 / -1;
+  }
+
+  html.rent-mobile-sheet .rent-mobile-sheet-handle:active {
+    cursor: grabbing;
+  }
+
+  html.rent-mobile-sheet .rent-mobile-sheet-handle:focus-visible {
+    outline: 2px solid rgba(243, 207, 130, 0.75);
+    outline-offset: 2px;
+  }
+
+  html.rent-mobile-sheet .rent-mobile-sheet-handle-bar {
+    display: block;
+    width: 44px;
+    height: 5px;
+    border-radius: 999px;
+    background: rgba(243, 207, 130, 0.55);
+  }
+
+  html.rent-mobile-sheet .addr-suggest {
+    position: relative;
+    z-index: 5;
+  }
+
+  html.rent-mobile-sheet .leaflet-top.leaflet-left,
+  html.rent-mobile-sheet .leaflet-top.leaflet-right {
+    z-index: 850;
+  }
+
+  html.rent-mobile-sheet .map-tap-hint {
+    bottom: calc(var(--rent-sheet-height, 30vh) + 12px);
+    z-index: 802;
+  }
+
+  html.rent-mobile-sheet .route-status-bar {
+    bottom: calc(var(--rent-sheet-height, 30vh) + 8px);
+    z-index: 803;
+  }
+}
+
+@media (min-width: 901px) {
+  html.rent-mobile-sheet .rent-mobile-sheet-handle {
+    display: none !important;
+  }
+}
+
+.rent-submit-toast {
+  position: fixed;
+  top: calc(12px + env(safe-area-inset-top, 0px));
+  left: 50%;
+  transform: translateX(-50%) translateY(-8px);
+  z-index: 100000;
+  max-width: min(520px, calc(100vw - 24px));
+  padding: 12px 18px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.35;
+  text-align: center;
+  white-space: pre-line;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.22s ease, transform 0.22s ease;
+}
+
+.rent-submit-toast[hidden] {
+  display: none !important;
+}
+
+.rent-submit-toast.is-visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.rent-submit-toast.is-success {
+  background: linear-gradient(180deg, #3a9a2e 0%, #2d7a1f 100%);
+  color: #efffef;
+  border: 1px solid rgba(180, 255, 170, 0.45);
+}
+
+.rent-submit-toast.is-warn {
+  background: linear-gradient(180deg, #c9a227 0%, #9a7b12 100%);
+  color: #fff9e8;
+  border: 1px solid rgba(255, 230, 150, 0.55);
+}
+
+.rent-submit-toast.is-progress {
+  background: linear-gradient(180deg, #3a4558 0%, #2a3344 100%);
+  color: #eef2f8;
+  border: 1px solid rgba(180, 200, 230, 0.35);
+}
+
+.rent-submit-toast.is-error {
+  background: linear-gradient(180deg, #b52a2a 0%, #8b1a1a 100%);
+  color: #fff5f5;
+  border: 1px solid rgba(255, 180, 180, 0.45);
+}
+
+#inquiryForm .required-mark {
+  color: #ff5c5c;
+  margin-left: 0.2em;
+  font-weight: 800;
+  line-height: 1;
+}
+
+#inquiryForm input.is-invalid,
+#inquiryForm textarea.is-invalid {
+  border-color: #e04545;
+  outline-color: rgba(224, 69, 69, 0.45);
+  box-shadow: 0 0 0 1px rgba(224, 69, 69, 0.35);
+}
+
+#inquiryForm .field-error {
+  margin: -2px 0 8px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: #ff8787;
+  font-weight: 600;
+}
+
+html.rent-mobile-sheet #inquiryForm .field-error {
+  scroll-margin-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+}
+
+@media (max-width: 900px) {
+  .rent-submit-toast {
+    top: calc(8px + env(safe-area-inset-top, 0px));
+    left: 50%;
+    width: min(calc(100vw - 24px), 420px);
+    max-width: 420px;
+    z-index: 2147483000;
+    transform: translateX(-50%);
+    box-sizing: border-box;
+    visibility: visible;
+  }
+
+  .rent-submit-toast.is-visible {
+    opacity: 1;
+    transform: translateX(-50%);
+  }
+
+  html.rent-mobile-sheet #inquiryForm input.is-invalid,
+  html.rent-mobile-sheet #inquiryForm textarea.is-invalid {
+    border-color: #ff5c5c !important;
+    outline-color: rgba(255, 92, 92, 0.5) !important;
+    box-shadow: 0 0 0 2px rgba(255, 92, 92, 0.42) !important;
+    scroll-margin-top: calc(52px + env(safe-area-inset-top, 0px));
+    scroll-margin-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+  }
+
+  html.rent-mobile-sheet #inquiryForm .field-error {
+    display: block;
+    opacity: 1;
+    font-size: 13px;
+    line-height: 1.4;
+    color: #ff8787;
+    margin: 2px 0 10px;
+    scroll-margin-top: calc(52px + env(safe-area-inset-top, 0px));
+    scroll-margin-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+  }
+
+  html.rent-mobile-sheet #inquiryForm .field-error[hidden] {
+    display: none !important;
+  }
+
+  html.rent-mobile-sheet .side .form-body {
+    padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  }
+}
