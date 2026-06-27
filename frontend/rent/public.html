@@ -824,6 +824,7 @@
       .grid2 { grid-template-columns: 1fr; }
     }
   </style>
+  <link rel="stylesheet" href="/assets/modules/location/navigator_location_widget.css">
 </head>
 <body class="mode-single">
   <div class="shell-wrap">
@@ -1990,6 +1991,96 @@
     applyAddrHit(hit);
   }
 
+window.RentPublicLocationBridgeV1 = Object.freeze({
+  version: '1.0.0-lab',
+
+  getApiBase: function () {
+    return API_BASE;
+  },
+
+  getMode: function () {
+    return bookingType;
+  },
+
+  getSnapshot: function () {
+    return {
+      bookingType: bookingType,
+      city: document.getElementById('city').value,
+      street: document.getElementById('street').value,
+      houseNumber: document.getElementById('houseNumber').value,
+      address: document.getElementById('address').value,
+      lat: lat,
+      lng: lng,
+      savedLocationPoint: savedLocationPoint ? {
+        lat: savedLocationPoint.lat,
+        lng: savedLocationPoint.lng
+      } : null,
+      routePoints: Array.isArray(routePoints) ? routePoints.slice() : []
+    };
+  },
+
+  selectCity: function (city) {
+    if (!city || bookingType !== 'single_location') return false;
+    var cityLat = Number(city.lat);
+    var cityLng = Number(city.lng);
+    if (!isFinite(cityLat) || !isFinite(cityLng)) return false;
+
+    applyCityHit({
+      name: String(city.name || ''),
+      display_name: [city.name, city.county, 'Magyarország'].filter(Boolean).join(', '),
+      lat: String(cityLat),
+      lon: String(cityLng),
+      address: {
+        city: String(city.name || ''),
+        postcode: String(city.zip || ''),
+        county: String(city.county || ''),
+        country: 'Magyarország',
+        country_code: 'hu'
+      },
+      _navigatorLocalCity: true
+    });
+
+    map.setView([cityLat, cityLng], 14, { animate: true });
+    return this.getSnapshot();
+  },
+
+  selectStreet: function (result, city) {
+    if (!result || bookingType !== 'single_location') return false;
+    var streetLat = Number(result.lat);
+    var streetLng = Number(result.lng);
+    if (!isFinite(streetLat) || !isFinite(streetLng)) return false;
+
+    var row = result.raw;
+    var isNominatimRow = row && row.lat != null && (row.lon != null || row.lng != null);
+    if (!isNominatimRow) {
+      row = {
+        name: String(result.street || ''),
+        display_name: String(result.displayName || [result.street, city && city.name].filter(Boolean).join(', ')),
+        lat: String(streetLat),
+        lon: String(streetLng),
+        address: {
+          city: String((city && city.name) || result.city || ''),
+          road: String(result.street || ''),
+          house_number: String(result.houseNumber || ''),
+          postcode: String(result.postcode || (city && city.zip) || ''),
+          county: String(result.county || (city && city.county) || ''),
+          country: 'Magyarország',
+          country_code: 'hu'
+        }
+      };
+    }
+
+    applyAddrHitFromRow(row);
+    return this.getSnapshot();
+  },
+
+  cityInputInvalidated: function () {
+    clearAddrSuggestions();
+    setGeoStatus('Válassza ki újra a települést a listából.', false);
+    updateLocationSummary();
+  }
+});
+
   function todayIso() {
     var d = new Date();
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
@@ -2881,5 +2972,16 @@
   }
 })();
   </script>
+<script>
+window.NAVIGATOR_LOCATION_CONFIG = {
+  settlementUrl: '/assets/data/telepulesek_hu_final.json',
+  allowDirectPhoton: false,
+  photonProxyUrl: '',
+  debug: true
+};
+</script>
+<script src="/assets/modules/location/navigator_location_core.js"></script>
+<script src="/assets/modules/location/navigator_location_widget.js"></script>
+<script src="/assets/modules/location/rent_public_location_init.js"></script>
 </body>
 </html>
