@@ -388,6 +388,12 @@
       text-transform: uppercase;
       text-decoration: none;
       box-shadow: 0 10px 32px rgba(0, 0, 0, 0.5);
+      cursor: pointer;
+      font-family: inherit;
+      -webkit-appearance: none;
+      appearance: none;
+      padding: 0;
+      width: 100%;
     }
     .sticky-map-cta {
       border: 1px solid var(--line);
@@ -825,8 +831,10 @@
     }
   </style>
   <link rel="stylesheet" href="/assets/modules/location/navigator_location_widget.css">
+  <link rel="stylesheet" href="/assets/modules/rent/rent_mobile_sheet.css">
 </head>
 <body class="mode-single">
+  <div id="rentSubmitToast" class="rent-submit-toast" role="status" aria-live="polite" aria-atomic="true" hidden></div>
   <div class="shell-wrap">
     <header class="conv-bar" aria-label="Gyors navigáció">
       <span class="conv-title">Kisvonat bérlés</span>
@@ -860,6 +868,13 @@
     </div>
 
     <div class="side">
+      <button type="button" class="rent-mobile-sheet-handle" id="rentMobileSheetHandle" aria-expanded="false" aria-label="Adatlap felhúzása">
+        <span class="rent-mobile-sheet-handle-bar" aria-hidden="true"></span>
+        <span class="rent-mobile-sheet-handle-row">
+          <span class="rent-mobile-sheet-handle-label" data-sheet-label>Adatlap</span>
+          <span class="rent-mobile-sheet-handle-arrow" data-sheet-arrow aria-hidden="true">⌃</span>
+        </span>
+      </button>
       <div class="brand">
         <h1>Kisvonat bérlés – árajánlatkérés</h1>
         <p>Jelölje meg a helyszínt vagy az útvonalat, majd adja meg az elérhetőségét.</p>
@@ -950,12 +965,14 @@
             <div class="form-section-body">
             <div class="grid2">
               <div class="field">
-                <label for="date">Dátum</label>
-                <input id="date" type="date" required />
+                <label for="date">Dátum <span class="required-mark" aria-hidden="true">*</span></label>
+                <input id="date" type="date" required aria-required="true" />
+                <p class="field-error" id="dateError" hidden role="alert"></p>
               </div>
               <div class="field">
-                <label for="headcount">Létszám</label>
-                <input id="headcount" type="number" min="1" required placeholder="pl. 52" inputmode="numeric" />
+                <label for="headcount">Létszám <span class="required-mark" aria-hidden="true">*</span></label>
+                <input id="headcount" type="number" min="1" required aria-required="true" placeholder="pl. 52" inputmode="numeric" />
+                <p class="field-error" id="headcountError" hidden role="alert"></p>
               </div>
             </div>
             <div class="grid2">
@@ -976,16 +993,19 @@
               <span class="form-section-label">Kapcsolat</span><span class="acc-warn" id="warnContact" hidden aria-hidden="true">⚠</span><span class="acc-chevron" aria-hidden="true"></span>
             </button>
             <div class="form-section-body">
-            <label for="ordererName">Megrendelő neve</label>
-            <input id="ordererName" name="rent-bill-name" required autocomplete="section-bill billing name" />
+            <label for="ordererName">Megrendelő neve <span class="required-mark" aria-hidden="true">*</span></label>
+            <input id="ordererName" name="rent-bill-name" required aria-required="true" autocomplete="section-bill billing name" />
+            <p class="field-error" id="ordererNameError" hidden role="alert"></p>
             <div class="grid2">
               <div class="field">
-                <label for="phone">Telefon</label>
-                <input id="phone" name="rent-bill-tel" type="tel" required placeholder="+36 30 123 4567" autocomplete="section-bill tel" inputmode="tel" />
+                <label for="phone">Telefon <span class="required-mark" aria-hidden="true">*</span></label>
+                <input id="phone" name="rent-bill-tel" type="tel" required aria-required="true" placeholder="+36 30 123 4567" autocomplete="section-bill tel" inputmode="tel" />
+                <p class="field-error" id="phoneError" hidden role="alert"></p>
               </div>
               <div class="field">
-                <label for="email">Email</label>
-                <input id="email" name="rent-bill-email" type="email" autocomplete="section-bill email" inputmode="email" />
+                <label for="email">Email <span class="required-mark" aria-hidden="true">*</span></label>
+                <input id="email" name="rent-bill-email" type="email" required aria-required="true" autocomplete="section-bill email" inputmode="email" />
+                <p class="field-error" id="emailError" hidden role="alert"></p>
               </div>
             </div>
             <label for="contact">Kapcsolattartó (opcionális)</label>
@@ -1112,7 +1132,7 @@
 
   <div class="sticky-actions" aria-label="Gyors műveletek">
     <a class="sticky-map-cta" href="#map">Térkép</a>
-    <a class="sticky-book-cta" href="#inquiryForm">Árajánlat kérése</a>
+    <button type="submit" form="inquiryForm" class="sticky-book-cta">Árajánlat kérése</button>
   </div>
 
   <script src="../opnav-config.js"></script>
@@ -1149,7 +1169,7 @@
   function getApiBase() {
     if (window.OPNAV_API_BASE) return String(window.OPNAV_API_BASE).replace(/\/+$/, '');
     var host = location.hostname;
-    if (host === 'localhost' || host === '127.0.0.1') return 'http://localhost:3000';
+    if (host === 'localhost' || host === '127.0.0.1') return window.location.origin;
     return 'https://operativ-navigator.onrender.com';
   }
   var API_BASE = getApiBase();
@@ -1276,19 +1296,81 @@
     return lat == null && lng == null && (!routePoints || !routePoints.length);
   }
 
-  function refreshMapLayout() {
-    clickFlowLog('refreshMapLayout RUN', { resetHungary: shouldResetMapToHungary() });
-    map.invalidateSize();
-    if (shouldResetMapToHungary()) {
-      map.setView(HUNGARY_CENTER, HUNGARY_ZOOM, { animate: false });
-    }
-    clickFlowLog('refreshMapLayout END', { resetHungary: shouldResetMapToHungary() });
+  function captureMapCamera() {
+    var center = map.getCenter();
+    return {
+      center: L.latLng(center.lat, center.lng),
+      zoom: map.getZoom()
+    };
   }
 
-  function scheduleRefreshMapLayout(delayMs) {
-    clickFlowLog('scheduleRefreshMapLayout', { delayMs: delayMs != null ? delayMs : 150 });
+  function restoreMapCameraIfChanged(saved) {
+    if (!saved || !saved.center || saved.zoom == null) return;
+    var current = map.getCenter();
+    var currentZoom = map.getZoom();
+    if (Math.abs(current.lat - saved.center.lat) > 1e-9 ||
+        Math.abs(current.lng - saved.center.lng) > 1e-9 ||
+        currentZoom !== saved.zoom) {
+      map.setView(saved.center, saved.zoom, { animate: false });
+    }
+  }
+
+  function captureRentUiState() {
+    var center = map.getCenter();
+    var sideEl = document.querySelector('.side');
+    var sheetState = null;
+    if (typeof window.__rentMobileSheetGetState === 'function') {
+      sheetState = window.__rentMobileSheetGetState();
+    } else {
+      var appEl = document.querySelector('.app');
+      sheetState = appEl ? appEl.getAttribute('data-sheet-state') : null;
+    }
+    return {
+      center: L.latLng(center.lat, center.lng),
+      zoom: map.getZoom(),
+      sideScrollTop: sideEl ? sideEl.scrollTop : 0,
+      sheetState: sheetState
+    };
+  }
+
+  function restoreRentUiState(uiState) {
+    if (!uiState) return;
+    if (uiState.center && uiState.zoom != null) {
+      map.setView(uiState.center, uiState.zoom, { animate: false });
+    }
+    var sideEl = document.querySelector('.side');
+    if (sideEl) {
+      var maxScroll = Math.max(0, sideEl.scrollHeight - sideEl.clientHeight);
+      sideEl.scrollTop = Math.min(uiState.sideScrollTop || 0, maxScroll);
+    }
+    if (uiState.sheetState && typeof window.__rentMobileSheetRestoreState === 'function') {
+      window.__rentMobileSheetRestoreState(uiState.sheetState);
+    }
+  }
+
+  function refreshMapLayout(opts) {
+    opts = opts || {};
+    var camera = captureMapCamera();
+    clickFlowLog('refreshMapLayout RUN', { preserveCamera: !!opts.preserveCamera });
+    try {
+      map.invalidateSize({ pan: false });
+    } catch (sizeErr) {
+      map.invalidateSize();
+    }
+    if (opts.preserveCamera && opts.uiState) {
+      restoreRentUiState(opts.uiState);
+    } else {
+      restoreMapCameraIfChanged(camera);
+    }
+    clickFlowLog('refreshMapLayout END', {});
+  }
+
+  function scheduleRefreshMapLayout(delayMs, opts) {
+    clickFlowLog('scheduleRefreshMapLayout', { delayMs: delayMs != null ? delayMs : 150, preserveCamera: opts && opts.preserveCamera });
     clearTimeout(mapLayoutTimer);
-    mapLayoutTimer = setTimeout(refreshMapLayout, delayMs != null ? delayMs : 150);
+    mapLayoutTimer = setTimeout(function () {
+      refreshMapLayout(opts || null);
+    }, delayMs != null ? delayMs : 150);
   }
 
   function updateBodyModeClass() {
@@ -1343,16 +1425,87 @@
     if (btn) btn.setAttribute('aria-expanded', 'true');
   }
 
+  function getMobileSheetStickyChrome() {
+    var handle = document.getElementById('rentMobileSheetHandle');
+    var stickyActions = document.querySelector('.sticky-actions');
+    var topChrome = 52;
+    if (handle) {
+      var handleRect = handle.getBoundingClientRect();
+      if (handleRect.height > 0) topChrome = handleRect.height;
+    }
+    var bottomChrome = 72;
+    if (stickyActions) {
+      var stickyStyle = window.getComputedStyle(stickyActions);
+      if (stickyStyle.display !== 'none') {
+        bottomChrome = stickyActions.getBoundingClientRect().height + 12;
+      }
+    }
+    return { top: topChrome, bottom: bottomChrome };
+  }
+
+  function ensureMobileSheetHalf(done) {
+    if (!isMobileView()) {
+      if (done) done();
+      return;
+    }
+    if (typeof window.__rentMobileSheetEnsureMinState === 'function') {
+      window.__rentMobileSheetEnsureMinState('half');
+    } else if (typeof window.__rentMobileSheetRestoreState === 'function') {
+      window.__rentMobileSheetRestoreState('half');
+    }
+    if (!done) return;
+    window.setTimeout(done, 0);
+    window.setTimeout(done, 320);
+    window.setTimeout(done, 450);
+  }
+
+  function ensureMobileFieldVisible(field) {
+    if (!field || !isMobileView()) return;
+    var sideEl = document.querySelector('.side');
+    if (!sideEl) return;
+    var sec = field.closest('[data-accordion]');
+    if (sec && sec.id) openAccordion(sec.id);
+
+    function scrollSideToField() {
+      var sideRect = sideEl.getBoundingClientRect();
+      var chrome = getMobileSheetStickyChrome();
+      var visibleTop = sideRect.top + chrome.top;
+      var visibleBottom = sideRect.bottom - chrome.bottom;
+      var visibleHeight = Math.max(120, visibleBottom - visibleTop);
+      var fieldRect = field.getBoundingClientRect();
+      var errEl = getFieldErrorEl(field);
+      var blockTop = fieldRect.top;
+      var blockBottom = fieldRect.bottom;
+      if (errEl && !errEl.hidden) {
+        var errRect = errEl.getBoundingClientRect();
+        blockTop = Math.min(blockTop, errRect.top);
+        blockBottom = Math.max(blockBottom, errRect.bottom);
+      }
+      var desiredTop = visibleTop + visibleHeight * 0.18;
+      var delta = blockTop - desiredTop;
+      if (blockBottom > visibleBottom - 4 || blockTop < visibleTop + 4 || Math.abs(delta) > 6) {
+        var nextScroll = sideEl.scrollTop + delta;
+        var maxScroll = Math.max(0, sideEl.scrollHeight - sideEl.clientHeight);
+        sideEl.scrollTop = Math.max(0, Math.min(nextScroll, maxScroll));
+      }
+      try { field.focus({ preventScroll: true }); } catch (e) { field.focus(); }
+    }
+
+    ensureMobileSheetHalf(scrollSideToField);
+  }
+
   function focusAndScrollTo(el) {
     if (!el) return;
     if (isMobileView()) {
-      var sec = el.closest('[data-accordion]');
-      if (sec && sec.id) openAccordion(sec.id);
+      ensureMobileFieldVisible(el);
+      return;
     }
+    var sec = el.closest('[data-accordion]');
+    if (sec && sec.id) openAccordion(sec.id);
     window.setTimeout(function () {
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       try { el.focus({ preventScroll: true }); } catch (e) { el.focus(); }
-    }, isMobileView() ? 150 : 0);
+    }, 0);
   }
 
   function setFormStatus(text, ok) {
@@ -1386,7 +1539,10 @@
   }
 
   function isContactIncomplete() {
-    return !document.getElementById('ordererName').value.trim() || !document.getElementById('phone').value.trim();
+    var emailEl = document.getElementById('email');
+    return !document.getElementById('ordererName').value.trim() ||
+      !document.getElementById('phone').value.trim() ||
+      !emailEl.value.trim();
   }
 
   function updateAccordionWarnings() {
@@ -1395,7 +1551,11 @@
     if (warnProgram) warnProgram.hidden = !isProgramIncomplete();
     if (warnContact) {
       var phoneVal = document.getElementById('phone').value.trim();
-      var showContactWarn = isContactIncomplete() || (phoneVal && !isValidPhone(phoneVal));
+      var emailEl = document.getElementById('email');
+      var emailVal = emailEl.value.trim();
+      var showContactWarn = isContactIncomplete() ||
+        (phoneVal && !isValidPhone(phoneVal)) ||
+        (emailVal && !emailEl.checkValidity());
       warnContact.hidden = !showContactWarn;
     }
   }
@@ -1406,30 +1566,157 @@
     el.hidden = !(bookingType === 'custom_route' && routeFinalized);
   }
 
+  var VALIDATION_TOAST_MSG = 'Kérjük, töltse ki vagy javítsa a csillaggal jelölt kötelező mezőket.';
+
+  function getFieldErrorEl(field) {
+    if (!field || !field.id) return null;
+    return document.getElementById(field.id + 'Error');
+  }
+
+  function setFieldError(field, message) {
+    if (!field) return;
+    field.classList.add('is-invalid');
+    field.setAttribute('aria-invalid', 'true');
+    var errEl = getFieldErrorEl(field);
+    if (errEl) {
+      errEl.textContent = message || '';
+      errEl.hidden = !message;
+      if (message) field.setAttribute('aria-describedby', errEl.id);
+    }
+  }
+
+  function clearFieldError(field) {
+    if (!field) return;
+    field.classList.remove('is-invalid');
+    field.removeAttribute('aria-invalid');
+    var errEl = getFieldErrorEl(field);
+    if (errEl) {
+      errEl.textContent = '';
+      errEl.hidden = true;
+    }
+    if (field.getAttribute('aria-describedby') === field.id + 'Error') {
+      field.removeAttribute('aria-describedby');
+    }
+  }
+
+  function isRequiredFieldValid(fieldId) {
+    var el = document.getElementById(fieldId);
+    if (!el) return true;
+    if (fieldId === 'date') return !!el.value;
+    if (fieldId === 'headcount') {
+      var hc = el.value.trim();
+      return !!hc && parseInt(hc, 10) >= 1;
+    }
+    if (fieldId === 'ordererName') return !!el.value.trim();
+    if (fieldId === 'phone') {
+      var phoneVal = el.value.trim();
+      return !!phoneVal && isValidPhone(phoneVal);
+    }
+    if (fieldId === 'email') {
+      var emailVal = el.value.trim();
+      return !!emailVal && el.checkValidity();
+    }
+    return true;
+  }
+
+  function bindRequiredFieldRecovery() {
+    ['date', 'headcount', 'ordererName', 'phone', 'email'].forEach(function (fieldId) {
+      var el = document.getElementById(fieldId);
+      if (!el) return;
+      function tryClearFieldError() {
+        if (!el.classList.contains('is-invalid')) return;
+        if (isRequiredFieldValid(fieldId)) clearFieldError(el);
+        updateAccordionWarnings();
+      }
+      el.addEventListener('input', tryClearFieldError);
+      el.addEventListener('change', tryClearFieldError);
+    });
+  }
+
+  function validateEmailField() {
+    var emailEl = document.getElementById('email');
+    var val = emailEl.value.trim();
+    if (!val) {
+      return {
+        ok: false,
+        field: emailEl,
+        sectionId: 'sectionContact',
+        message: VALIDATION_TOAST_MSG,
+        fieldMessage: 'Kérjük, adja meg az e-mail címet.'
+      };
+    }
+    if (!emailEl.checkValidity()) {
+      return {
+        ok: false,
+        field: emailEl,
+        sectionId: 'sectionContact',
+        message: VALIDATION_TOAST_MSG,
+        fieldMessage: 'Kérjük, adjon meg érvényes e-mail címet.'
+      };
+    }
+    return { ok: true };
+  }
+
   function validatePhone() {
     var phoneEl = document.getElementById('phone');
     var val = phoneEl.value.trim();
     if (!val) {
-      return { ok: false, field: phoneEl, sectionId: 'sectionContact', message: 'Kérjük, töltse ki a kötelező adatokat.' };
+      return {
+        ok: false,
+        field: phoneEl,
+        sectionId: 'sectionContact',
+        message: VALIDATION_TOAST_MSG,
+        fieldMessage: 'Kötelező mező.'
+      };
     }
     if (!isValidPhone(val)) {
-      return { ok: false, field: phoneEl, sectionId: 'sectionContact', message: 'Kérjük, adjon meg érvényes telefonszámot.' };
+      return {
+        ok: false,
+        field: phoneEl,
+        sectionId: 'sectionContact',
+        message: VALIDATION_TOAST_MSG,
+        fieldMessage: 'Kérjük, adjon meg érvényes telefonszámot.'
+      };
     }
     return { ok: true };
   }
 
   function validateRequiredFields() {
-    if (isProgramIncomplete()) {
-      var field = !document.getElementById('date').value
-        ? document.getElementById('date')
-        : document.getElementById('headcount');
-      return { ok: false, field: field, sectionId: 'sectionProgram', message: 'Kérjük, töltse ki a kötelező adatokat.' };
+    var dateEl = document.getElementById('date');
+    if (!dateEl.value) {
+      return {
+        ok: false,
+        field: dateEl,
+        sectionId: 'sectionProgram',
+        message: VALIDATION_TOAST_MSG,
+        fieldMessage: 'Kötelező mező.'
+      };
     }
-    if (!document.getElementById('ordererName').value.trim()) {
-      return { ok: false, field: document.getElementById('ordererName'), sectionId: 'sectionContact', message: 'Kérjük, töltse ki a kötelező adatokat.' };
+    var headcountEl = document.getElementById('headcount');
+    var headcountVal = headcountEl.value.trim();
+    if (!headcountVal || parseInt(headcountVal, 10) < 1) {
+      return {
+        ok: false,
+        field: headcountEl,
+        sectionId: 'sectionProgram',
+        message: VALIDATION_TOAST_MSG,
+        fieldMessage: 'Kötelező mező.'
+      };
+    }
+    var nameEl = document.getElementById('ordererName');
+    if (!nameEl.value.trim()) {
+      return {
+        ok: false,
+        field: nameEl,
+        sectionId: 'sectionContact',
+        message: VALIDATION_TOAST_MSG,
+        fieldMessage: 'Kötelező mező.'
+      };
     }
     var phoneCheck = validatePhone();
     if (!phoneCheck.ok) return phoneCheck;
+    var emailCheck = validateEmailField();
+    if (!emailCheck.ok) return emailCheck;
     return { ok: true };
   }
 
@@ -1437,7 +1724,11 @@
     setFormStatus(result.message, false);
     updateAccordionWarnings();
     if (result.sectionId) openAccordion(result.sectionId);
-    focusAndScrollTo(result.field);
+    if (result.field) {
+      setFieldError(result.field, result.fieldMessage || result.message);
+      focusAndScrollTo(result.field);
+    }
+    showSubmitToast(VALIDATION_TOAST_MSG, 'warn', 5000);
   }
 
   function isMobileView() {
@@ -2086,6 +2377,7 @@ window.RentPublicLocationBridgeV1 = Object.freeze({
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   }
   document.getElementById('date').value = todayIso();
+  bindRequiredFieldRecovery();
 
   function syncHiddenAddress() {
     var street = document.getElementById('street').value.trim();
@@ -2185,6 +2477,7 @@ window.RentPublicLocationBridgeV1 = Object.freeze({
   }
 
   function setMode(mode) {
+    var uiPreserve = captureRentUiState();
     bookingType = mode;
     routeFinalized = false;
     document.getElementById('modeSingle').classList.toggle('is-active', mode === 'single_location');
@@ -2215,12 +2508,12 @@ window.RentPublicLocationBridgeV1 = Object.freeze({
       setGeoStatus(routePoints.length ? 'Útvonal rajzolása folyamatban' : '', !!routePoints.length);
     }
     clearMapLayers();
-    redrawMap();
+    redrawMap({ preserveCamera: true });
     updateBodyModeClass();
     updateMapActions();
     updateSubmitHint();
     updateLocationSummary();
-    scheduleRefreshMapLayout(150);
+    scheduleRefreshMapLayout(150, { preserveCamera: true, uiState: uiPreserve });
   }
 
   function routeMarkerIcon(i, count) {
@@ -2268,7 +2561,8 @@ window.RentPublicLocationBridgeV1 = Object.freeze({
     });
   }
 
-  function showSingleMarker(latVal, lngVal, label) {
+  function showSingleMarker(latVal, lngVal, label, opts) {
+    opts = opts || {};
     lat = latVal;
     lng = lngVal;
     storeSavedLocation(latVal, lngVal);
@@ -2280,7 +2574,9 @@ window.RentPublicLocationBridgeV1 = Object.freeze({
       fillOpacity: 0.9,
       weight: 3
     }).addTo(mapLayer).bindTooltip(label || 'Helyszín', { direction: 'top' });
-    map.setView([latVal, lngVal], PLACE_ZOOM, { animate: true });
+    if (!opts.preserveCamera) {
+      map.setView([latVal, lngVal], PLACE_ZOOM, { animate: true });
+    }
     updateMapCursor();
     updateLocationSummary();
   }
@@ -2316,11 +2612,12 @@ window.RentPublicLocationBridgeV1 = Object.freeze({
     updateLocationSummary();
   }
 
-  function redrawMap() {
-    clickFlowLog('redrawMap RUN', { bookingType: bookingType, lat: lat, lng: lng });
+  function redrawMap(opts) {
+    opts = opts || {};
+    clickFlowLog('redrawMap RUN', { bookingType: bookingType, lat: lat, lng: lng, preserveCamera: !!opts.preserveCamera });
     clearMapLayers();
     if (bookingType === 'single_location' && lat != null && lng != null) {
-      showSingleMarker(lat, lng, document.getElementById('city').value || 'Helyszín');
+      showSingleMarker(lat, lng, document.getElementById('city').value || 'Helyszín', opts);
       clickFlowLog('redrawMap END (single marker)', {});
       return;
     }
@@ -2766,7 +3063,58 @@ window.RentPublicLocationBridgeV1 = Object.freeze({
     });
   }
 
+  var submitToastTimer = null;
+  var submitToastHideTimer = null;
+  var btnSubmitDefaultText = document.getElementById('btnSubmit').textContent;
+
+  function hideSubmitToastLater(delayMs) {
+    clearTimeout(submitToastTimer);
+    clearTimeout(submitToastHideTimer);
+    submitToastTimer = setTimeout(function () {
+      var el = document.getElementById('rentSubmitToast');
+      if (!el) return;
+      el.classList.remove('is-visible');
+      submitToastHideTimer = setTimeout(function () {
+        el.hidden = true;
+      }, 260);
+    }, delayMs != null ? delayMs : 7000);
+  }
+
+  function showSubmitToast(message, type, durationMs) {
+    var el = document.getElementById('rentSubmitToast');
+    if (!el) return;
+    clearTimeout(submitToastTimer);
+    clearTimeout(submitToastHideTimer);
+    el.textContent = message;
+    el.className = 'rent-submit-toast is-' + type;
+    el.hidden = false;
+    requestAnimationFrame(function () {
+      el.classList.add('is-visible');
+    });
+    if (type === 'progress') return;
+    hideSubmitToastLater(durationMs != null ? durationMs : 7000);
+  }
+
+  function scrollSideToSuccess() {
+    if (isMobileView()) {
+      ensureMobileSheetHalf(function () {
+        var sideEl = document.querySelector('.side');
+        if (sideEl) sideEl.scrollTop = 0;
+      });
+      return;
+    }
+    var sideEl = document.querySelector('.side');
+    if (sideEl) sideEl.scrollTop = 0;
+    if (successBox && successBox.scrollIntoView) {
+      successBox.scrollIntoView({ behavior: 'auto', block: 'start' });
+    }
+  }
+
   function showSaveSuccess(saved) {
+    var toastMsg = saved && saved.id
+      ? 'Köszönjük! Érdeklődését fogadtuk.\nAzonosító: ' + saved.id
+      : 'Köszönjük! Érdeklődését fogadtuk.';
+    showSubmitToast(toastMsg, 'success', 7000);
     form.classList.add('is-hidden');
     successBox.classList.add('is-visible');
     var refEl = document.getElementById('successRef');
@@ -2774,10 +3122,13 @@ window.RentPublicLocationBridgeV1 = Object.freeze({
       refEl.textContent = 'Az árajánlatkérés sikeresen rögzítve. Azonosító: ' + saved.id;
       refEl.hidden = false;
     }
+    scrollSideToSuccess();
   }
 
-  form.addEventListener('submit', function (ev) {
+  document.addEventListener('submit', function (ev) {
+    if (ev.target !== form) return;
     ev.preventDefault();
+    ev.stopPropagation();
     var btn = document.getElementById('btnSubmit');
     syncHiddenAddress();
     updateAccordionWarnings();
@@ -2793,10 +3144,12 @@ window.RentPublicLocationBridgeV1 = Object.freeze({
 
     function failValidation(result) {
       btn.disabled = false;
+      btn.textContent = btnSubmitDefaultText;
       if (result && result.field) {
         showValidationError(result);
       } else if (result && result.message) {
         setFormStatus(result.message, false);
+        showSubmitToast(VALIDATION_TOAST_MSG, 'warn', 5000);
       }
     }
 
@@ -2830,12 +3183,16 @@ window.RentPublicLocationBridgeV1 = Object.freeze({
       } else if (bookingType === 'custom_route') {
         if (!routeDraft || routePoints.length < 2) {
           setFormStatus('Útvonal megadása módban legalább 2 pontot jelöljön a térképen.', false);
+          showSubmitToast(VALIDATION_TOAST_MSG, 'warn', 5000);
           btn.disabled = false;
+          btn.textContent = btnSubmitDefaultText;
           return;
         }
         if (!routeFinalized) {
           setFormStatus('Kérjük, zárja le az útvonalat az „Útvonal lezárása” gombbal.', false);
+          showSubmitToast(VALIDATION_TOAST_MSG, 'warn', 5000);
           btn.disabled = false;
+          btn.textContent = btnSubmitDefaultText;
           return;
         }
       }
@@ -2844,17 +3201,22 @@ window.RentPublicLocationBridgeV1 = Object.freeze({
       isSubmitting = true;
       setFormStatus('Küldés folyamatban…', true);
       btn.disabled = true;
+      btn.textContent = 'Küldés folyamatban…';
+      showSubmitToast('Az árajánlatkérés küldése folyamatban…', 'progress');
 
       saveProjectInquiry(payload)
         .then(function (saved) {
           trackRentInquirySubmit(payload);
+          btn.textContent = btnSubmitDefaultText;
           showSaveSuccess(saved);
           isSubmitting = false;
         })
         .catch(function (err) {
           console.error('POST /api/rent/inquiries failed:', err);
           setFormStatus('A szerveres mentés nem sikerült. Az adatok nem kerültek beküldésre. Próbáld újra.', false);
+          showSubmitToast('Nem sikerült elküldeni.\nAz adatok nem kerültek beküldésre.', 'error');
           btn.disabled = false;
+          btn.textContent = btnSubmitDefaultText;
           isSubmitting = false;
         });
     }
@@ -2933,6 +3295,10 @@ window.RentPublicLocationBridgeV1 = Object.freeze({
       btn.disabled = false;
       setFormStatus('Útvonal végpontok feldolgozása sikertelen.', false);
     });
+  }, true);
+
+  window.addEventListener('rent-mobile-sheet-layout', function () {
+    scheduleRefreshMapLayout(40);
   });
 
   window.addEventListener('resize', function () {
@@ -2968,7 +3334,16 @@ window.RentPublicLocationBridgeV1 = Object.freeze({
   }, 200);
 
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js').catch(function () {});
+    var swHost = location.hostname;
+    if (swHost === 'localhost' || swHost === '127.0.0.1') {
+      navigator.serviceWorker.getRegistrations().then(function (registrations) {
+        registrations.forEach(function (registration) {
+          registration.unregister().catch(function () {});
+        });
+      }).catch(function () {});
+    } else {
+      navigator.serviceWorker.register('./sw.js').catch(function () {});
+    }
   }
 })();
   </script>
@@ -2983,5 +3358,6 @@ window.NAVIGATOR_LOCATION_CONFIG = {
 <script src="/assets/modules/location/navigator_location_core.js"></script>
 <script src="/assets/modules/location/navigator_location_widget.js"></script>
 <script src="/assets/modules/location/rent_public_location_init.js"></script>
+<script src="/assets/modules/rent/rent_mobile_sheet.js"></script>
 </body>
 </html>
