@@ -2200,17 +2200,60 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
 
+const GEOCODE_RESILIENCE_BUILD = 'geocode-resilience-v1-20260627';
 const NOMINATIM_BASE = 'https://nominatim.openstreetmap.org';
 const NOMINATIM_USER_AGENT = 'OperativNavigator-Rent/1.0 (geocode-proxy; https://operativ-navigator.onrender.com/rent/public)';
 const NOMINATIM_MIN_INTERVAL_MS = 1100;
 const REVERSE_GECODE_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const SEARCH_GECODE_CACHE_TTL_MS = 30 * 60 * 1000;
+const NOMINATIM_429_COOLDOWN_MS = Number(process.env.NOMINATIM_429_COOLDOWN_MS) || 15 * 60 * 1000;
+const LOCATIONIQ_429_COOLDOWN_MS = Number(process.env.LOCATIONIQ_429_COOLDOWN_MS) || 60 * 1000;
+const GEOCODER_TIMEOUT_MS = Number(process.env.GEOCODER_TIMEOUT_MS) || 6000;
+const GEOCODE_FALLBACK_RESERVE_MS = Number(process.env.GEOCODE_FALLBACK_RESERVE_MS) || 2000;
+const LOCATIONIQ_BASE = String(process.env.LOCATIONIQ_BASE_URL || 'https://us1.locationiq.com/v1').replace(/\/$/, '');
+const LOCATIONIQ_API_KEY = String(process.env.LOCATIONIQ_API_KEY || '').trim();
 
 let nominatimLastFetchAt = 0;
 let nominatimFetchChain = Promise.resolve();
+let nominatimCooldownUntil = 0;
+let locationiqCooldownUntil = 0;
 const reverseGeocodeCache = new Map();
+const searchGeocodeCache = new Map();
+const reverseInFlight = new Map();
+const searchInFlight = new Map();
+
+function geocodeFetchImpl() {
+  return globalThis.__geocodeFetchImpl || fetch;
+}
+
+function geocodeLog(message) {
+  console.log('[GEOCODE]', message);
+}
+
+function geocodeStartupLog() {
+  console.log('[GEOCODE] build: ' + GEOCODE_RESILIENCE_BUILD);
+  if (LOCATIONIQ_API_KEY) {
+    geocodeLog('fallback: locationiq configured');
+  } else {
+    geocodeLog('fallback: not configured');
+  }
+}
+
+function setGeocodeResponseHeaders(res, provider) {
+  res.setHeader('X-Geocode-Proxy-Version', GEOCODE_RESILIENCE_BUILD);
+  if (provider) res.setHeader('X-Geocode-Provider', provider);
+}
+
+function normalizeCacheToken(value) {
+  return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
 
 function reverseGeocodeCacheKey(lat, lng, zoom) {
   return Number(lat).toFixed(6) + '|' + Number(lng).toFixed(6) + '|' + zoom;
+}
+
+function searchGeocodeCacheKey(q, city, limit) {
+  return 'q:' + normalizeCacheToken(q) + '|city:' + normalizeCacheToken(city) + '|limit:' + limit;
 }
 
 function getReverseGeocodeCached(key) {
@@ -2230,22 +2273,414 @@ function setReverseGeocodeCached(key, data) {
   });
 }
 
-async function nominatimFetch(url) {
+function getSearchGeocodeCached(key) {
+  const entry = searchGeocodeCache.get(key);
+  if (!entry) return null;
+  if (entry.expiresAt <= Date.now()) {
+    searchGeocodeCache.delete(key);
+    return null;
+  }
+  return entry.data;
+}
+
+function setSearchGeocodeCached(key, data) {
+  searchGeocodeCache.set(key, {
+    expiresAt: Date.now() + SEARCH_GECODE_CACHE_TTL_MS,
+    data: data,
+  });
+}
+
+function parseRetryAfterMs(retryAfterHeader) {
+  if (retryAfterHeader == null || retryAfterHeader === '') return null;
+  const trimmed = String(retryAfterHeader).trim();
+  const asSeconds = Number(trimmed);
+  if (Number.isFinite(asSeconds) && asSeconds >= 0) return Math.round(asSeconds * 1000);
+  const asDate = Date.parse(trimmed);
+  if (!Number.isNaN(asDate)) return Math.max(0, asDate - Date.now());
+  return null;
+}
+
+function isNominatimInCooldown() {
+  return Date.now() < nominatimCooldownUntil;
+}
+
+function nominatimCooldownRemainingSec() {
+  return Math.max(0, Math.ceil((nominatimCooldownUntil - Date.now()) / 1000));
+}
+
+function activateNominatimCooldown(response) {
+  const retryMs = response && typeof response.headers?.get === 'function'
+    ? parseRetryAfterMs(response.headers.get('Retry-After'))
+    : null;
+  const cooldownMs = retryMs != null ? retryMs : NOMINATIM_429_COOLDOWN_MS;
+  nominatimCooldownUntil = Math.max(nominatimCooldownUntil, Date.now() + cooldownMs);
+  geocodeLog('nominatim cooldown activated remaining=' + nominatimCooldownRemainingSec() + 's');
+}
+
+function isLocationIqInCooldown() {
+  return Date.now() < locationiqCooldownUntil;
+}
+
+function locationiqCooldownRemainingSec() {
+  return Math.max(0, Math.ceil((locationiqCooldownUntil - Date.now()) / 1000));
+}
+
+function activateLocationIqCooldown(response) {
+  const retryMs = response && typeof response.headers?.get === 'function'
+    ? parseRetryAfterMs(response.headers.get('Retry-After'))
+    : null;
+  const cooldownMs = retryMs != null ? retryMs : LOCATIONIQ_429_COOLDOWN_MS;
+  locationiqCooldownUntil = Math.max(locationiqCooldownUntil, Date.now() + cooldownMs);
+  geocodeLog('locationiq cooldown activated remaining=' + locationiqCooldownRemainingSec() + 's');
+}
+
+function createGeocodeDeadline() {
+  const startedAt = Date.now();
+  return {
+    remainingMs() {
+      return Math.max(0, GEOCODER_TIMEOUT_MS - (Date.now() - startedAt));
+    },
+    isExpired() {
+      return this.remainingMs() <= 0;
+    },
+  };
+}
+
+function createAbortError(message) {
+  const err = new Error(message || 'aborted');
+  err.name = 'AbortError';
+  return err;
+}
+
+function isLocationIqConfigured() {
+  return LOCATIONIQ_API_KEY.length > 0;
+}
+
+function isNominatimFallbackEligible(status, skipped) {
+  if (skipped) return true;
+  return status === 429 || status === 403 || status >= 500;
+}
+
+function nominatimFetchBudgetMs(deadline) {
+  if (!deadline) return GEOCODER_TIMEOUT_MS;
+  const remaining = deadline.remainingMs();
+  if (!isLocationIqConfigured()) return remaining;
+  return Math.max(250, remaining - GEOCODE_FALLBACK_RESERVE_MS);
+}
+
+async function geocodeFetchWithDeadline(url, options, deadline, maxMs) {
+  const remaining = deadline ? deadline.remainingMs() : GEOCODER_TIMEOUT_MS;
+  const budget = maxMs != null ? Math.min(remaining, maxMs) : remaining;
+  if (budget <= 0) throw createAbortError('geocode deadline exceeded');
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), budget);
+  try {
+    return await geocodeFetchImpl()(url, Object.assign({}, options || {}, { signal: controller.signal }));
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function nominatimFetch(url, deadline) {
   nominatimFetchChain = nominatimFetchChain.then(async () => {
+    if (deadline && deadline.isExpired()) throw createAbortError('geocode deadline exceeded');
     const now = Date.now();
     const wait = Math.max(0, NOMINATIM_MIN_INTERVAL_MS - (now - nominatimLastFetchAt));
-    if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+    if (wait > 0) {
+      const waitMs = deadline ? Math.min(wait, deadline.remainingMs()) : wait;
+      if (waitMs > 0) await new Promise((resolve) => setTimeout(resolve, waitMs));
+    }
+    if (deadline && deadline.isExpired()) throw createAbortError('geocode deadline exceeded');
     nominatimLastFetchAt = Date.now();
-    return fetch(url, {
+    return geocodeFetchWithDeadline(url, {
       headers: {
         Accept: 'application/json',
         'Accept-Language': 'hu',
         'User-Agent': NOMINATIM_USER_AGENT,
       },
-    });
+    }, deadline, nominatimFetchBudgetMs(deadline));
   });
   return nominatimFetchChain;
 }
+
+async function fetchNominatim(url, endpointLabel, deadline) {
+  if (isNominatimInCooldown()) {
+    geocodeLog(endpointLabel + ' nominatim skipped cooldown remaining=' + nominatimCooldownRemainingSec() + 's');
+    return { skipped: true, status: 429, text: '' };
+  }
+  if (deadline && deadline.isExpired()) {
+    geocodeLog(endpointLabel + ' nominatim skipped deadline');
+    return { skipped: false, status: 504, ok: false, text: '', networkError: true };
+  }
+  try {
+    const response = await nominatimFetch(url, deadline);
+    const text = await response.text();
+    geocodeLog(endpointLabel + ' provider=nominatim status=' + response.status);
+    if (response.status === 429) activateNominatimCooldown(response);
+    return { skipped: false, status: response.status, ok: response.ok, text: text, response: response };
+  } catch (err) {
+    const isTimeout = err && (err.name === 'AbortError' || err.code === 'ABORT_ERR');
+    geocodeLog(endpointLabel + ' provider=nominatim error=' + (isTimeout ? 'timeout' : 'network'));
+    return { skipped: false, status: isTimeout ? 504 : 503, ok: false, text: '', networkError: true };
+  }
+}
+
+function buildLocationIqReverseUrl(lat, lng, zoom) {
+  return LOCATIONIQ_BASE + '/reverse?key=' + encodeURIComponent(LOCATIONIQ_API_KEY) +
+    '&lat=' + encodeURIComponent(lat) +
+    '&lon=' + encodeURIComponent(lng) +
+    '&format=json&addressdetails=1&normalizeaddress=1&accept-language=hu&zoom=' + encodeURIComponent(zoom);
+}
+
+function buildLocationIqSearchUrl(q, city, limit) {
+  if (city) {
+    return LOCATIONIQ_BASE + '/search?key=' + encodeURIComponent(LOCATIONIQ_API_KEY) +
+      '&q=' + encodeURIComponent(city) +
+      '&limit=' + encodeURIComponent(limit) +
+      '&countrycodes=hu&addressdetails=1&format=json';
+  }
+  return LOCATIONIQ_BASE + '/search?key=' + encodeURIComponent(LOCATIONIQ_API_KEY) +
+    '&q=' + encodeURIComponent(q) +
+    '&limit=' + encodeURIComponent(limit) +
+    '&countrycodes=hu&addressdetails=1&format=json';
+}
+
+function normalizeLocationIqAddress(address) {
+  const src = address && typeof address === 'object' ? address : {};
+  const out = Object.assign({}, src);
+  if (!out.city && out.town) out.city = out.town;
+  if (!out.city && out.village) out.city = out.village;
+  if (!out.city && out.municipality) out.city = out.municipality;
+  if (!out.road && out.pedestrian) out.road = out.pedestrian;
+  if (!out.road && out.street) out.road = out.street;
+  return out;
+}
+
+function normalizeLocationIqReverse(row) {
+  if (!row || typeof row !== 'object') return null;
+  const address = normalizeLocationIqAddress(row.address);
+  return {
+    place_id: row.place_id != null ? row.place_id : (row.osm_id != null ? row.osm_id : null),
+    lat: row.lat != null ? String(row.lat) : null,
+    lon: row.lon != null ? String(row.lon) : (row.lng != null ? String(row.lng) : null),
+    display_name: String(row.display_name || ''),
+    name: String(row.name || ''),
+    address: address,
+    type: row.type || row.class || '',
+    class: row.class || row.type || '',
+  };
+}
+
+function normalizeLocationIqSearchRow(row) {
+  if (!row || typeof row !== 'object') return null;
+  const address = normalizeLocationIqAddress(row.address);
+  return {
+    place_id: row.place_id != null ? row.place_id : (row.osm_id != null ? row.osm_id : null),
+    lat: row.lat != null ? String(row.lat) : null,
+    lon: row.lon != null ? String(row.lon) : (row.lng != null ? String(row.lng) : null),
+    display_name: String(row.display_name || ''),
+    name: String(row.name || ''),
+    address: address,
+    type: row.type || row.class || '',
+    class: row.class || row.type || '',
+  };
+}
+
+async function fetchLocationIqReverse(lat, lng, zoom, endpointLabel, deadline) {
+  if (!isLocationIqConfigured()) return { ok: false, status: 503, data: null, configured: false };
+  if (isLocationIqInCooldown()) {
+    geocodeLog(endpointLabel + ' locationiq skipped cooldown remaining=' + locationiqCooldownRemainingSec() + 's');
+    return { ok: false, status: 429, data: null, configured: true, skipped: true };
+  }
+  if (deadline && deadline.isExpired()) {
+    geocodeLog(endpointLabel + ' locationiq skipped deadline');
+    return { ok: false, status: 504, data: null, configured: true };
+  }
+  geocodeLog(endpointLabel + ' fallback start provider=locationiq');
+  try {
+    const url = buildLocationIqReverseUrl(lat, lng, zoom);
+    const response = await geocodeFetchWithDeadline(url, {
+      headers: { Accept: 'application/json', 'Accept-Language': 'hu' },
+    }, deadline);
+    const text = await response.text();
+    geocodeLog(endpointLabel + ' provider=locationiq status=' + response.status);
+    if (response.status === 429 || response.status === 403) activateLocationIqCooldown(response);
+    if (!response.ok) return { ok: false, status: response.status, data: null, configured: true };
+    let parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch (parseErr) {
+      return { ok: false, status: 502, data: null, configured: true };
+    }
+    const normalized = normalizeLocationIqReverse(parsed);
+    if (!normalized) return { ok: false, status: 502, data: null, configured: true };
+    return { ok: true, status: 200, data: normalized, configured: true };
+  } catch (err) {
+    const isTimeout = err && (err.name === 'AbortError' || err.code === 'ABORT_ERR');
+    geocodeLog(endpointLabel + ' provider=locationiq error=' + (isTimeout ? 'timeout' : 'network'));
+    return { ok: false, status: isTimeout ? 504 : 503, data: null, configured: true };
+  }
+}
+
+async function fetchLocationIqSearch(q, city, limit, endpointLabel, deadline) {
+  if (!isLocationIqConfigured()) return { ok: false, status: 503, data: null, configured: false };
+  if (isLocationIqInCooldown()) {
+    geocodeLog(endpointLabel + ' locationiq skipped cooldown remaining=' + locationiqCooldownRemainingSec() + 's');
+    return { ok: false, status: 429, data: null, configured: true, skipped: true };
+  }
+  if (deadline && deadline.isExpired()) {
+    geocodeLog(endpointLabel + ' locationiq skipped deadline');
+    return { ok: false, status: 504, data: null, configured: true };
+  }
+  geocodeLog(endpointLabel + ' fallback start provider=locationiq');
+  try {
+    const url = buildLocationIqSearchUrl(q, city, limit);
+    const response = await geocodeFetchWithDeadline(url, {
+      headers: { Accept: 'application/json', 'Accept-Language': 'hu' },
+    }, deadline);
+    const text = await response.text();
+    geocodeLog(endpointLabel + ' provider=locationiq status=' + response.status);
+    if (response.status === 429 || response.status === 403) activateLocationIqCooldown(response);
+    if (!response.ok) return { ok: false, status: response.status, data: null, configured: true };
+    let parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch (parseErr) {
+      return { ok: false, status: 502, data: null, configured: true };
+    }
+    const rows = Array.isArray(parsed) ? parsed.map(normalizeLocationIqSearchRow).filter(Boolean) : [];
+    return { ok: true, status: 200, data: rows, configured: true };
+  } catch (err) {
+    const isTimeout = err && (err.name === 'AbortError' || err.code === 'ABORT_ERR');
+    geocodeLog(endpointLabel + ' provider=locationiq error=' + (isTimeout ? 'timeout' : 'network'));
+    return { ok: false, status: isTimeout ? 504 : 503, data: null, configured: true };
+  }
+}
+
+function withInFlight(map, key, runner) {
+  if (map.has(key)) return map.get(key);
+  const promise = Promise.resolve()
+    .then(runner)
+    .finally(() => {
+      map.delete(key);
+    });
+  map.set(key, promise);
+  return promise;
+}
+
+async function resolveReverseGeocode(lat, lng, zoom) {
+  const cacheKey = reverseGeocodeCacheKey(lat, lng, zoom);
+  const cached = getReverseGeocodeCached(cacheKey);
+  if (cached) {
+    geocodeLog('reverse cache=hit');
+    return { ok: true, status: 200, data: cached, provider: 'cache' };
+  }
+
+  return withInFlight(reverseInFlight, cacheKey, async () => {
+    const deadline = createGeocodeDeadline();
+    const cachedAgain = getReverseGeocodeCached(cacheKey);
+    if (cachedAgain) {
+      geocodeLog('reverse cache=hit');
+      return { ok: true, status: 200, data: cachedAgain, provider: 'cache' };
+    }
+
+    const nominatimUrl = NOMINATIM_BASE + '/reverse?format=jsonv2&lat=' + encodeURIComponent(lat) +
+      '&lon=' + encodeURIComponent(lng) +
+      '&addressdetails=1&zoom=' + zoom + '&accept-language=hu&countrycodes=hu';
+    const primary = await fetchNominatim(nominatimUrl, 'reverse', deadline);
+
+    if (primary.ok) {
+      let data;
+      try {
+        data = JSON.parse(primary.text);
+      } catch (parseErr) {
+        return { ok: false, status: 502, data: null, provider: 'nominatim' };
+      }
+      setReverseGeocodeCached(cacheKey, data);
+      geocodeLog('reverse success provider=nominatim cache=miss');
+      return { ok: true, status: 200, data: data, provider: 'nominatim' };
+    }
+
+    if (!isNominatimFallbackEligible(primary.status, primary.skipped)) {
+      return { ok: false, status: primary.status || 502, data: null, provider: 'nominatim' };
+    }
+
+    const fallback = await fetchLocationIqReverse(lat, lng, zoom, 'reverse', deadline);
+    if (fallback.ok && fallback.data) {
+      setReverseGeocodeCached(cacheKey, fallback.data);
+      geocodeLog('reverse success provider=locationiq cache=miss');
+      return { ok: true, status: 200, data: fallback.data, provider: 'locationiq' };
+    }
+
+    const upstreamStatus = primary.status === 429 ? 429 : (fallback.status || primary.status || 503);
+    geocodeLog('reverse failed primary=' + (primary.status || 'error') + ' fallback=' + (fallback.configured ? String(fallback.status || 'error') : 'not_configured'));
+    return { ok: false, status: upstreamStatus, data: null, provider: 'nominatim' };
+  });
+}
+
+async function resolveSearchGeocode(q, city, limit) {
+  const cacheKey = searchGeocodeCacheKey(q, city, limit);
+  const cached = getSearchGeocodeCached(cacheKey);
+  if (cached) {
+    geocodeLog('search cache=hit');
+    return { ok: true, status: 200, data: cached, provider: 'cache' };
+  }
+
+  return withInFlight(searchInFlight, cacheKey, async () => {
+    const deadline = createGeocodeDeadline();
+    const cachedAgain = getSearchGeocodeCached(cacheKey);
+    if (cachedAgain) {
+      geocodeLog('search cache=hit');
+      return { ok: true, status: 200, data: cachedAgain, provider: 'cache' };
+    }
+
+    const nominatimUrl = city
+      ? NOMINATIM_BASE + '/search?format=json&limit=' + limit + '&countrycodes=hu&addressdetails=1&city=' + encodeURIComponent(city)
+      : NOMINATIM_BASE + '/search?format=json&limit=' + limit + '&countrycodes=hu&addressdetails=1&q=' + encodeURIComponent(q);
+    const primary = await fetchNominatim(nominatimUrl, 'search', deadline);
+
+    if (primary.ok) {
+      let data;
+      try {
+        data = JSON.parse(primary.text);
+      } catch (parseErr) {
+        return { ok: false, status: 502, data: null, provider: 'nominatim' };
+      }
+      const rows = Array.isArray(data) ? data : [];
+      setSearchGeocodeCached(cacheKey, rows);
+      geocodeLog('search success provider=nominatim cache=miss');
+      return { ok: true, status: 200, data: rows, provider: 'nominatim' };
+    }
+
+    if (!isNominatimFallbackEligible(primary.status, primary.skipped)) {
+      return { ok: false, status: primary.status || 502, data: null, provider: 'nominatim' };
+    }
+
+    const fallback = await fetchLocationIqSearch(q, city, limit, 'search', deadline);
+    if (fallback.ok && fallback.data) {
+      setSearchGeocodeCached(cacheKey, fallback.data);
+      geocodeLog('search success provider=locationiq cache=miss');
+      return { ok: true, status: 200, data: fallback.data, provider: 'locationiq' };
+    }
+
+    const upstreamStatus = primary.status === 429 ? 429 : (fallback.status || primary.status || 503);
+    geocodeLog('search failed primary=' + (primary.status || 'error') + ' fallback=' + (fallback.configured ? String(fallback.status || 'error') : 'not_configured'));
+    return { ok: false, status: upstreamStatus, data: null, provider: 'nominatim' };
+  });
+}
+
+globalThis.__geocodeResilienceReset = function geocodeResilienceReset() {
+  nominatimCooldownUntil = 0;
+  locationiqCooldownUntil = 0;
+  nominatimLastFetchAt = 0;
+  nominatimFetchChain = Promise.resolve();
+  reverseGeocodeCache.clear();
+  searchGeocodeCache.clear();
+  reverseInFlight.clear();
+  searchInFlight.clear();
+};
+
+geocodeStartupLog();
 
 app.get('/api/geocode/search', async (req, res) => {
   try {
@@ -2255,22 +2690,18 @@ app.get('/api/geocode/search', async (req, res) => {
     if (!q && !city) {
       return res.status(400).json({ ok: false, error: 'Missing q or city parameter' });
     }
-    const url = city
-      ? NOMINATIM_BASE + '/search?format=json&limit=' + limit + '&countrycodes=hu&addressdetails=1&city=' + encodeURIComponent(city)
-      : NOMINATIM_BASE + '/search?format=json&limit=' + limit + '&countrycodes=hu&addressdetails=1&q=' + encodeURIComponent(q);
-    const r = await nominatimFetch(url);
-    const text = await r.text();
-    if (!r.ok) {
-      console.error('Nominatim search failed:', r.status, text.slice(0, 200));
-      return res.status(r.status === 429 ? 429 : 502).json({ ok: false, error: 'Geocode search failed', status: r.status });
+    const result = await resolveSearchGeocode(q, city, limit);
+    if (result.ok) {
+      setGeocodeResponseHeaders(res, result.provider);
+      return res.json(result.data);
     }
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch (parseErr) {
-      return res.status(502).json({ ok: false, error: 'Invalid geocode response' });
-    }
-    res.json(Array.isArray(data) ? data : []);
+    const status = result.status === 429 ? 429 : 502;
+    setGeocodeResponseHeaders(res, result.provider || 'nominatim');
+    return res.status(status).json({
+      ok: false,
+      error: status === 429 ? 'Geocode temporarily unavailable' : 'Geocode search failed',
+      status: result.status,
+    });
   } catch (err) {
     console.error('GET /api/geocode/search failed:', err);
     res.status(500).json({ ok: false, error: 'Geocode search failed' });
@@ -2289,31 +2720,18 @@ app.get('/api/geocode/reverse', async (req, res) => {
     if (!isFinite(lat) || !isFinite(lng)) {
       return res.status(400).json({ ok: false, error: 'Invalid lat/lng' });
     }
-    const cacheKey = reverseGeocodeCacheKey(lat, lng, zoom);
-    const cached = getReverseGeocodeCached(cacheKey);
-    if (cached) {
-      return res.json(cached);
+    const result = await resolveReverseGeocode(lat, lng, zoom);
+    if (result.ok) {
+      setGeocodeResponseHeaders(res, result.provider);
+      return res.json(result.data);
     }
-    const url = NOMINATIM_BASE + '/reverse?format=jsonv2&lat=' + encodeURIComponent(lat) +
-      '&lon=' + encodeURIComponent(lng) +
-      '&addressdetails=1&zoom=' + zoom + '&accept-language=hu&countrycodes=hu';
-    console.log('Nominatim URL:', url);
-    const r = await nominatimFetch(url);
-    const text = await r.text();
-    console.log('Nominatim response.status:', r.status);
-    console.log('Nominatim response body (first 300 chars):', text.slice(0, 300));
-    if (!r.ok) {
-      console.error('Nominatim reverse failed:', r.status, text.slice(0, 200));
-      return res.status(r.status === 429 ? 429 : 502).json({ ok: false, error: 'Geocode reverse failed', status: r.status });
-    }
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch (parseErr) {
-      return res.status(502).json({ ok: false, error: 'Invalid geocode response' });
-    }
-    setReverseGeocodeCached(cacheKey, data);
-    res.json(data);
+    const status = result.status === 429 ? 429 : 502;
+    setGeocodeResponseHeaders(res, result.provider || 'nominatim');
+    return res.status(status).json({
+      ok: false,
+      error: status === 429 ? 'Geocode temporarily unavailable' : 'Geocode reverse failed',
+      status: result.status,
+    });
   } catch (err) {
     console.error('GET /api/geocode/reverse failed:', err);
     res.status(500).json({ ok: false, error: 'Geocode reverse failed' });
