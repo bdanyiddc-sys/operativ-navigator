@@ -2201,16 +2201,50 @@ app.get('/api/health', (_req, res) => {
 });
 
 const NOMINATIM_BASE = 'https://nominatim.openstreetmap.org';
-const NOMINATIM_USER_AGENT = 'OperativNavigator-Rent/1.0 (geocode-proxy)';
+const NOMINATIM_USER_AGENT = 'OperativNavigator-Rent/1.0 (geocode-proxy; https://operativ-navigator.onrender.com/rent/public)';
+const NOMINATIM_MIN_INTERVAL_MS = 1100;
+const REVERSE_GECODE_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
+let nominatimLastFetchAt = 0;
+let nominatimFetchChain = Promise.resolve();
+const reverseGeocodeCache = new Map();
+
+function reverseGeocodeCacheKey(lat, lng, zoom) {
+  return Number(lat).toFixed(6) + '|' + Number(lng).toFixed(6) + '|' + zoom;
+}
+
+function getReverseGeocodeCached(key) {
+  const entry = reverseGeocodeCache.get(key);
+  if (!entry) return null;
+  if (entry.expiresAt <= Date.now()) {
+    reverseGeocodeCache.delete(key);
+    return null;
+  }
+  return entry.data;
+}
+
+function setReverseGeocodeCached(key, data) {
+  reverseGeocodeCache.set(key, {
+    expiresAt: Date.now() + REVERSE_GECODE_CACHE_TTL_MS,
+    data: data,
+  });
+}
 
 async function nominatimFetch(url) {
-  return fetch(url, {
-    headers: {
-      Accept: 'application/json',
-      'Accept-Language': 'hu',
-      'User-Agent': NOMINATIM_USER_AGENT,
-    },
+  nominatimFetchChain = nominatimFetchChain.then(async () => {
+    const now = Date.now();
+    const wait = Math.max(0, NOMINATIM_MIN_INTERVAL_MS - (now - nominatimLastFetchAt));
+    if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+    nominatimLastFetchAt = Date.now();
+    return fetch(url, {
+      headers: {
+        Accept: 'application/json',
+        'Accept-Language': 'hu',
+        'User-Agent': NOMINATIM_USER_AGENT,
+      },
+    });
   });
+  return nominatimFetchChain;
 }
 
 app.get('/api/geocode/search', async (req, res) => {
@@ -2255,6 +2289,11 @@ app.get('/api/geocode/reverse', async (req, res) => {
     if (!isFinite(lat) || !isFinite(lng)) {
       return res.status(400).json({ ok: false, error: 'Invalid lat/lng' });
     }
+    const cacheKey = reverseGeocodeCacheKey(lat, lng, zoom);
+    const cached = getReverseGeocodeCached(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
     const url = NOMINATIM_BASE + '/reverse?format=jsonv2&lat=' + encodeURIComponent(lat) +
       '&lon=' + encodeURIComponent(lng) +
       '&addressdetails=1&zoom=' + zoom + '&accept-language=hu&countrycodes=hu';
@@ -2273,6 +2312,7 @@ app.get('/api/geocode/reverse', async (req, res) => {
     } catch (parseErr) {
       return res.status(502).json({ ok: false, error: 'Invalid geocode response' });
     }
+    setReverseGeocodeCached(cacheKey, data);
     res.json(data);
   } catch (err) {
     console.error('GET /api/geocode/reverse failed:', err);
