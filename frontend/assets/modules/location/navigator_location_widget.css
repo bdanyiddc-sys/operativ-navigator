@@ -1,0 +1,50 @@
+/* Navigator Location Core V1 — isolated styles. Existing Rent IDs and layout are untouched. */
+.navigator-location-results,
+.addr-suggest.navigator-location-managed {
+  position: relative;
+  z-index: 1000;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  max-height: 280px;
+  overflow-y: auto;
+  border: 1px solid rgba(33, 45, 62, 0.18);
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 10px 24px rgba(31, 42, 55, 0.14);
+}
+
+.navigator-location-results[hidden],
+.addr-suggest.navigator-location-managed[hidden] {
+  display: none !important;
+}
+
+.navigator-location-result {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(33, 45, 62, 0.08);
+}
+
+.navigator-location-result:last-child { border-bottom: 0; }
+.navigator-location-result:hover,
+.navigator-location-result.is-active,
+.navigator-location-result[aria-selected="true"] {
+  background: rgba(184, 138, 41, 0.10);
+}
+
+.navigator-location-result-title {
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.navigator-location-result-meta {
+  font-size: 0.82rem;
+  color: #667085;
+}
+
+[data-location-status="error"] { color: #b42318 !important; }
+[data-location-status="warning"] { color: #8a6116 !important; }
+[data-location-status="success"] { color: #067647 !important; }
