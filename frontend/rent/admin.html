@@ -2993,6 +2993,12 @@
       booking._kiallasServerSaveStatus = 'saved';
       return booking;
     }
+    if (booking.adminCalculatedRoute && booking.adminCalculatedRoute.geometry) {
+      booking._kiallasLocalSaved = true;
+      booking._kiallasServerSaveStatus = 'saved';
+      booking._kiallasAdminRouteFromServer = true;
+      return booking;
+    }
     if (window.IntegrationRouteWorkflow && window.IntegrationRouteWorkflow.hydrateKiallasServerStatusFromServerBooking) {
       return window.IntegrationRouteWorkflow.hydrateKiallasServerStatusFromServerBooking(booking);
     }
@@ -3002,12 +3008,13 @@
   function completeBookingSaveSuccess(saved) {
     var prevId = saved && saved.id;
     var existing = prevId ? bookings.find(function (x) { return x.id === prevId; }) : null;
-    if (existing && existing._kiallasLocalSaved && !(saved && saved.transferRoute)) {
+    if (existing && existing._kiallasLocalSaved && !(saved && (saved.transferRoute || saved.adminCalculatedRoute))) {
       preserveKiallasFieldsOnBooking(saved, existing);
       if (!saved._kiallasServerSaveStatus) saved._kiallasServerSaveStatus = 'blocked';
-    } else if (saved && saved.transferRoute) {
+    } else if (saved && (saved.transferRoute || saved.adminCalculatedRoute)) {
       saved._kiallasLocalSaved = true;
       saved._kiallasServerSaveStatus = 'saved';
+      applyKiallasBadgeStateAfterServerBooking(saved);
     } else {
       applyKiallasBadgeStateAfterServerBooking(saved);
     }
@@ -4231,7 +4238,18 @@
   function applyRentBookingsFromServer(rows, opts) {
     opts = opts || {};
     var prevIds = knownBookingIds || rentPollKnownIds || new Set();
-    var normalized = rows.map(normalizeBooking);
+    var prevById = {};
+    bookings.forEach(function (b) {
+      if (b && b.id) prevById[b.id] = b;
+    });
+    var normalized = rows.map(function (row) {
+      var b = applyKiallasBadgeStateAfterServerBooking(normalizeBooking(row));
+      var prev = prevById[b.id];
+      if (prev && !b.adminCalculatedRoute && (prev.transferRoute || prev._kiallasLocalSaved)) {
+        preserveKiallasFieldsOnBooking(b, prev);
+      }
+      return b;
+    });
     var newOnes = [];
     if (rentPollInitialized) {
       newOnes = normalized.filter(function (b) {
@@ -4435,23 +4453,40 @@
     }
   }
 
+  function resolveAdminCalculatedRouteForSave(entry) {
+    if (!entry || !entry.id) return null;
+    var calc = calculatedRoutes.find(function (r) { return r.bookingId === entry.id; });
+    if (calc) return normalizeRouteRecord(calc, entry);
+    if (entry.adminCalculatedRoute && entry.adminCalculatedRoute.geometry) {
+      return normalizeRouteRecord(entry.adminCalculatedRoute, entry);
+    }
+    var existing = bookings.find(function (b) { return b.id === entry.id; });
+    var transfer = (existing && (existing.transferRoute || existing.selectedTransferRoute))
+      || entry.transferRoute || entry.selectedTransferRoute;
+    if (transfer && window.IntegrationRouteWorkflow && window.IntegrationRouteWorkflow.buildAdminCalculatedRouteForSave) {
+      return window.IntegrationRouteWorkflow.buildAdminCalculatedRouteForSave(entry, transfer);
+    }
+    return null;
+  }
+
   function saveBookingToServer(entry) {
     setGeoStatus('Mentés…', 'warn');
-    var calc = calculatedRoutes.find(function (r) { return r.bookingId === entry.id; });
-    if (calc) entry.adminCalculatedRoute = calc;
+    var routeForSave = resolveAdminCalculatedRouteForSave(entry);
     var patchBody = prepareRentPatchBody(entry);
+    if (routeForSave) patchBody.adminCalculatedRoute = routeForSave;
     var promise = isBackendRentId(entry.id)
       ? patchRentInquiryApi(entry.id, patchBody)
       : postRentInquiryApi(patchBody);
     return promise.then(function (saved) {
       var norm = normalizeBooking(saved);
       var existing = bookings.find(function (x) { return x.id === norm.id; });
-      if (existing && existing._kiallasLocalSaved && !norm.transferRoute) {
+      if (existing && existing._kiallasLocalSaved && !norm.transferRoute && !norm.adminCalculatedRoute) {
         preserveKiallasFieldsOnBooking(norm, existing);
         if (!norm._kiallasServerSaveStatus) norm._kiallasServerSaveStatus = 'blocked';
-      } else if (norm.transferRoute) {
+      } else if (norm.transferRoute || norm.adminCalculatedRoute) {
         norm._kiallasLocalSaved = true;
         norm._kiallasServerSaveStatus = 'saved';
+        applyKiallasBadgeStateAfterServerBooking(norm);
       } else {
         applyKiallasBadgeStateAfterServerBooking(norm);
       }
