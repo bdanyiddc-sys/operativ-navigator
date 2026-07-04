@@ -381,32 +381,6 @@
     return !!(g && g.coordinates && g.coordinates.length >= 2);
   }
 
-  function buildAdminCalculatedRouteForSave(booking, transferRoute) {
-    if (!booking || !transferRoute || !hasKiallasRouteData(transferRoute)) return null;
-    var targetName = booking.placeName || booking.city || booking.address || null;
-    var fromName = transferRoute.originEndLocation || transferRoute.originLabel || transferRoute.fromName || null;
-    var record = {
-      bookingId: booking.id,
-      routeType: transferRoute.routeType || 'TRANSFER_ROUTE',
-      geometry: transferRoute.geometry,
-      distanceKm: transferRoute.distanceKm,
-      travelMinutes: transferRoute.travelMinutes,
-      fromName: fromName,
-      fromLat: transferRoute.fromLat,
-      fromLng: transferRoute.fromLng,
-      toLat: transferRoute.toLat != null ? transferRoute.toLat : booking.lat,
-      toLng: transferRoute.toLng != null ? transferRoute.toLng : booking.lng,
-      targetName: targetName,
-      preparationBufferMinutes: transferRoute.preparationBufferMinutes,
-      dataQuality: transferRoute.dataQuality,
-      routingProvider: transferRoute.routingProvider || transferRoute.provider,
-      calculatedAt: transferRoute.calculatedAt || new Date().toISOString()
-    };
-    if (transferRoute.latestDepartureAt) record.suggestedDeparture = transferRoute.latestDepartureAt;
-    else if (transferRoute.suggestedDeparture) record.suggestedDeparture = transferRoute.suggestedDeparture;
-    return record;
-  }
-
   function getKiallasRouteForBooking(booking) {
     if (!booking) return null;
     var route = booking.transferRoute || booking.selectedTransferRoute;
@@ -835,7 +809,9 @@
     if (!header) return '';
     var html = '<div class="kiallas-status-card' + (options.compact ? ' kiallas-status-card--compact' : '') + '">';
     html += '<div class="kiallas-card-header">' + escapeHtml(header) + '</div>';
-    if (state.localSaved && (state.serverBlocked || state.serverFailed)) {
+    if (state.serverSaved) {
+      html += '<div class="kiallas-card-server-ok">Szerverre mentve ✓</div>';
+    } else if (state.localSaved && (state.serverBlocked || state.serverFailed)) {
       html += '<div class="kiallas-card-server-warn">Szervermentés nem történt meg.</div>';
     }
     html += buildSavedRouteDetailBodyHtml(booking, route);
@@ -1614,10 +1590,10 @@
   }
 
   function init() {
-    bindSelectSync();
     if (!isLiveReadOnly()) return;
     function tryBind() {
       syncBookingSelects();
+      bindSelectSync();
       bindMapPopupDelegation();
       renderDualRouteDetails();
       return !!global.__rentMap;
@@ -1668,8 +1644,7 @@
     enhanceTypedRouteLayerPopups: enhanceTypedRouteLayerPopups,
     collectVisibleRouteGeoJsonFeatures: collectVisibleRouteGeoJsonFeatures,
     resolveRouteSourceLabel: resolveRouteSourceLabel,
-    computeOwnerReportRouteMetrics: computeOwnerReportRouteMetrics,
-    buildAdminCalculatedRouteForSave: buildAdminCalculatedRouteForSave
+    computeOwnerReportRouteMetrics: computeOwnerReportRouteMetrics
   };
 
   installRouteLayerHooks();
