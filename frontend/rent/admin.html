@@ -10,6 +10,9 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <script src="../opnav-config.js"></script>
   <script src="booking_storage.js"></script>
+  <script src="../assets/modules/rent/depot_matrix/integration_config.js"></script>
+  <script src="../assets/modules/rent/depot_matrix/integration_runtime_guard.js"></script>
+  <link rel="stylesheet" href="../assets/modules/rent/depot_matrix/depot_advisor.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     :root {
@@ -26,8 +29,18 @@
       --route: #38bdf8;
     }
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+    }
     html, body {
       margin: 0;
+      padding: 0;
+      width: 100%;
+      max-width: none;
       height: 100%;
       overflow: hidden;
       font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -38,10 +51,13 @@
     }
     .app {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) clamp(760px, 42vw, 920px);
-      width: 100vw;
+      grid-template-columns: minmax(0, 52.5fr) minmax(0, 47.5fr);
+      width: 100%;
+      max-width: none;
       height: 100vh;
+      height: 100dvh;
       min-height: 0;
+      min-width: 0;
       overflow: hidden;
     }
     .map-panel {
@@ -128,23 +144,31 @@
     .work-panel {
       width: 100%;
       min-width: 0;
-      max-width: none;
-      height: 100vh;
+      max-width: 100%;
+      height: 100%;
       min-height: 0;
       display: flex;
       flex-direction: column;
       background: var(--panel);
       border-left: 1px solid var(--line);
       overflow: hidden;
+      box-sizing: border-box;
+    }
+    .work-panel > * {
+      min-width: 0;
+      max-width: 100%;
+      box-sizing: border-box;
     }
     .work-header {
       flex-shrink: 0;
       padding: 5px 10px 4px;
       border-bottom: 1px solid var(--line);
       background: rgba(15, 23, 42, 0.65);
-      overflow: visible;
+      overflow: hidden;
       position: relative;
       z-index: 200;
+      min-width: 0;
+      max-width: 100%;
     }
     .work-toolbar {
       display: flex;
@@ -193,6 +217,8 @@
       padding: 3px 8px;
       border-bottom: 1px solid var(--line);
       background: rgba(10, 16, 26, 0.55);
+      min-width: 0;
+      max-width: 100%;
     }
     .main-nav-btn {
       width: 100%;
@@ -217,6 +243,8 @@
     .module-viewport {
       flex: 1;
       min-height: 0;
+      min-width: 0;
+      max-width: 100%;
       overflow: hidden;
       position: relative;
     }
@@ -224,8 +252,10 @@
       display: none;
       height: 100%;
       min-height: 0;
+      min-width: 0;
+      max-width: 100%;
       overflow: hidden;
-      padding: 8px 10px 10px;
+      padding: 6px 8px 8px;
     }
     .main-module.is-active { display: flex; flex-direction: column; }
     .detail-module-pane,
@@ -367,23 +397,191 @@
     }
     .gis-kv strong { font-size: 13px; color: var(--text); font-weight: 700; }
     .route-target-panel {
-      padding: 12px;
-      border-radius: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 6px 8px;
+      border-radius: 8px;
       border: 1px solid rgba(56, 189, 248, 0.35);
       background: rgba(2, 132, 199, 0.12);
-      margin-bottom: 12px;
+      margin-bottom: 6px;
+      font-size: 11px;
+      line-height: 1.25;
+      max-height: none;
+      overflow: hidden;
+    }
+    .route-target-panel .rt-line1 {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 0.35em 0.5em;
+      font-weight: 800;
+      font-size: 12px;
+      line-height: 1.2;
+    }
+    .route-target-panel .rt-booking-id {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 10px;
+      font-weight: 500;
+      color: #7dd3fc;
+      flex-shrink: 0;
+    }
+    .route-target-panel .rt-place { font-weight: 800; min-width: 0; }
+    .route-target-panel .rt-line2 {
+      color: var(--muted);
+      font-size: 10px;
+      line-height: 1.2;
+    }
+    .route-target-panel .rt-line3 {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 10px;
+      color: #cbd5e1;
+      font-size: 10px;
+      line-height: 1.2;
+    }
+    .route-target-panel .rt-past-warn {
+      margin-top: 3px;
+      font-size: 10px;
+      font-weight: 700;
+      color: #fbbf24;
+      line-height: 1.3;
+    }
+    .route-actions-bar {
+      margin: 0 0 6px;
+    }
+    .route-operator-primary {
+      margin: 0 0 8px;
+    }
+    .route-draft-preview--hidden {
+      display: none !important;
+      height: 0 !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      overflow: hidden !important;
+      border: 0 !important;
+    }
+    .route-operator-primary__btn {
+      width: 100%;
+      min-height: 42px;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+    .route-operator-section {
+      margin: 8px 0 0;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      border-radius: 8px;
+      background: rgba(15, 23, 42, 0.45);
+      padding: 4px 8px;
+    }
+    .route-operator-section > summary {
+      cursor: pointer;
+      font-weight: 800;
+      font-size: 11px;
+      color: #94a3b8;
+      list-style: none;
+      padding: 4px 2px;
+    }
+    .route-operator-section > summary::-webkit-details-marker { display: none; }
+    .route-operator-section__body {
+      padding: 6px 2px 4px;
+    }
+    .route-settings-summary-hint {
+      font-weight: 500;
+      color: #64748b;
+      margin-left: 6px;
+      font-size: 10px;
+    }
+    .route-form-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 8px 10px;
+      margin-bottom: 8px;
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+    }
+    @media (min-width: 1280px) {
+      .app {
+        width: 100%;
+        max-width: none;
+        grid-template-columns: minmax(0, 52.5fr) minmax(0, 47.5fr);
+      }
+    }
+    .route-form-grid .field { margin-bottom: 0; }
+    #module-routes label {
+      font-size: 10px;
+      margin-bottom: 3px;
+      color: var(--muted);
+      font-weight: 700;
+    }
+    #module-routes input,
+    #module-routes select {
+      min-height: 38px;
+      padding: 6px 8px;
       font-size: 13px;
-      line-height: 1.55;
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+    }
+    #module-routes .btn.xs {
+      padding: 4px 8px;
+      font-size: 11px;
+      min-height: 34px;
+      border-radius: 8px;
+    }
+    #module-routes .route-actions-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      margin: 6px 0;
+      align-items: center;
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+    }
+    #module-routes .route-actions-row .btn {
+      min-height: 34px;
+      padding: 5px 8px;
+      font-size: 11px;
+      width: auto;
+      max-width: 100%;
+      flex: 0 1 auto;
+      white-space: nowrap;
+      line-height: 1.2;
+      text-align: center;
+    }
+    @media (min-width: 1100px) {
+      #module-routes .route-actions-row {
+        flex-wrap: nowrap;
+        gap: 4px;
+      }
+      #module-routes .route-actions-row .btn {
+        flex: 0 1 auto;
+        min-height: 32px;
+        padding: 4px 7px;
+        font-size: 10px;
+      }
+    }
+    #module-routes .route-status-line {
+      margin: 0 0 8px;
+      padding: 5px 8px;
+      border-radius: 6px;
+      background: rgba(15, 23, 42, 0.55);
+      border: 1px solid var(--line);
+      font-size: 10px;
+      color: var(--muted);
+      line-height: 1.3;
+    }
+    #module-routes .module-full-card h2 {
+      margin: 0 0 8px;
+      font-size: 12px;
     }
     .route-target-panel .rt-title {
-      font-size: 10px;
-      font-weight: 800;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: var(--muted);
-      margin-bottom: 6px;
+      margin-bottom: 0;
     }
-    .route-target-panel .rt-id { font-weight: 900; color: #7dd3fc; }
     .resources-section { margin-bottom: 16px; }
     .resources-section h3 {
       margin: 0 0 8px;
@@ -527,12 +725,45 @@
       background: rgba(15, 23, 42, 0.45);
     }
     #module-calendar .module-full-card,
-    #module-routes .module-full-card,
     #module-analytics .module-full-card {
       flex: 1;
       min-height: 0;
       overflow-y: auto;
       overflow-x: hidden;
+    }
+    #module-routes.main-module.is-active {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      padding-bottom: 8px;
+    }
+    #module-routes .module-full-card {
+      flex: 1;
+      min-height: 0;
+      min-width: 0;
+      max-width: 100%;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      padding: 8px 10px;
+    }
+    #module-routes .route-module-scroll {
+      flex: 1;
+      min-height: 0;
+      min-width: 0;
+      max-width: 100%;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding-right: 2px;
+    }
+    #module-routes .route-module-scroll > * {
+      min-width: 0;
+      max-width: 100%;
+    }
+    .route-planner-block {
+      flex-shrink: 0;
+      min-width: 0;
+      max-width: 100%;
     }
     .module-full-card h2 {
       margin: 0 0 10px;
@@ -630,8 +861,46 @@
     .bookings-list-module .filters-compact .field {
       margin-bottom: 5px;
     }
+    .bookings-list-module .filters-compact .filters-row-primary {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 5px;
+    }
+    .bookings-list-module .filters-compact .filters-row-search .field {
+      margin-bottom: 5px;
+    }
+    .bookings-list-module .filters-compact .filter-single-day-wrap {
+      display: flex;
+      align-items: flex-end;
+      gap: 6px;
+      margin-top: 4px;
+      flex-wrap: wrap;
+    }
+    .bookings-list-module .filters-compact .filter-single-day-wrap label {
+      margin-bottom: 0;
+      white-space: nowrap;
+    }
+    .bookings-list-module .filters-compact .filter-single-day-wrap input[type="date"] {
+      max-width: 148px;
+      min-height: 28px;
+      padding: 4px 7px;
+      font-size: 12px;
+    }
     .bookings-list-module .filters-compact .filters {
       gap: 5px;
+    }
+    .route-compact-summary {
+      font-weight: 700;
+      font-size: 13px;
+      margin-bottom: 4px;
+    }
+    .route-compact-fuel {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .route-compact-fuel--hint {
+      font-style: italic;
     }
     .bookings-list-module .filters-compact .actions {
       margin-top: 5px;
@@ -719,24 +988,104 @@
       background: rgba(34, 197, 94, 0.12);
       border: 1px solid rgba(34, 197, 94, 0.35);
     }
+    .route-server-save-status {
+      margin-top: 6px;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.35;
+    }
+    .route-server-save-status--ok { color: var(--ok); }
+    .route-server-save-status--warn { color: var(--warn); }
+    .route-server-save-warning {
+      margin-top: 6px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      font-size: 12px;
+      line-height: 1.4;
+      color: #fcd34d;
+      background: rgba(234, 179, 8, 0.12);
+      border: 1px solid rgba(234, 179, 8, 0.35);
+    }
+    .kiallas-status-card {
+      margin-top: 8px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      font-size: 12px;
+      line-height: 1.4;
+      background: rgba(34, 197, 94, 0.08);
+      border: 1px solid rgba(34, 197, 94, 0.28);
+    }
+    .kiallas-status-card--compact {
+      margin-top: 4px;
+      padding: 5px 8px;
+      font-size: 10px;
+      line-height: 1.3;
+    }
+    .kiallas-card-header { font-weight: 800; color: var(--ok); margin-bottom: 2px; }
+    .kiallas-card-server-ok { font-weight: 700; color: var(--ok); margin-bottom: 2px; }
+    .kiallas-card-server-warn { font-weight: 700; color: var(--warn); margin-bottom: 2px; }
+    .kiallas-card-line { color: var(--text, #e2e8f0); }
+    .kiallas-card-meta { color: var(--muted); font-size: 11px; }
+    .kiallas-status-card--compact .kiallas-card-meta { font-size: 9px; }
+    .route-missing-hint {
+      font-size: 12px;
+      color: var(--muted);
+      margin: 4px 0;
+      line-height: 1.35;
+    }
+    .ops-section { margin-top: 8px; }
+    .ops-section-label {
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .ops-section--estimate .ops-estimate-note { color: var(--muted); font-style: italic; }
+    .ops-fuel-note {
+      margin-top: 8px;
+      font-size: 11px;
+      color: var(--muted);
+      font-style: italic;
+    }
     .filters { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .list {
       max-height: 300px; overflow-y: auto;
       border: 1px solid var(--line); border-radius: 10px;
     }
     .list-item {
-      padding: 6px 72px 6px 8px;
+      padding: 3px 68px 2px 8px;
       border-bottom: 1px solid var(--line);
       cursor: pointer;
+      min-height: 0;
     }
     .list-item:hover, .list-item.is-active { background: rgba(249, 115, 22, 0.12); }
     .list-item:last-child { border-bottom: 0; }
-    .list-title { font-weight: 800; font-size: 13px; line-height: 1.25; }
-    .list-meta { color: var(--muted); font-size: 11px; margin-top: 2px; line-height: 1.25; }
-    .list-tags { margin-top: 3px; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+    .list-title {
+      font-weight: 800;
+      font-size: 12px;
+      line-height: 1.15;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 0.25em 0.4em;
+      min-width: 0;
+    }
+    .list-booking-id {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 9px;
+      font-weight: 500;
+      color: var(--muted);
+      letter-spacing: 0.02em;
+      flex-shrink: 0;
+    }
+    .list-title-place { font-weight: 800; min-width: 0; }
+    .list-meta { color: var(--muted); font-size: 10px; margin-top: 0; line-height: 1.15; }
+    .list-tags { margin-top: 1px; display: flex; flex-wrap: wrap; gap: 3px; align-items: center; }
     .tag {
-      display: inline-block; padding: 1px 6px; border-radius: 999px;
-      font-size: 10px; font-weight: 700;
+      display: inline-block; padding: 0 5px; border-radius: 999px;
+      font-size: 9px; font-weight: 700; line-height: 1.35;
     }
     .tag-people { background: rgba(34, 197, 94, 0.2); color: #86efac; }
     .tag-veh { background: rgba(56, 189, 248, 0.2); color: #7dd3fc; }
@@ -756,13 +1105,14 @@
     .list-item-actions { display: none; }
     .list-del-btn {
       position: absolute;
-      top: 5px;
+      top: 50%;
       right: 5px;
+      transform: translateY(-50%);
       z-index: 2;
-      font-size: 10px;
-      padding: 2px 6px;
+      font-size: 9px;
+      padding: 1px 5px;
       min-height: 0;
-      line-height: 1.2;
+      line-height: 1.15;
     }
     .rent-modal {
       position: fixed; inset: 0; z-index: 9999;
@@ -932,15 +1282,17 @@
     .nav-route { background: #0284c7; }
     .leaflet-tooltip.map-label,
     .leaflet-tooltip.rent-map-label-dark {
+      --booking-label-status-color: #94a3b8;
       background: rgba(15, 23, 42, 0.94) !important;
       background-color: rgba(15, 23, 42, 0.94) !important;
       border: 1px solid rgba(255, 255, 255, 0.14) !important;
       border-radius: 6.9px !important;
-      box-shadow: 0 2.3px 6.9px rgba(0, 0, 0, 0.35) !important;
+      box-shadow: inset 4px 0 0 0 var(--booking-label-status-color, #94a3b8), 0 2.3px 6.9px rgba(0, 0, 0, 0.35) !important;
+      box-sizing: border-box !important;
       color: #f1f5f9 !important;
       font-size: 9.2px;
       line-height: 1.44;
-      padding: 4.6px 6.9px !important;
+      padding: 4.6px 6.9px 4.6px 6.9px !important;
       font-weight: 600;
       white-space: nowrap;
       pointer-events: auto;
@@ -949,7 +1301,7 @@
     .leaflet-tooltip.map-label:hover,
     .leaflet-tooltip.rent-map-label-dark:hover {
       border-color: rgba(251, 146, 60, 0.55) !important;
-      box-shadow: 0 2px 10px rgba(251, 146, 60, 0.2) !important;
+      box-shadow: inset 4px 0 0 0 var(--booking-label-status-color, #94a3b8), 0 2px 10px rgba(251, 146, 60, 0.2) !important;
     }
     .leaflet-tooltip-left.map-label::before,
     .leaflet-tooltip-left.rent-map-label-dark::before {
@@ -1103,7 +1455,7 @@
     .route-geom-field { margin-top: 8px; }
     .route-geom-field textarea { min-height: 72px; font-family: monospace; font-size: 11px; }
     @media (max-width: 1000px) {
-      html, body { overflow: auto; height: auto; min-height: 100%; }
+      html, body { overflow-x: hidden; overflow-y: auto; height: auto; min-height: 100%; }
       .app {
         display: flex;
         flex-direction: column;
@@ -1157,6 +1509,22 @@
         min-height: 36px;
         padding: 6px 10px;
         font-size: 11px;
+      }
+      #module-routes .route-actions-row .btn {
+        flex: 1 1 calc(50% - 4px);
+        max-width: calc(50% - 2px);
+        white-space: normal;
+        min-height: 40px;
+      }
+      #module-routes .route-actions-row .btn.tech-only {
+        flex: 1 1 100%;
+        max-width: 100%;
+      }
+      .route-target-panel {
+        grid-template-columns: 1fr;
+      }
+      .route-target-panel .rt-row--meta {
+        grid-template-columns: 1fr;
       }
     }
   </style>
@@ -1309,7 +1677,10 @@
                   <p id="legacyAddressHint" class="legacy-address-hint" hidden></p>
                   <input type="hidden" id="address" />
                   <p class="geo-status" id="geoStatus"></p>
-                  <p class="route-saved-badge" id="routeSavedBadge" hidden>Útvonal rögzítve ✓</p>
+                  <p class="route-saved-badge" id="routeSavedBadge" hidden>Kiállás helyileg rögzítve ✓</p>
+                  <p class="route-server-save-status" id="kiallasServerSaveStatus" hidden></p>
+                  <p class="route-server-save-warning" id="kiallasServerSaveWarning" hidden></p>
+                  <div class="route-type-details route-type-details--transfer" id="transferBookingSummary" hidden></div>
                   <p class="hint">Cím alapján geokódolás. A térképre kattintva is beállítható a pont.</p>
                   <div class="grid3">
                     <div class="field">
@@ -1423,7 +1794,9 @@
                   <div class="gis-route-box" id="gisRouteSummary" hidden></div>
                   <div class="actions">
                     <button type="button" class="btn secondary sm" id="btnGisExportGeoJson" disabled>GeoJSON letöltése</button>
-                    <button type="button" class="btn route sm" id="btnAttachCalcRoute">Útvonal hozzárendelése és vissza az adatlaphoz</button>
+                    <button type="button" class="btn secondary sm" id="btnGisExportCustomerRoute" disabled title="Megrendelői szolgáltatási útvonal export">Megrendelői útvonal letöltése</button>
+                    <button type="button" class="btn secondary sm" id="btnGisExportTransferRoute" disabled title="Kiválasztott kiállási útvonal export">Kiállás letöltése</button>
+                    <button type="button" class="btn route sm" id="btnAttachCalcRoute">Megrendelői útvonal hozzárendelése</button>
                     <button type="button" class="btn ghost sm" id="btnGisOpenRouteModule">Útvonal tervezése</button>
                   </div>
                 </div>
@@ -1459,11 +1832,8 @@
                   <span id="rentDataStatus" class="rent-data-status" hidden></span>
                 </div>
                 <div class="filters-compact">
-                  <div class="filters">
-                    <div class="field">
-                      <label for="filterDay">Konkrét nap</label>
-                      <input id="filterDay" type="date" />
-                    </div>
+                  <input type="date" id="filterDay" hidden aria-hidden="true" tabindex="-1" />
+                  <div class="filters-row-primary">
                     <div class="field">
                       <label for="filterPlace">Helyszín</label>
                       <input id="filterPlace" placeholder="Helyszín vagy cím…" />
@@ -1477,9 +1847,15 @@
                       <input id="filterTo" type="date" />
                     </div>
                   </div>
-                  <div class="field" style="margin-top:4px">
-                    <label for="filterSearch">Szöveges keresés</label>
-                    <input id="filterSearch" placeholder="Megrendelő, cég, jármű, sofőr, telefon…" />
+                  <div class="filters-row-search">
+                    <div class="field">
+                      <label for="filterSearch">Szöveges keresés</label>
+                      <input id="filterSearch" placeholder="Megrendelő, cég, jármű, sofőr, telefon…" />
+                    </div>
+                  </div>
+                  <div class="filter-single-day-wrap">
+                    <label for="filterSingleDay">Egy nap</label>
+                    <input type="date" id="filterSingleDay" title="Dátumtól és Dátumig ugyanarra a napra állítása" />
                   </div>
                   <div class="actions">
                     <button type="button" class="btn secondary sm" id="filterToday">Mai nap</button>
@@ -1487,6 +1863,8 @@
                     <button type="button" class="btn secondary sm" id="filter5">5 nap</button>
                     <button type="button" class="btn secondary sm" id="filter7">7 nap</button>
                     <button type="button" class="btn secondary sm" id="filter30">30 nap</button>
+                    <button type="button" class="btn secondary sm" id="filterShowPast" aria-pressed="false" title="Múltbeli rendelések megjelenítése">Korábbiak (0)</button>
+                    <button type="button" class="btn primary sm" id="filterShowAll">Összes foglalás</button>
                     <button type="button" class="btn ghost sm" id="filterReset">Törlés</button>
                   </div>
                   <div class="actions bookings-import-actions-legacy" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line)">
@@ -1518,36 +1896,79 @@
         <section id="module-routes" class="main-module" aria-label="Útvonaltervezés" hidden>
           <div class="module-full-card" id="routeCard">
             <h2>Útvonaltervezés</h2>
+            <div class="route-module-scroll">
             <div class="route-target-panel" id="routeTargetPanel">
-              <div class="rt-title">Célfoglalás</div>
-              <div id="routeTargetLabel">Nincs kiválasztott célfoglalás.</div>
+              <div class="rt-line1" id="routeTargetLine1"><span class="rt-booking-id" id="routeTargetId">—</span><span class="rt-place" id="routeTargetPlace">—</span></div>
+              <div class="rt-line2" id="routeTargetMeta">Nincs kiválasztott célfoglalás.</div>
+              <div class="rt-line3"><span id="routeTargetHeadcount">—</span><span id="routeTargetStatus">—</span></div>
+              <div class="rt-past-warn" id="routeTargetPastWarn" hidden>Múltbeli célfoglalás – ehhez a foglaláshoz új indulási ajánlás nem készíthető.</div>
             </div>
-            <div class="field">
-              <label for="routeDepot">Kiindulási telephely</label>
-              <select id="routeDepot"></select>
-            </div>
-            <div class="field">
-              <label for="routeCustomFrom">Egyedi kiindulási cím (opcionális)</label>
-              <input id="routeCustomFrom" placeholder="Ha kitöltöd, felülírja a telephelyet" />
-            </div>
-            <div class="grid2">
-              <div class="field">
-                <label for="routeSpeed">Átlagsebesség (km/h)</label>
-                <input id="routeSpeed" type="number" min="5" max="120" value="30" />
+
+            <div class="route-actions-bar" id="routeActionsBar">
+              <div class="route-actions-row">
+                <button type="button" class="btn route" id="btnCalcRoute">Útvonal számítása</button>
+                <button type="button" class="btn route sm" id="btnWriteBackRoute">Megrendelői útvonal hozzárendelése</button>
+                <button type="button" class="btn route sm" id="btnAssignTransferRoute" title="Kiállás – telephely / előző hely → indulási pont. Hozzárendelés után vissza az adatlaphoz.">Kiállás hozzárendelése</button>
+                <button type="button" class="btn ghost sm" id="btnBackToBookingFromRoute">Vissza módosítás nélkül</button>
+                <button type="button" class="btn secondary sm tech-only" id="btnExportGeoJson" disabled>GeoJSON</button>
               </div>
-              <div class="field">
-                <label for="routeBookingId">Célfoglalás</label>
-                <select id="routeBookingId"></select>
+              <div class="route-result" id="routeResult" hidden></div>
+            </div>
+
+            <details class="route-operator-section" id="routeSettingsSection">
+              <summary>Útvonal- és számítási beállítások <span class="route-settings-summary-hint" id="routeSettingsSummaryHint"></span></summary>
+              <div class="route-operator-section__body">
+                <div class="route-form-grid">
+                  <div class="field">
+                    <label for="routeDepot">Kiindulási telephely</label>
+                    <select id="routeDepot"></select>
+                  </div>
+                  <div class="field">
+                    <label for="routeCustomFrom">Egyedi kiindulási cím</label>
+                    <input id="routeCustomFrom" placeholder="Felülírja a telephelyet" />
+                  </div>
+                  <div class="field">
+                    <label for="routeSpeed">Átlagsebesség (km/h)</label>
+                    <input id="routeSpeed" type="number" min="5" max="120" value="30" />
+                  </div>
+                  <div class="field">
+                    <label for="routeBookingId">Célfoglalás</label>
+                    <select id="routeBookingId"></select>
+                  </div>
+                  <div class="field">
+                    <label for="advisorBuffer">Felkészülési tartalék (perc)</label>
+                    <input id="advisorBuffer" type="number" min="0" max="480" value="30" />
+                  </div>
+                  <div class="field">
+                    <label for="advisorPreviousProjectWindowHours">Továbbküldési időablak (óra)</label>
+                    <input id="advisorPreviousProjectWindowHours" type="number" min="1" max="72" value="24" />
+                  </div>
+                  <div class="field">
+                    <label for="fuelConsumptionL100">Fogyasztás (l/100 km)</label>
+                    <input id="fuelConsumptionL100" type="text" inputmode="decimal" autocomplete="off" placeholder="pl. 12,5" />
+                  </div>
+                  <div class="field">
+                    <label for="fuelPriceFtL">Üzemanyagár (Ft/l)</label>
+                    <input id="fuelPriceFtL" type="text" inputmode="decimal" autocomplete="off" placeholder="pl. 650" />
+                  </div>
+                </div>
               </div>
+            </details>
+
+            <div class="route-operator-primary">
+              <button type="button" class="btn route route-operator-primary__btn" id="btnAdvisorCompare">INDULÁSI LEHETŐSÉGEK ÖSSZEHASONLÍTÁSA</button>
+              <p class="depot-advisor-panel__status" id="advisorStatus" hidden></p>
             </div>
-            <div class="actions">
-              <button type="button" class="btn route" id="btnCalcRoute">Útvonal számítása</button>
-              <button type="button" class="btn secondary sm tech-only" id="btnExportGeoJson" disabled>GeoJSON export</button>
-              <button type="button" class="btn route sm" id="btnWriteBackRoute">Útvonal hozzárendelése és vissza az adatlaphoz</button>
-              <button type="button" class="btn ghost sm" id="btnBackToBookingFromRoute">Vissza módosítás nélkül</button>
+
+            <div class="depot-advisor-panel__results" id="advisorResults" hidden></div>
+
+            <div class="route-type-details-grid" id="routeTypeDetailsGrid">
+              <div class="route-type-details route-type-details--customer" id="customerRouteDetails" hidden></div>
+              <div class="route-type-details route-type-details--transfer" id="transferRouteDetails" hidden></div>
             </div>
-            <div class="route-result" id="routeResult" hidden></div>
-            <p class="hint">Kisvonat útvonal: gyorsforgalom kizárva (Valhalla). Menetidő a megadott átlagsebességből. A foglalás kezdési ideje = célérkezés.</p>
+            <div class="route-draft-preview route-draft-preview--hidden" id="transferDraftPreview" hidden aria-hidden="true"></div>
+            <div class="route-type-details route-type-details--ops" id="operationalCostSummary" hidden></div>
+            </div>
           </div>
         </section>
 
@@ -1559,7 +1980,11 @@
               <button type="button" class="btn" id="btnReportExportForecast">90 napos előrejelzés (CSV)</button>
               <button type="button" class="btn secondary" id="btnReportExportClosed">Lezárt 30 nap (CSV)</button>
             </div>
-            <p class="report-export-hint">Oszlopok: Dátum · Város · Vonat · Utas fő · Ár · Állapot (adatlap) · Fizetési állapot (adatlap, ha kitöltve) · napi Összesen fő/ár az adott nap utolsó sorában. Ugyanaz elérhető az <strong>Adatkezelés</strong> menüben is.</p>
+            <p class="report-export-hint">Oszlopok: Rendelés azonosító · Dátum · Város · Vonat · Utas fő · Ár · Állapot (adatlap) · Fizetési állapot (adatlap, ha kitöltve) · napi Összesen fő/ár · ODA_VISSZA_KM · ÜZEMANYAG_L_ODA_VISSZA · ÜZEMANYAG_FT_ODA_VISSZA · BECSÜLT_MUNKAIDŐ_ÓRA. Ugyanaz elérhető az <strong>Adatkezelés</strong> menüben is.</p>
+            <div id="ownerReportPreviewWrap" class="owner-report-preview-wrap">
+              <h4>Riport előnézet (90 nap)</h4>
+              <div id="ownerReportPreviewTableWrap" class="owner-report-preview-table-wrap"></div>
+            </div>
           </div>
         </section>
       </div>
@@ -1622,6 +2047,10 @@
   var rentAutoRefreshEnabled = true;
   var RENT_POLL_MS = 5000;
   var RENT_DISMISS_KEY = 'rent_admin_dismissed_new';
+  var FUEL_STORAGE_KEYS = {
+    consumption: 'opnav_rent_lab_fuel_consumption_l100km_v1',
+    price: 'opnav_rent_lab_fuel_price_ft_l_v1'
+  };
   var rentPollTimer = null;
   var rentPollSnapshot = '';
   var rentPollKnownIds = null;
@@ -1680,7 +2109,9 @@
     avoidHighways: true,
     osrmBase: 'https://router.project-osrm.org/route/v1',
     osrmProfile: 'driving',
-    valhallaUrl: 'https://valhalla1.openstreetmap.de/route',
+    valhallaUrl: (window.DEPOT_MATRIX_CONFIG && window.DEPOT_MATRIX_CONFIG.valhallaRouteUrl) || 'https://valhalla1.openstreetmap.de/route',
+    valhallaRouteUrl: (window.DEPOT_MATRIX_CONFIG && window.DEPOT_MATRIX_CONFIG.valhallaRouteUrl) || 'https://valhalla1.openstreetmap.de/route',
+    valhallaMatrixUrl: (window.DEPOT_MATRIX_CONFIG && window.DEPOT_MATRIX_CONFIG.valhallaMatrixUrl) || 'https://valhalla1.openstreetmap.de/sources_to_targets',
     valhallaUseHighways: 0,
     advisoryWarning: 'Az automatikus útvonal csak tájékoztató jellegű, kisvonatra ellenőrizendő.'
   };
@@ -1802,6 +2233,16 @@
     TELJESITVE: 'Teljesítve'
   };
 
+  var MAP_LABEL_STATUS_STRIPE_UNKNOWN = '#94a3b8';
+  var MAP_LABEL_STATUS_STRIPE = {
+    ARAJANLATKERES: MAP_LABEL_STATUS_STRIPE_UNKNOWN,
+    AJANLAT_KIKULDVE: MAP_LABEL_STATUS_STRIPE_UNKNOWN,
+    VARAKOZIK: MAP_LABEL_STATUS_STRIPE_UNKNOWN,
+    MEGRENDELVE: '#2563eb',
+    TELJESITVE: '#22c55e',
+    LEMONDVA: '#ef4444'
+  };
+
   var BOOKING_TYPE_LABEL = {
     MENETRENDI_JARAT: 'Menetrendi járat',
     BERLES: 'Bérlés'
@@ -1817,6 +2258,7 @@
   ];
 
   var map = L.map('map', { zoomControl: true, tapTolerance: 20 }).setView([47.1625, 19.5033], 7);
+  window.__rentMap = map;
 
   var MAP_BASEMAP_KEY = 'rent_map_basemap';
   var baseMapLayerDefs = {
@@ -1914,6 +2356,7 @@
   syncBasemapSwitcherUi();
 
   var bookings = [];
+  var showPastBookings = false;
   var calculatedRoutes = [];
   var rentDataSource = '';
   var isSavingBooking = false;
@@ -1924,12 +2367,73 @@
   var markerEntries = [];
   var markerLayer = L.layerGroup().addTo(map);
   var bookingRouteLayer = L.layerGroup().addTo(map);
+  window.__rentBookingRouteLayer = bookingRouteLayer;
   var routeLayer = L.layerGroup().addTo(map);
   var draftMarker = null;
   var geocodeTimer = null;
   var geocodeSeq = 0;
 
   var $ = function (id) { return document.getElementById(id); };
+
+  function parsePositiveDecimalInput(raw) {
+    if (raw == null) return null;
+    var s = String(raw).trim().replace(',', '.');
+    if (!s) return null;
+    var n = Number(s);
+    if (!isFinite(n) || n <= 0) return null;
+    return Math.round(n * 1000) / 1000;
+  }
+
+  function readStoredFuelPrefs() {
+    var consumption = null;
+    var price = null;
+    try {
+      var cs = localStorage.getItem(FUEL_STORAGE_KEYS.consumption);
+      var ps = localStorage.getItem(FUEL_STORAGE_KEYS.price);
+      if (cs != null && cs !== '') consumption = parsePositiveDecimalInput(cs);
+      if (ps != null && ps !== '') price = parsePositiveDecimalInput(ps);
+    } catch (e) { /* ignore */ }
+    return { consumptionLitresPer100Km: consumption, fuelPricePerLitre: price };
+  }
+
+  function loadFuelPrefsFromStorage() {
+    var prefs = readStoredFuelPrefs();
+    var cEl = $('fuelConsumptionL100');
+    var pEl = $('fuelPriceFtL');
+    if (cEl && prefs.consumptionLitresPer100Km != null) {
+      cEl.value = String(prefs.consumptionLitresPer100Km).replace('.', ',');
+    }
+    if (pEl && prefs.fuelPricePerLitre != null) {
+      pEl.value = String(prefs.fuelPricePerLitre).replace('.', ',');
+    }
+  }
+
+  function persistFuelPrefFromField(fieldId, storageKey) {
+    var el = $(fieldId);
+    if (!el) return;
+    var parsed = parsePositiveDecimalInput(el.value);
+    if (parsed == null) return;
+    try { localStorage.setItem(storageKey, String(parsed)); } catch (e) { /* ignore */ }
+  }
+
+  function refreshFuelEstimateDisplays() {
+    if (window.IntegrationRouteWorkflow && window.IntegrationRouteWorkflow.renderDualRouteDetails) {
+      window.IntegrationRouteWorkflow.renderDualRouteDetails();
+    }
+    if (window.IntegrationRouteWorkflow && window.IntegrationRouteWorkflow.renderOperationalCostSummary) {
+      var b = getRouteTargetBooking();
+      window.IntegrationRouteWorkflow.renderOperationalCostSummary(b && b.id);
+    }
+  }
+
+  function syncFilterSingleDayControl() {
+    var single = $('filterSingleDay');
+    if (!single) return;
+    var from = $('filterFrom').value;
+    var to = $('filterTo').value;
+    if (from && to && from === to) single.value = from;
+    else if (!$('filterDay').value) single.value = '';
+  }
   updateAdminDebugBanner();
 
   function adminUserName(u) {
@@ -2204,9 +2708,14 @@
   function openBookingForm(id) {
     var b = bookings.find(function (x) { return x.id === id; });
     if (!b) return;
+    var prevId = $('editId').value;
+    if (prevId && prevId !== id) clearRouteResultPanel();
     fillForm(b);
     setFormTab('basic');
     setMainModule('detail');
+    if (window.IntegrationRouteWorkflow && window.IntegrationRouteWorkflow.syncBookingSelects) {
+      window.IntegrationRouteWorkflow.syncBookingSelects(id);
+    }
     var pts = getBookingRoutePoints(b);
     if (pts.length >= 2) {
       map.fitBounds(L.latLngBounds(pts.map(function (p) { return [p.lat, p.lng]; })), { padding: [36, 36], animate: true });
@@ -2217,6 +2726,7 @@
     }
     renderList(getFiltered());
   }
+  window.openBookingForm = openBookingForm;
 
   function buildAddressForStorage() {
     var street = $('street').value.trim();
@@ -2440,7 +2950,7 @@
     setMainModule('detail');
     setFormTab('basic');
     renderBasicRouteSavedBadge(getCurrentBookingBase());
-    setGeoStatus('Útvonal visszaírva. Mentés szükséges a tároláshoz.', 'warn');
+    setGeoStatus('Megrendelői útvonal visszaírva a drafthoz. Mentés szükséges a tároláshoz.', 'warn');
     renderGisTabSummary();
   }
 
@@ -2456,22 +2966,59 @@
   }
 
   function renderBasicRouteSavedBadge(b) {
+    if (window.IntegrationRouteWorkflow && window.IntegrationRouteWorkflow.renderKiallasSaveStatusBadges) {
+      window.IntegrationRouteWorkflow.renderKiallasSaveStatusBadges(b && b.id);
+      return;
+    }
     var el = $('routeSavedBadge');
     if (!el) return;
-    if (!b && $('routeGeometry') && $('routeGeometry').value.trim()) {
-      b = { routeGeometry: parseRouteGeometryInput($('routeGeometry').value.trim()) };
+    el.hidden = true;
+  }
+
+  function preserveKiallasFieldsOnBooking(target, source) {
+    if (!target || !source) return target;
+    if (source.transferRoute) target.transferRoute = source.transferRoute;
+    if (source.selectedTransferRoute) target.selectedTransferRoute = source.selectedTransferRoute;
+    if (source._kiallasLocalSaved) target._kiallasLocalSaved = source._kiallasLocalSaved;
+    if (source._kiallasLocalSavedAt) target._kiallasLocalSavedAt = source._kiallasLocalSavedAt;
+    if (source._kiallasServerSaveStatus) target._kiallasServerSaveStatus = source._kiallasServerSaveStatus;
+    if (source._kiallasAdminRouteFromServer) target._kiallasAdminRouteFromServer = source._kiallasAdminRouteFromServer;
+    return target;
+  }
+
+  function applyKiallasBadgeStateAfterServerBooking(booking) {
+    if (!booking) return booking;
+    if (booking.transferRoute) {
+      booking._kiallasLocalSaved = true;
+      booking._kiallasServerSaveStatus = 'saved';
+      return booking;
     }
-    el.hidden = !bookingHasSavedRoute(b);
-    el.textContent = 'Útvonal rögzítve ✓';
+    if (window.IntegrationRouteWorkflow && window.IntegrationRouteWorkflow.hydrateKiallasServerStatusFromServerBooking) {
+      return window.IntegrationRouteWorkflow.hydrateKiallasServerStatusFromServerBooking(booking);
+    }
+    return booking;
   }
 
   function completeBookingSaveSuccess(saved) {
+    var prevId = saved && saved.id;
+    var existing = prevId ? bookings.find(function (x) { return x.id === prevId; }) : null;
+    if (existing && existing._kiallasLocalSaved && !(saved && saved.transferRoute)) {
+      preserveKiallasFieldsOnBooking(saved, existing);
+      if (!saved._kiallasServerSaveStatus) saved._kiallasServerSaveStatus = 'blocked';
+    } else if (saved && saved.transferRoute) {
+      saved._kiallasLocalSaved = true;
+      saved._kiallasServerSaveStatus = 'saved';
+    } else {
+      applyKiallasBadgeStateAfterServerBooking(saved);
+    }
     setMainModule('detail');
     fillForm(saved);
     setFormTab('basic');
     renderBasicRouteSavedBadge(saved);
     if (bookingHasSavedRoute(saved)) {
       setGeoStatus('Útvonal sikeresen mentve', 'ok');
+    } else if (saved && saved._kiallasLocalSaved && saved._kiallasServerSaveStatus === 'blocked') {
+      setGeoStatus('A szervermentés nem történt meg. A helyileg rögzített útvonal továbbra is elérhető és exportálható.', 'warn');
     } else {
       setGeoStatus('Mentve a szerverre.', 'ok');
     }
@@ -2535,6 +3082,7 @@
     });
     if (activeFormTab === 'gis') renderGisTabSummary();
   }
+  window.setFormTab = setFormTab;
 
   function setMainModule(moduleId) {
     activeMainModule = moduleId || 'bookings';
@@ -2555,8 +3103,10 @@
       renderRouteTargetPanel();
     }
     if (activeMainModule === 'detail') renderGisTabSummary();
+    if (activeMainModule === 'analytics') renderOwnerReportPreview();
     setTimeout(function () { map.invalidateSize(); }, 80);
   }
+  window.setMainModule = setMainModule;
 
   function renderGisTabSummary() {
     var coordEl = $('gisCoordDisplay');
@@ -2655,21 +3205,40 @@
     if (!b && (id === ROUTE_DRAFT_ID || !$('editId').value)) {
       b = buildBookingFromFormForRoute();
     }
-    var panel = $('routeTargetLabel');
-    if (!panel) return;
+    var idEl = $('routeTargetId');
+    var placeEl = $('routeTargetPlace');
+    var metaEl = $('routeTargetMeta');
+    var headEl = $('routeTargetHeadcount');
+    var statusEl = $('routeTargetStatus');
+    var pastEl = $('routeTargetPastWarn');
+    var hintEl = $('routeSettingsSummaryHint');
+    if (!metaEl) return;
     if (!b) {
-      panel.innerHTML = 'Nincs kiválasztott célfoglalás.';
+      if (idEl) idEl.textContent = '—';
+      if (placeEl) placeEl.textContent = '—';
+      if (headEl) headEl.textContent = '—';
+      if (statusEl) statusEl.textContent = '—';
+      metaEl.textContent = 'Nincs kiválasztott célfoglalás.';
+      if (pastEl) pastEl.hidden = true;
+      if (hintEl) hintEl.textContent = '';
       return;
     }
-    var idLabel = ($('editId').value && id !== ROUTE_DRAFT_ID)
-      ? escapeHtml(b.id)
-      : 'Új árajánlatkérés';
-    panel.innerHTML =
-      '<div class="rt-id">' + idLabel + '</div>' +
-      '<div>' + escapeHtml(b.city || '—') + '</div>' +
-      '<div>' + escapeHtml(formatAddressDisplay(b)) + '</div>' +
-      '<div>' + escapeHtml(String(b.headcount || 0)) + ' fő</div>' +
-      '<div>' + escapeHtml((b.date ? formatHuDate(b.date) + ' ' : '') + formatTimeShort(b.timeStart || '00:00')) + '</div>';
+    var idLabel = ($('editId').value && id !== ROUTE_DRAFT_ID) ? String(b.id) : 'Új árajánlatkérés';
+    var placeLabel = (b.city ? b.city + ' · ' : '') + (b.placeName || b.address || '—');
+    if (idEl) idEl.textContent = idLabel;
+    if (placeEl) placeEl.textContent = placeLabel;
+    metaEl.textContent = (b.date ? formatHuDate(b.date) + ' · ' : '') +
+      formatTimeShort(b.timeStart || '00:00') + '–' + formatTimeShort(b.timeEnd || '00:00');
+    if (headEl) headEl.textContent = String(b.headcount || 0) + ' fő';
+    if (statusEl) statusEl.textContent = statusLabel(b.status || b.bookingType || '—');
+    var isPast = isBookingPastEvent(b);
+    if (pastEl) pastEl.hidden = !isPast;
+    if (hintEl) {
+      var speed = $('routeSpeed') ? $('routeSpeed').value : '30';
+      var buffer = $('advisorBuffer') ? $('advisorBuffer').value : '30';
+      var windowH = $('advisorPreviousProjectWindowHours') ? $('advisorPreviousProjectWindowHours').value : '24';
+      hintEl.textContent = speed + ' km/h · ' + buffer + ' perc tartalék · ' + windowH + ' órás időablak';
+    }
   }
 
   function initMainNavUi() {
@@ -2972,38 +3541,75 @@
     return v;
   }
 
+  function markerLabelTimeRange(b) {
+    if (!b) return '—';
+    var start = formatTimeShort(b.timeStart) || '—';
+    var end = formatTimeShort(b.timeEnd);
+    if (end && end !== '—' && end !== start) return start + '–' + end;
+    return start;
+  }
+
+  function markerTownLabel(b) {
+    if (!b) return '';
+    return String(b.city || '').trim();
+  }
+
   function markerLabelHtml(b) {
     if (!b) b = {};
     var dateLine = '<div class="ml-date" style="font-weight:800;font-size:10.35px;color:#fb923c">' +
       escapeHtml(formatShortDate(b.date)) + '</div>';
     var timeLine = '<div class="ml-time" style="font-size:9.2px;color:#fde68a">' +
-      escapeHtml(markerTimeRange(b)) + '</div>';
-    var peopleLine = '<div class="ml-people" style="font-weight:800;font-size:9.2px;color:#86efac">' +
-      escapeHtml(markerHeadcountLabel(b)) + '</div>';
-    var statusLine = '<div class="ml-status" style="font-size:9.2px;color:#93c5fd;font-weight:700">' +
-      escapeHtml(statusShortLabel(b.status)) + '</div>';
-    var veh = markerVehicleLabel(b);
-    var vehLine = veh
-      ? ('<div class="ml-veh" style="font-weight:800;font-size:9.2px;color:#7dd3fc">' + escapeHtml(veh) + '</div>')
+      escapeHtml(markerLabelTimeRange(b)) + '</div>';
+    var town = markerTownLabel(b);
+    var townLine = town
+      ? ('<div class="ml-town" style="font-size:9.2px;font-weight:700">' + escapeHtml(town) + '</div>')
       : '';
-    return '<div class="map-label-inner">' + dateLine + timeLine + peopleLine + statusLine + vehLine + '</div>';
+    return '<div class="map-label-inner">' + dateLine + timeLine + townLine + '</div>';
   }
 
-  function applyMapLabelTooltipTheme(source) {
+  function mapLabelStatusStripeColor(status) {
+    var raw = String(status || '').trim();
+    if (!raw) return MAP_LABEL_STATUS_STRIPE_UNKNOWN;
+    var v = migrateLegacyStatus(raw);
+    return MAP_LABEL_STATUS_STRIPE[v] || MAP_LABEL_STATUS_STRIPE_UNKNOWN;
+  }
+
+  function mapLabelStatusStripeClass(status) {
+    var raw = String(status || '').trim();
+    if (!raw) return 'map-label-st-unknown';
+    var v = migrateLegacyStatus(raw);
+    return MAP_LABEL_STATUS_STRIPE[v] ? ('map-label-st-' + v.toLowerCase()) : 'map-label-st-unknown';
+  }
+
+  function applyMapLabelTooltipTheme(source, status) {
     var tooltip = source && source.getTooltip ? source.getTooltip() : source;
     if (!tooltip || !tooltip.getElement) return;
     var el = tooltip.getElement();
     if (!el) return;
+    var stripeColor = mapLabelStatusStripeColor(status);
     el.classList.add('map-label', 'rent-map-label-dark');
+    Array.from(el.classList).forEach(function (cls) {
+      if (cls.indexOf('map-label-st-') === 0) el.classList.remove(cls);
+    });
+    el.classList.add(mapLabelStatusStripeClass(status));
+    el.style.setProperty('--booking-label-status-color', stripeColor, 'important');
     el.style.setProperty('background', 'rgba(15, 23, 42, 0.94)', 'important');
     el.style.setProperty('background-color', 'rgba(15, 23, 42, 0.94)', 'important');
     el.style.setProperty('border', '1px solid rgba(255, 255, 255, 0.14)', 'important');
     el.style.setProperty('color', '#f1f5f9', 'important');
-    el.style.setProperty('box-shadow', '0 2.3px 6.9px rgba(0, 0, 0, 0.35)', 'important');
+    el.style.setProperty('box-shadow', 'inset 4px 0 0 0 ' + stripeColor + ', 0 2.3px 6.9px rgba(0, 0, 0, 0.35)', 'important');
     el.style.setProperty('border-radius', '6.9px', 'important');
+    el.style.setProperty('box-sizing', 'border-box', 'important');
     el.style.setProperty('padding', '4.6px 6.9px', 'important');
     el.style.setProperty('font-size', '9.2px', 'important');
     el.style.setProperty('line-height', '1.44', 'important');
+    var inner = el.querySelector('.map-label-inner');
+    if (inner) {
+      inner.style.removeProperty('border-left');
+      inner.style.removeProperty('padding-left');
+      inner.style.removeProperty('border-radius');
+      inner.style.removeProperty('box-sizing');
+    }
   }
 
   function activateBookingMarkerPopup(m, b) {
@@ -3021,7 +3627,7 @@
     var el = tooltip.getElement();
     if (!el) return;
     el.classList.add('map-label-clickable');
-    applyMapLabelTooltipTheme(tooltip);
+    applyMapLabelTooltipTheme(tooltip, b.status);
     if (el._rentPopupClick) {
       L.DomEvent.off(el, 'click', el._rentPopupClick);
     }
@@ -3087,7 +3693,7 @@
     if (mapViewMode === 'load') return;
     markerEntries.forEach(function (entry) {
       entry.marker.setTooltipContent(markerLabelHtml(entry.booking));
-      applyMapLabelTooltipTheme(entry.marker);
+      applyMapLabelTooltipTheme(entry.marker, entry.booking.status);
       wireBookingMarkerTooltipClick(entry.marker, entry.booking);
     });
   }
@@ -3168,6 +3774,10 @@
     if (!raw) return null;
     try {
       var data = JSON.parse(raw);
+      if (window.RouteTypeAdapter && window.RouteTypeAdapter.isCustomerRouteGeoJsonImportAllowed
+        && !window.RouteTypeAdapter.isCustomerRouteGeoJsonImportAllowed(data)) {
+        return null;
+      }
       if (data.type === 'LineString' && Array.isArray(data.coordinates)) return data;
       if (data.geometry && data.geometry.type === 'LineString') return data.geometry;
       if (data.type === 'Feature' && data.geometry) return data.geometry;
@@ -3256,18 +3866,21 @@
     });
   }
 
-  function drawBookingRoutePoints(pts, layer, styleOpts) {
+  function drawBookingRoutePoints(pts, layer, styleOpts, routeContext) {
     if (!pts || !pts.length) return null;
     var opts = styleOpts || {};
     var showPointMarkers = !!opts.showPointMarkers;
     var maxPointMarkers = opts.maxPointMarkers || 16;
     if (pts.length >= 2) {
-      L.polyline(pts.map(function (p) { return [p.lat, p.lng]; }), {
+      var line = L.polyline(pts.map(function (p) { return [p.lat, p.lng]; }), {
         color: opts.color || '#a855f7',
         weight: opts.weight || 4,
         opacity: opts.opacity != null ? opts.opacity : 0.85,
         dashArray: opts.dashArray || '6 4'
       }).addTo(layer);
+      if (routeContext && window.IntegrationRouteWorkflow && window.IntegrationRouteWorkflow.bindRouteLayerPopup) {
+        window.IntegrationRouteWorkflow.bindRouteLayerPopup(line, routeContext);
+      }
       if (showPointMarkers && pts.length <= maxPointMarkers) {
         pts.forEach(function (p, i) {
           var label = 'S';
@@ -3425,7 +4038,9 @@
           if (!resp.ok || !data || !data.ok || !Array.isArray(data.inquiries)) {
             throw new Error((data && data.error) || ('HTTP ' + resp.status));
           }
-          bookings = data.inquiries.map(normalizeBooking);
+          bookings = data.inquiries.map(function (b) {
+            return applyKiallasBadgeStateAfterServerBooking(normalizeBooking(b));
+          });
           restoreCalculatedRoutesFromBookings();
           setRentDataStatus('server');
           return bookings;
@@ -3830,6 +4445,16 @@
       : postRentInquiryApi(patchBody);
     return promise.then(function (saved) {
       var norm = normalizeBooking(saved);
+      var existing = bookings.find(function (x) { return x.id === norm.id; });
+      if (existing && existing._kiallasLocalSaved && !norm.transferRoute) {
+        preserveKiallasFieldsOnBooking(norm, existing);
+        if (!norm._kiallasServerSaveStatus) norm._kiallasServerSaveStatus = 'blocked';
+      } else if (norm.transferRoute) {
+        norm._kiallasLocalSaved = true;
+        norm._kiallasServerSaveStatus = 'saved';
+      } else {
+        applyKiallasBadgeStateAfterServerBooking(norm);
+      }
       var idx = bookings.findIndex(function (x) { return x.id === norm.id; });
       if (idx >= 0) bookings[idx] = norm;
       else bookings.push(norm);
@@ -3932,6 +4557,11 @@
     if (!merged.routePoints && existing.routePoints) merged.routePoints = existing.routePoints;
     if (!merged.routeGeometry && existing.routeGeometry) merged.routeGeometry = existing.routeGeometry;
     if (!merged.routeDraft && existing.routeDraft) merged.routeDraft = existing.routeDraft;
+    if (!merged.transferRoute && existing.transferRoute) merged.transferRoute = existing.transferRoute;
+    if (!merged.selectedTransferRoute && existing.selectedTransferRoute) {
+      merged.selectedTransferRoute = existing.selectedTransferRoute;
+    }
+    preserveKiallasFieldsOnBooking(merged, existing);
     if (existing.start_address && !merged.start_address) merged.start_address = existing.start_address;
     if (existing.end_address && !merged.end_address) merged.end_address = existing.end_address;
     if (!merged.phone && existing.phone) merged.phone = existing.phone;
@@ -4244,7 +4874,7 @@
       : (b.vehicle_id && !isPendingAssign(b.vehicle_id) ? b.vehicle_id : DEFAULT_PENDING);
     $('driver').value = !isPendingAssign(b.driver) ? b.driver
       : (b.driver_id && !isPendingAssign(b.driver_id) ? b.driver_id : DEFAULT_PENDING);
-    $('geometryType').value = b.geometryType || DEFAULT_GEOMETRY_TYPE;
+    $('geometryType').value = b.geometryType === 'ROUTE' || b.routeGeometry ? 'ROUTE' : DEFAULT_GEOMETRY_TYPE;
     $('routeGeometry').value = b.routeGeometry ? JSON.stringify(b.routeGeometry) : '';
     updateGeometryTypeUi();
     $('price').value = b.price != null ? b.price : '';
@@ -4277,6 +4907,16 @@
     renderBookingDetailHeader();
     populateRouteBookingSelect();
     renderBasicRouteSavedBadge(b);
+    if (b.transferRoute || b.selectedTransferRoute) {
+      var tr = b.transferRoute || b.selectedTransferRoute;
+      if (window.IntegrationRouteWorkflow) {
+        window.IntegrationRouteWorkflow.setSelectedTransferRoute(b.id, tr, null, { skipEligibilityGuard: true });
+      }
+    }
+    if (window.IntegrationRouteWorkflow && window.IntegrationRouteWorkflow.renderTransferBookingSummary) {
+      window.IntegrationRouteWorkflow.renderTransferBookingSummary(b.id);
+      window.IntegrationRouteWorkflow.renderOperationalCostSummary(b.id);
+    }
   }
 
   function clearForm() {
@@ -4319,6 +4959,10 @@
     setGeoStatus('');
     var routeBadge = $('routeSavedBadge');
     if (routeBadge) routeBadge.hidden = true;
+    var kiallasServer = $('kiallasServerSaveStatus');
+    if (kiallasServer) { kiallasServer.hidden = true; kiallasServer.textContent = ''; }
+    var kiallasWarn = $('kiallasServerSaveWarning');
+    if (kiallasWarn) { kiallasWarn.hidden = true; kiallasWarn.textContent = ''; }
     if (draftMarker) {
       markerLayer.removeLayer(draftMarker);
       draftMarker = null;
@@ -4328,6 +4972,7 @@
     renderGisTabSummary();
     renderBookingDetailHeader();
     populateRouteBookingSelect();
+    clearRouteResultPanel();
   }
 
   function popupMetaRow(label, value) {
@@ -4375,6 +5020,7 @@
     var bookingId = b.id ? String(b.id) : '';
     return '<div class="popup-detail">' +
       '<div class="popup-section">' +
+      popupMetaRow('Foglalás azonosító', bookingId || '—') +
       popupMetaRow('Ügyfél', bookingCustomerLabel(b)) +
       popupMetaRow('Kapcsolattartó', b.contact) +
       popupMetaRow('Telefon', b.phone) +
@@ -4445,32 +5091,169 @@
     return getBookingRoutePoints(b).length > 0;
   }
 
-  function getFiltered() {
+  var BUDAPEST_TZ = 'Europe/Budapest';
+  var SAFE_ROUTE_UNAVAILABLE_MSG = 'Biztonságos, gyorsforgalmi utakat kerülő útvonal most nem számítható. Az útvonal nem használható.';
+  var ROUTE_NETWORK_ERROR_MSG = 'Az útvonal lekérése hálózati hiba miatt nem sikerült.';
+
+  function getBudapestWallClockParts(date) {
+    var d = date || new Date();
+    try {
+      var fmt = new Intl.DateTimeFormat('en-GB', {
+        timeZone: BUDAPEST_TZ,
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+      });
+      var parts = fmt.formatToParts(d);
+      var pick = function (type) {
+        var hit = parts.find(function (p) { return p.type === type; });
+        return hit ? parseInt(hit.value, 10) : 0;
+      };
+      return {
+        y: pick('year'), mo: pick('month'), d: pick('day'),
+        h: pick('hour'), mi: pick('minute'), s: pick('second')
+      };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function wallClockSortKey(p) {
+    if (!p) return null;
+    return (((((p.y * 100 + p.mo) * 100 + p.d) * 100 + p.h) * 100 + p.mi) * 100 + p.s);
+  }
+
+  function getBookingEventEndWallClock(b) {
+    if (!b || !b.date) return null;
+    var dateStr = String(b.date).trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return null;
+    var y = parseInt(dateStr.slice(0, 4), 10);
+    var mo = parseInt(dateStr.slice(5, 7), 10);
+    var d = parseInt(dateStr.slice(8, 10), 10);
+    if (!y || !mo || !d) return null;
+    var h = 23;
+    var mi = 59;
+    var s = 59;
+    if (b.timeEnd) {
+      var tp = String(b.timeEnd).trim().split(':');
+      if (tp.length < 2) return null;
+      h = parseInt(tp[0], 10);
+      mi = parseInt(tp[1], 10);
+      s = 0;
+      if (isNaN(h) || isNaN(mi)) return null;
+    }
+    return { y: y, mo: mo, d: d, h: h, mi: mi, s: s };
+  }
+
+  function isBookingPastEvent(b) {
+    var endParts = getBookingEventEndWallClock(b);
+    if (!endParts) return false;
+    var nowParts = getBudapestWallClockParts(new Date());
+    if (!nowParts) return false;
+    return wallClockSortKey(endParts) < wallClockSortKey(nowParts);
+  }
+
+  function passesListingFilters(b, opts) {
+    opts = opts || {};
+    var ignorePast = !!opts.ignorePast;
+    var ignoreDate = !!opts.ignoreDate;
     var day = $('filterDay').value;
     var from = $('filterFrom').value;
     var to = $('filterTo').value;
     var place = $('filterPlace').value.trim().toLowerCase();
     var search = $('filterSearch').value.trim().toLowerCase();
 
-    return bookings.filter(function (b) {
+    if (!ignorePast && !showPastBookings && isBookingPastEvent(b)) return false;
+
+    if (!ignoreDate) {
       if (day) {
         if (b.date !== day) return false;
       } else {
         if (from && b.date < from) return false;
         if (to && b.date > to) return false;
       }
-      if (place) {
-        var hay = ((b.placeName || '') + ' ' + (b.address || '')).toLowerCase();
-        if (hay.indexOf(place) < 0) return false;
-      }
-      if (search) {
-        var blob = [
-          b.id, b.placeName, b.city, b.street, b.houseNumber, b.locationNote, b.address, b.ordererName, b.companyName,
-          b.taxId, b.contact, b.phone, b.email, b.note, b.vehicle, b.driver, b.status
-        ].join(' ').toLowerCase();
-        if (blob.indexOf(search) < 0) return false;
-      }
-      return bookingHasMapAnchor(b);
+    }
+    if (place) {
+      var hay = ((b.placeName || '') + ' ' + (b.address || '')).toLowerCase();
+      if (hay.indexOf(place) < 0) return false;
+    }
+    if (search) {
+      var blob = [
+        b.id, b.placeName, b.city, b.street, b.houseNumber, b.locationNote, b.address, b.ordererName, b.companyName,
+        b.taxId, b.contact, b.phone, b.email, b.note, b.vehicle, b.driver, b.status
+      ].join(' ').toLowerCase();
+      if (blob.indexOf(search) < 0) return false;
+    }
+    return true;
+  }
+
+  function countHiddenPastBookings() {
+    return bookings.filter(function (b) {
+      return bookingHasMapAnchor(b) && isBookingPastEvent(b) &&
+        passesListingFilters(b, { ignorePast: true, ignoreDate: true });
+    }).length;
+  }
+
+  function updatePastBookingsToggleUi() {
+    var btn = $('filterShowPast');
+    if (!btn) return;
+    var n = countHiddenPastBookings();
+    btn.textContent = 'Korábbiak (' + n + ')';
+    btn.setAttribute('aria-pressed', showPastBookings ? 'true' : 'false');
+    btn.classList.toggle('is-active', showPastBookings);
+  }
+
+  function clearRouteResultPanel() {
+    var el = $('routeResult');
+    if (!el) return;
+    el.innerHTML = '';
+    el.hidden = true;
+  }
+
+  function clearOperatorSelectionForPastHidden() {
+    if (showPastBookings) return;
+    var editId = $('editId').value;
+    var routeId = $('routeBookingId').value;
+    var selectedPast = false;
+    if (editId) {
+      var eb = bookings.find(function (x) { return x.id === editId; });
+      if (eb && isBookingPastEvent(eb)) selectedPast = true;
+    }
+    if (!selectedPast && routeId && routeId !== ROUTE_DRAFT_ID) {
+      var rb = bookings.find(function (x) { return x.id === routeId; });
+      if (rb && isBookingPastEvent(rb)) selectedPast = true;
+    }
+    if (!selectedPast) return;
+
+    if (map && map.closePopup) map.closePopup();
+    rentMapPopupBookingId = null;
+    rentMapPopupRestoreOnRender = false;
+    rentMapPopupUserClosed = true;
+
+    $('editId').value = '';
+    $('btnDelete').hidden = true;
+    clearRouteResultPanel();
+    clearRouteLayer();
+    if (window.__ORIGIN_ADVISOR_STATE && window.__ORIGIN_ADVISOR_STATE.clearForTargetChange) {
+      window.__ORIGIN_ADVISOR_STATE.clearForTargetChange();
+    }
+    $('routeBookingId').value = '';
+    if (window.IntegrationRouteWorkflow && window.IntegrationRouteWorkflow.syncBookingSelects) {
+      window.IntegrationRouteWorkflow.syncBookingSelects(null);
+    }
+    renderRouteTargetPanel();
+    if (window.__RENT_DEPOT_INTEGRATION_BRIDGE && window.__RENT_DEPOT_INTEGRATION_BRIDGE.refreshDepotRoutes) {
+      window.__RENT_DEPOT_INTEGRATION_BRIDGE.refreshDepotRoutes();
+    }
+    if (window.IntegrationRouteWorkflow && window.IntegrationRouteWorkflow.renderTransferBookingSummary) {
+      window.IntegrationRouteWorkflow.renderTransferBookingSummary(null);
+      window.IntegrationRouteWorkflow.renderOperationalCostSummary(null);
+    }
+    renderBookingDetailHeader();
+  }
+
+  function getFiltered() {
+    return bookings.filter(function (b) {
+      return passesListingFilters(b) && bookingHasMapAnchor(b);
     }).sort(function (a, b) {
       return (a.date + ' ' + a.timeStart).localeCompare(b.date + ' ' + b.timeStart);
     });
@@ -4505,7 +5288,7 @@
         m.bindTooltip(loadLabelHtml(g), {
           permanent: true, direction: 'right', className: 'map-label rent-map-label-dark', offset: [9, 0], opacity: 1
         });
-        applyMapLabelTooltipTheme(m);
+        applyMapLabelTooltipTheme(m, null);
         m.bindPopup(loadPopupHtml(g), { maxWidth: 320 });
         m.on('click', function () { setFilterDayOnly(g.date); });
         markers.push(m);
@@ -4518,6 +5301,8 @@
     list.forEach(function (b) {
       var customerPts = getCustomerRoutePoints(b);
       var adminPts = getAdminRoutePoints(b);
+      var routeTargetId = $('routeBookingId') && $('routeBookingId').value || '';
+      var skipTargetOnBookingLayer = isIntegrationLabRouteMode() && routeTargetId && b.id === routeTargetId;
       var markerLat = null;
       var markerLng = null;
       if (customerPts.length >= 1) {
@@ -4529,22 +5314,22 @@
       }
       if (markerLat == null || markerLng == null) return;
 
-      if (customerPts.length >= 2) {
+      if (customerPts.length >= 2 && !skipTargetOnBookingLayer) {
         drawBookingRoutePoints(customerPts, bookingRouteLayer, {
           color: '#a855f7',
           dashArray: '6 4',
           weight: 4,
           showPointMarkers: rentShowRoutePointMarkers
-        });
+        }, buildCustomerRouteLayerMeta(b));
       }
-      if (adminPts.length >= 2) {
+      if (adminPts.length >= 2 && !skipTargetOnBookingLayer) {
         drawBookingRoutePoints(adminPts, bookingRouteLayer, {
           color: '#38bdf8',
           dashArray: null,
           weight: 5,
           opacity: 0.9,
           showPointMarkers: false
-        });
+        }, buildAdminRouteLayerMeta(b));
       }
 
       var color = statusColor(b.status);
@@ -4556,7 +5341,7 @@
         permanent: true, direction: 'right', className: 'map-label rent-map-label-dark', offset: [9, 0], opacity: 1,
         interactive: true
       });
-      applyMapLabelTooltipTheme(m);
+      applyMapLabelTooltipTheme(m, b.status);
       m.bindPopup(popupHtml(b), RENT_BOOKING_POPUP_OPTS);
       wireBookingMarkerInteraction(m, b);
       markers.push(m);
@@ -4572,6 +5357,10 @@
 
     if (preserveView && mapCenter) {
       map.setView(mapCenter, mapZoom, { animate: false });
+    }
+    if (isIntegrationLabRouteMode() && window.__RENT_DEPOT_INTEGRATION_BRIDGE &&
+        window.__RENT_DEPOT_INTEGRATION_BRIDGE.refreshDepotRoutes) {
+      window.__RENT_DEPOT_INTEGRATION_BRIDGE.refreshDepotRoutes();
     }
     rentMapPopupSuppressClose = false;
     restoreRentMapPopupIfNeeded(restorePopupId);
@@ -4596,11 +5385,15 @@
     var activeId = $('editId').value;
     root.innerHTML = list.map(function (b) {
       var cls = b.id === activeId ? ' is-active' : '';
+      var kiallasHtml = '';
+      if (window.IntegrationRouteWorkflow && window.IntegrationRouteWorkflow.buildKiallasListItemHtml) {
+        kiallasHtml = window.IntegrationRouteWorkflow.buildKiallasListItemHtml(b);
+      }
       return '<div class="list-item' + cls + '" data-id="' + escapeHtml(b.id) + '">' +
         (isBackendRentId(b.id)
           ? ('<button type="button" class="btn danger sm list-del-btn" data-del-id="' + escapeHtml(b.id) + '">Törlés</button>')
           : '') +
-        '<div class="list-title">' + escapeHtml((b.city ? b.city + ' · ' : '') + (b.placeName || b.address)) + '</div>' +
+        '<div class="list-title"><span class="list-booking-id">' + escapeHtml(b.id || '') + '</span><span class="list-title-place">' + escapeHtml((b.city ? b.city + ' · ' : '') + (b.placeName || b.address)) + '</span></div>' +
         '<div class="list-meta">' + escapeHtml(formatHuDate(b.date)) + ' · ' +
         escapeHtml(formatTimeShort(b.timeStart)) + '–' + escapeHtml(formatTimeShort(b.timeEnd)) + '</div>' +
         '<div class="list-tags">' +
@@ -4610,6 +5403,7 @@
         '<span class="tag tag-veh">' + escapeHtml(b.vehicle || DEFAULT_PENDING) + '</span>' +
         '<span class="tag tag-drv">' + escapeHtml(b.driver || DEFAULT_PENDING) + '</span>' +
         '</div>' +
+        kiallasHtml +
         '</div>';
     }).join('');
 
@@ -4648,10 +5442,19 @@
   }
 
   function populateRouteBookingSelect() {
+    if (isLiveReadOnlyAuditMode() && window.IntegrationRouteWorkflow && window.IntegrationRouteWorkflow.syncBookingSelects) {
+      var keepId = $('routeBookingId') && $('routeBookingId').value;
+      var editId = $('editId').value;
+      window.IntegrationRouteWorkflow.syncBookingSelects(keepId || editId || null);
+      updateRouteTargetLabel();
+      return;
+    }
     var sel = $('routeBookingId');
     if (!sel) return;
     var prev = sel.value;
-    var opts = bookings.filter(function (b) { return b.lat != null && b.lng != null; })
+    var opts = bookings.filter(function (b) {
+      return b.lat != null && b.lng != null && passesListingFilters(b);
+    })
       .sort(function (a, b) { return (a.date + a.timeStart).localeCompare(b.date + b.timeStart); });
     var draftOpt = (!$('editId').value && $('lat').value && $('lng').value)
       ? ('<option value="' + ROUTE_DRAFT_ID + '">Aktuális adatlap (új árajánlatkérés)</option>')
@@ -4671,7 +5474,65 @@
     else if (prev && opts.some(function (b) { return b.id === prev; })) sel.value = prev;
     else if (!editId && draftOpt && $('routeBookingId').value === ROUTE_DRAFT_ID) sel.value = ROUTE_DRAFT_ID;
     updateRouteTargetLabel();
+    window.dispatchEvent(new Event('rent-booking-selects-sync'));
   }
+
+  function isLiveReadOnlyAuditMode() {
+    return window.DEPOT_MATRIX_CONFIG && window.DEPOT_MATRIX_CONFIG.runtimeMode === 'LIVE_READ_ONLY_AUDIT';
+  }
+
+  function isIntegrationLabRouteMode() {
+    return !!(window.DEPOT_MATRIX_CONFIG && window.DEPOT_MATRIX_CONFIG.integrationLab);
+  }
+
+  function buildAdminRouteLayerMeta(booking) {
+    if (!booking || !window.IntegrationRouteWorkflow) return null;
+    var record = null;
+    var source = null;
+    if (booking.adminCalculatedRoute && booking.adminCalculatedRoute.geometry) {
+      record = booking.adminCalculatedRoute;
+      source = 'booking.adminCalculatedRoute';
+    } else {
+      var calc = calculatedRoutes.find(function (r) { return r.bookingId === booking.id; });
+      if (calc && calc.geometry) {
+        record = calc;
+        source = 'calculatedRoutes';
+      }
+    }
+    if (!record) return null;
+    return window.IntegrationRouteWorkflow.buildRouteLayerMetadata({
+      booking: booking,
+      routeType: window.RouteTypeAdapter && window.RouteTypeAdapter.ROUTE_TYPE
+        ? window.RouteTypeAdapter.ROUTE_TYPE.TRANSFER_ROUTE : 'TRANSFER_ROUTE',
+      source: source,
+      record: record,
+      isSaved: source === 'booking.adminCalculatedRoute'
+    });
+  }
+
+  function buildCustomerRouteLayerMeta(booking) {
+    if (!booking || !window.IntegrationRouteWorkflow) return null;
+    var source = 'booking.routePoints';
+    if (booking.routeGeometry) source = 'booking.routeGeometry';
+    else if (booking.routeDraft) source = 'booking.routeDraft';
+    return window.IntegrationRouteWorkflow.buildRouteLayerMetadata({
+      booking: booking,
+      routeType: window.RouteTypeAdapter && window.RouteTypeAdapter.ROUTE_TYPE
+        ? window.RouteTypeAdapter.ROUTE_TYPE.CUSTOMER_SERVICE_ROUTE : 'CUSTOMER_SERVICE_ROUTE',
+      source: source,
+      record: {
+        distanceKm: null,
+        travelMinutes: null
+      },
+      isSaved: true
+    });
+  }
+
+  window.getCustomerRoutePoints = getCustomerRoutePoints;
+  window.getAdminRoutePoints = getAdminRoutePoints;
+  window.lineStringFromBookingRouteForExport = lineStringFromBookingRouteForExport;
+  window.buildAdminRouteLayerMeta = buildAdminRouteLayerMeta;
+  window.buildCustomerRouteLayerMeta = buildCustomerRouteLayerMeta;
 
   function updateRouteExportButton() {
     var id = $('routeBookingId').value || getRouteTargetBookingId();
@@ -4680,6 +5541,14 @@
   }
 
   function showStoredRouteForBooking(bookingId) {
+    if (isLiveReadOnlyAuditMode() || isIntegrationLabRouteMode()) {
+      clearRouteLayer();
+      if (window.__RENT_DEPOT_INTEGRATION_BRIDGE && window.__RENT_DEPOT_INTEGRATION_BRIDGE.refreshDepotRoutes) {
+        window.__RENT_DEPOT_INTEGRATION_BRIDGE.refreshDepotRoutes();
+      }
+      updateRouteExportButton();
+      return;
+    }
     var r = getRouteForBooking(bookingId);
     if (r && r.geometry && r.fromLat != null) {
       drawRoute(r.geometry, r.fromLat, r.fromLng, r.toLat, r.toLng);
@@ -4693,7 +5562,18 @@
   }
 
   function selectRouteTarget(id, openRouteView) {
-    $('routeBookingId').value = id || '';
+    var prev = $('routeBookingId').value;
+    var next = id || '';
+    if (prev !== next) {
+      clearRouteResultPanel();
+      if (window.__ORIGIN_ADVISOR_STATE && window.__ORIGIN_ADVISOR_STATE.clearForTargetChange) {
+        window.__ORIGIN_ADVISOR_STATE.clearForTargetChange();
+      }
+    }
+    $('routeBookingId').value = next;
+    if (window.IntegrationRouteWorkflow && window.IntegrationRouteWorkflow.syncBookingSelects) {
+      window.IntegrationRouteWorkflow.syncBookingSelects(id);
+    }
     updateRouteTargetLabel();
     if (openRouteView) setMainModule('routes');
   }
@@ -4804,7 +5684,7 @@
   }
 
   function requestValhallaRoute(fromLng, fromLat, toLng, toLat) {
-    var url = ROUTING_CONFIG.valhallaUrl || 'https://valhalla1.openstreetmap.de/route';
+    var url = ROUTING_CONFIG.valhallaRouteUrl || ROUTING_CONFIG.valhallaUrl || 'http://127.0.0.1:3118/route';
     var body = {
       locations: [
         { lat: fromLat, lon: fromLng },
@@ -4851,15 +5731,14 @@
   function requestRoute(fromLng, fromLat, toLng, toLat) {
     if (ROUTING_CONFIG.avoidHighways) {
       return requestValhallaRoute(fromLng, fromLat, toLng, toLat).then(function (valhallaResult) {
-        if (valhallaResult && valhallaResult.ok) return valhallaResult;
-        console.warn('[ROUTING] Valhalla failed, OSRM fallback', valhallaResult);
-        return requestOsrmRoute(fromLng, fromLat, toLng, toLat).then(function (osrmResult) {
-          if (osrmResult && osrmResult.ok) {
-            osrmResult.highwayMode = 'fallback-highway';
-            return osrmResult;
+        if (valhallaResult && valhallaResult.ok) {
+          if (valhallaResult.hasHighway) {
+            return { ok: false, provider: 'valhalla', reason: 'HIGHWAY_DETECTED', highwayMode: 'blocked' };
           }
-          return osrmResult || valhallaResult;
-        });
+          return valhallaResult;
+        }
+        console.warn('[ROUTING] Valhalla failed – safe route unavailable', valhallaResult);
+        return { ok: false, provider: 'valhalla', reason: 'VALHALLA_UNAVAILABLE', highwayMode: 'blocked' };
       });
     }
     return requestOsrmRoute(fromLng, fromLat, toLng, toLat);
@@ -4902,6 +5781,7 @@
       var toLat = booking.lat;
       var toLng = booking.lng;
       showRouteResult('<strong>Útvonal számítása…</strong>');
+      clearRouteLayer();
       $('btnCalcRoute').disabled = true;
 
       requestRoute(fromLng, fromLat, toLng, toLat)
@@ -4909,7 +5789,11 @@
           $('btnCalcRoute').disabled = false;
           if (!result || !result.ok || !result.geometry) {
             console.error('[ROUTING] route failed', result);
-            showRouteResult('<span style="color:#f87171">Útvonal nem elérhető. Próbáld újra később.</span>');
+            if (ROUTING_CONFIG.avoidHighways) {
+              showRouteResult('<span style="color:#f87171">' + escapeHtml(SAFE_ROUTE_UNAVAILABLE_MSG) + '</span>');
+            } else {
+              showRouteResult('<span style="color:#f87171">' + escapeHtml(ROUTE_NETWORK_ERROR_MSG) + '</span>');
+            }
             return;
           }
           var routeGeometry = result.geometry;
@@ -4948,20 +5832,40 @@
           calculatedRoutes.push(record);
           if (bookingId !== ROUTE_DRAFT_ID && isBackendRentId(bookingId) && !isPatchingRoute) {
             isPatchingRoute = true;
+            var patchIdx = bookings.findIndex(function (x) { return x.id === bookingId; });
+            if (patchIdx >= 0 && window.IntegrationRouteWorkflow && window.IntegrationRouteWorkflow.applyKiallasAdminRoutePatchOutcome) {
+              window.IntegrationRouteWorkflow.applyKiallasAdminRoutePatchOutcome(bookings[patchIdx], 'saving');
+              window.IntegrationRouteWorkflow.renderKiallasSaveStatusBadges(bookingId);
+            }
             patchRentInquiryApi(bookingId, { adminCalculatedRoute: record })
               .then(function (saved) {
                 var idx = bookings.findIndex(function (x) { return x.id === bookingId; });
-                if (idx >= 0) bookings[idx] = normalizeBooking(saved);
+                if (idx >= 0) {
+                  bookings[idx] = normalizeBooking(saved);
+                  applyKiallasBadgeStateAfterServerBooking(bookings[idx]);
+                }
                 restoreCalculatedRoutesFromBookings();
+                if (window.IntegrationRouteWorkflow && window.IntegrationRouteWorkflow.renderKiallasSaveStatusBadges) {
+                  window.IntegrationRouteWorkflow.renderKiallasSaveStatusBadges(bookingId);
+                }
               })
               .catch(function (err) {
                 console.error('adminCalculatedRoute PATCH failed:', err);
+                var failIdx = bookings.findIndex(function (x) { return x.id === bookingId; });
+                if (failIdx >= 0 && window.IntegrationRouteWorkflow && window.IntegrationRouteWorkflow.applyKiallasAdminRoutePatchOutcome) {
+                  window.IntegrationRouteWorkflow.applyKiallasAdminRoutePatchOutcome(bookings[failIdx], 'failed');
+                  window.IntegrationRouteWorkflow.renderKiallasSaveStatusBadges(bookingId);
+                }
               })
               .finally(function () {
                 isPatchingRoute = false;
               });
           }
-          drawRoute(routeGeometry, fromLat, fromLng, toLat, toLng);
+          if (!isIntegrationLabRouteMode()) {
+            drawRoute(routeGeometry, fromLat, fromLng, toLat, toLng);
+          } else if (window.__RENT_DEPOT_INTEGRATION_BRIDGE && window.__RENT_DEPOT_INTEGRATION_BRIDGE.refreshDepotRoutes) {
+            window.__RENT_DEPOT_INTEGRATION_BRIDGE.refreshDepotRoutes();
+          }
           updateRouteExportButton();
           renderRouteTargetPanel();
           if ($('editId').value === bookingId || (! $('editId').value && bookingId === ROUTE_DRAFT_ID)) {
@@ -4981,7 +5885,11 @@
         .catch(function (err) {
           $('btnCalcRoute').disabled = false;
           console.error('[ROUTING] network error', err);
-          showRouteResult('<span style="color:#f87171">Hálózati hiba az útvonal lekérésnél.</span>');
+          if (ROUTING_CONFIG.avoidHighways) {
+            showRouteResult('<span style="color:#f87171">' + escapeHtml(SAFE_ROUTE_UNAVAILABLE_MSG) + '</span>');
+          } else {
+            showRouteResult('<span style="color:#f87171">' + escapeHtml(ROUTE_NETWORK_ERROR_MSG) + '</span>');
+          }
         });
     }
 
@@ -5084,6 +5992,7 @@
   function render(opts) {
     opts = opts || {};
     var soft = !!opts.soft;
+    updatePastBookingsToggleUi();
     var list = getFiltered();
     renderMarkers(list, { preserveView: soft, preserveDraft: soft });
     if (!soft) {
@@ -5222,27 +6131,35 @@
 
   function exportAllRoutesGeoJson() {
     var features = [];
-    bookings.forEach(function (b) {
-      var customer = lineStringFromBookingRouteForExport(b);
-      if (customer) {
-        features.push({
-          type: 'Feature',
-          geometry: customer,
-          properties: { bookingId: b.id, routeKind: 'customer' }
-        });
-      }
-      var adminPts = getAdminRoutePoints(b);
-      if (adminPts.length >= 2) {
-        features.push({
-          type: 'Feature',
-          geometry: {
-            type: 'LineString',
-            coordinates: adminPts.map(function (p) { return [p.lng, p.lat]; })
-          },
-          properties: { bookingId: b.id, routeKind: 'admin' }
-        });
-      }
-    });
+    if (window.IntegrationRouteWorkflow && window.IntegrationRouteWorkflow.collectVisibleRouteGeoJsonFeatures) {
+      features = window.IntegrationRouteWorkflow.collectVisibleRouteGeoJsonFeatures();
+    }
+    if (!features.length) {
+      bookings.forEach(function (b) {
+        var customer = lineStringFromBookingRouteForExport(b);
+        if (customer) {
+          var cMeta = buildCustomerRouteLayerMeta(b);
+          var cProps = { bookingId: b.id, routeKind: 'customer' };
+          if (window.GeoJsonDownloadUtils && cMeta) {
+            cProps = window.GeoJsonDownloadUtils.enrichRouteFeatureProperties(cProps, window.GeoJsonDownloadUtils.routeMetaToFeatureExtras(cMeta));
+          }
+          features.push({ type: 'Feature', geometry: customer, properties: cProps });
+        }
+        var adminPts = getAdminRoutePoints(b);
+        if (adminPts.length >= 2) {
+          var aMeta = buildAdminRouteLayerMeta(b);
+          var aProps = { bookingId: b.id, routeKind: 'admin' };
+          if (window.GeoJsonDownloadUtils && aMeta) {
+            aProps = window.GeoJsonDownloadUtils.enrichRouteFeatureProperties(aProps, window.GeoJsonDownloadUtils.routeMetaToFeatureExtras(aMeta));
+          }
+          features.push({
+            type: 'Feature',
+            geometry: { type: 'LineString', coordinates: adminPts.map(function (p) { return [p.lng, p.lat]; }) },
+            properties: aProps
+          });
+        }
+      });
+    }
     if (!features.length) {
       alert('Nincs exportálható útvonal.');
       return;
@@ -5407,9 +6324,59 @@
     return statusLabel(normalizeStatus(b.status));
   }
 
-  function reportInquiryRow(b, dayTotals) {
+  var REPORT_CSV_HEADERS = [
+    'RENDELÉS_AZONOSÍTÓ', 'DÁTUM', 'VÁROS', 'VONAT', 'UTAS_FŐ', 'ÁR', 'ÁLLAPOT', 'FIZETÉSI_ÁLLAPOT',
+    'ÖSSZESEN_FŐ', 'ÖSSZESEN_ÁR', 'ODA_VISSZA_KM', 'ÜZEMANYAG_L_ODA_VISSZA',
+    'ÜZEMANYAG_FT_ODA_VISSZA', 'BECSÜLT_MUNKAIDŐ_ÓRA'
+  ];
+
+  function reportMetricDecimalCell(val, decimals) {
+    if (val == null || val === '' || !isFinite(Number(val))) return '';
+    return Number(val).toFixed(decimals).replace('.', ',');
+  }
+
+  function reportMetricIntegerCell(val) {
+    if (val == null || val === '' || !isFinite(Number(val))) return '';
+    return String(Math.round(Number(val)));
+  }
+
+  function reportMetricDecimalDisplay(val, decimals) {
+    if (val == null || val === '' || !isFinite(Number(val))) return '—';
+    return Number(val).toFixed(decimals).replace('.', ',');
+  }
+
+  function reportRouteMetricsCells(b) {
+    var wf = window.IntegrationRouteWorkflow;
+    var m = wf && wf.computeOwnerReportRouteMetrics ? wf.computeOwnerReportRouteMetrics(b) : null;
+    if (!m) return ['', '', '', ''];
+    return [
+      reportMetricDecimalCell(m.roundTripKm, 1),
+      reportMetricDecimalCell(m.roundTripFuelL, 1),
+      reportMetricIntegerCell(m.roundTripFuelCost),
+      reportMetricDecimalCell(m.estimatedWorkHours, 2)
+    ];
+  }
+
+  function reportRouteMetricsDisplayCells(b) {
+    var wf = window.IntegrationRouteWorkflow;
+    var m = wf && wf.computeOwnerReportRouteMetrics ? wf.computeOwnerReportRouteMetrics(b) : null;
+    if (!m) return ['—', '—', '—', '—'];
+    var costDisplay = '—';
+    if (m.roundTripFuelCost != null && isFinite(Number(m.roundTripFuelCost))) {
+      costDisplay = String(Math.round(Number(m.roundTripFuelCost))).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+    }
+    return [
+      reportMetricDecimalDisplay(m.roundTripKm, 1),
+      reportMetricDecimalDisplay(m.roundTripFuelL, 1),
+      costDisplay,
+      reportMetricDecimalDisplay(m.estimatedWorkHours, 2)
+    ];
+  }
+
+  function reportInquiryRowValues(b, dayTotals) {
     var totals = dayTotals || {};
     return [
+      String(b.id || '').trim(),
       reportInquiryDate(b),
       String(b.city || '').trim(),
       reportInquiryVehicle(b),
@@ -5419,7 +6386,108 @@
       reportInquiryPaymentLabel(b),
       totals.isLast ? (totals.hasHc ? String(totals.sumHc) : '') : '',
       totals.isLast ? (totals.hasPrice ? String(totals.sumPrice) : '') : ''
-    ].map(reportCsvCell).join(';');
+    ].concat(reportRouteMetricsCells(b));
+  }
+
+  function reportInquiryPreviewRowValues(b, dayTotals) {
+    var totals = dayTotals || {};
+    var hc = reportInquiryHeadcountNum(b);
+    var pr = reportInquiryPriceNum(b);
+    return [
+      String(b.id || '').trim(),
+      reportInquiryDate(b),
+      String(b.city || '').trim(),
+      reportInquiryVehicle(b),
+      hc == null ? '—' : String(hc),
+      pr == null ? '—' : String(pr).replace(/\B(?=(\d{3})+(?!\d))/g, ' '),
+      reportInquiryStatusLabel(b),
+      reportInquiryPaymentLabel(b) || '—',
+      totals.isLast ? (totals.hasHc ? String(totals.sumHc) : '') : '',
+      totals.isLast ? (totals.hasPrice ? String(totals.sumPrice).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') : '') : ''
+    ].concat(reportRouteMetricsDisplayCells(b));
+  }
+
+  function reportInquiryRow(b, dayTotals) {
+    return reportInquiryRowValues(b, dayTotals).map(reportCsvCell).join(';');
+  }
+
+  function buildOwnerReportPreviewRows(inquiries) {
+    var byDate = {};
+    inquiries.forEach(function (b) {
+      var d = reportInquiryDate(b);
+      if (!d) return;
+      if (!byDate[d]) byDate[d] = [];
+      byDate[d].push(b);
+    });
+    var dates = Object.keys(byDate).sort();
+    var rows = [];
+    dates.forEach(function (d) {
+      var dayRows = byDate[d].slice().sort(function (a, b) {
+        var ca = String(a.city || '');
+        var cb = String(b.city || '');
+        if (ca !== cb) return ca.localeCompare(cb, 'hu');
+        return reportInquiryVehicle(a).localeCompare(reportInquiryVehicle(b), 'hu');
+      });
+      var sumHc = 0;
+      var sumPrice = 0;
+      var hasHc = false;
+      var hasPrice = false;
+      dayRows.forEach(function (b) {
+        var hc = reportInquiryHeadcountNum(b);
+        if (hc != null) { sumHc += hc; hasHc = true; }
+        var pr = reportInquiryPriceNum(b);
+        if (pr != null) { sumPrice += pr; hasPrice = true; }
+      });
+      dayRows.forEach(function (b, idx) {
+        rows.push(reportInquiryPreviewRowValues(b, {
+          isLast: idx === dayRows.length - 1,
+          sumHc: sumHc,
+          sumPrice: sumPrice,
+          hasHc: hasHc,
+          hasPrice: hasPrice
+        }));
+      });
+    });
+    return rows;
+  }
+
+  function renderOwnerReportPreview() {
+    var wrap = $('ownerReportPreviewTableWrap');
+    if (!wrap) return;
+    wrap.innerHTML = '<p class="report-preview-loading">Előnézet betöltése…</p>';
+    var today = todayIso();
+    var end = addDaysIso(today, 90);
+    fetchRentInquiriesList()
+      .then(function (inquiries) {
+        var filtered = inquiries.filter(function (b) {
+          var d = reportInquiryDate(b);
+          if (!d || d < today || d > end) return false;
+          return normalizeStatus(b.status) !== 'LEMONDVA';
+        });
+        if (!filtered.length) {
+          wrap.innerHTML = '<p class="report-preview-empty">Nincs megjeleníthető sor a 90 napos előnézethez.</p>';
+          return;
+        }
+        var previewRows = buildOwnerReportPreviewRows(filtered);
+        var html = '<table class="rent-preview-table owner-report-preview-table"><thead><tr>';
+        REPORT_CSV_HEADERS.forEach(function (h) {
+          html += '<th>' + h + '</th>';
+        });
+        html += '</tr></thead><tbody>';
+        previewRows.forEach(function (cells) {
+          html += '<tr>';
+          cells.forEach(function (cell) {
+            html += '<td>' + String(cell == null ? '' : cell) + '</td>';
+          });
+          html += '</tr>';
+        });
+        html += '</tbody></table>';
+        wrap.innerHTML = html;
+      })
+      .catch(function (err) {
+        console.error('Owner report preview failed:', err);
+        wrap.innerHTML = '<p class="report-preview-empty">Az előnézet betöltése nem sikerült.</p>';
+      });
   }
 
   function buildDailyReportCsvLines(inquiries) {
@@ -5431,7 +6499,7 @@
       byDate[d].push(b);
     });
     var dates = Object.keys(byDate).sort();
-    var lines = ['DÁTUM;VÁROS;VONAT;UTAS_FŐ;ÁR;ÁLLAPOT;FIZETÉSI_ÁLLAPOT;ÖSSZESEN_FŐ;ÖSSZESEN_ÁR'];
+    var lines = [REPORT_CSV_HEADERS.join(';')];
     dates.forEach(function (d) {
       var dayRows = byDate[d].slice().sort(function (a, b) {
         var ca = String(a.city || '');
@@ -5728,6 +6796,15 @@
     $('filterDay').value = iso;
     $('filterFrom').value = '';
     $('filterTo').value = '';
+    if ($('filterSingleDay')) $('filterSingleDay').value = '';
+    render();
+  }
+
+  function setFilterExactDayRange(iso) {
+    $('filterDay').value = '';
+    $('filterFrom').value = iso || '';
+    $('filterTo').value = iso || '';
+    if ($('filterSingleDay')) $('filterSingleDay').value = iso || '';
     render();
   }
 
@@ -5737,6 +6814,7 @@
     $('filterDay').value = '';
     $('filterFrom').value = start;
     $('filterTo').value = end;
+    if ($('filterSingleDay')) $('filterSingleDay').value = '';
     render();
   }
 
@@ -5906,15 +6984,31 @@
   });
   $('btnExportGeoJson').addEventListener('click', exportRouteGeoJson);
   $('routeBookingId').addEventListener('change', updateRouteTargetLabel);
+  ['routeSpeed', 'advisorBuffer', 'advisorPreviousProjectWindowHours'].forEach(function (fid) {
+    var fel = $(fid);
+    if (fel) fel.addEventListener('change', renderRouteTargetPanel);
+  });
+  ['fuelConsumptionL100', 'fuelPriceFtL'].forEach(function (fid) {
+    var fel = $(fid);
+    if (!fel) return;
+    fel.addEventListener('change', function () {
+      if (fid === 'fuelConsumptionL100') persistFuelPrefFromField(fid, FUEL_STORAGE_KEYS.consumption);
+      else persistFuelPrefFromField(fid, FUEL_STORAGE_KEYS.price);
+      refreshFuelEstimateDisplays();
+    });
+  });
+  loadFuelPrefsFromStorage();
 
   ['filterDay', 'filterFrom', 'filterTo', 'filterPlace', 'filterSearch'].forEach(function (id) {
     $(id).addEventListener('input', function () {
       if (id === 'filterDay' && $(id).value) {
         $('filterFrom').value = '';
         $('filterTo').value = '';
+        if ($('filterSingleDay')) $('filterSingleDay').value = '';
       }
       if ((id === 'filterFrom' || id === 'filterTo') && ($(id).value)) {
         $('filterDay').value = '';
+        syncFilterSingleDayControl();
       }
       render();
     });
@@ -5922,25 +7016,42 @@
       if (id === 'filterDay' && $(id).value) {
         $('filterFrom').value = '';
         $('filterTo').value = '';
+        if ($('filterSingleDay')) $('filterSingleDay').value = '';
       }
       if ((id === 'filterFrom' || id === 'filterTo') && ($(id).value)) {
         $('filterDay').value = '';
+        syncFilterSingleDayControl();
       }
       render();
     });
   });
+  if ($('filterSingleDay')) {
+    $('filterSingleDay').addEventListener('change', function () {
+      var iso = $('filterSingleDay').value;
+      if (!iso) return;
+      setFilterExactDayRange(iso);
+    });
+  }
 
   $('filterToday').addEventListener('click', function () { setFilterDayOnly(todayIso()); });
   $('filterTomorrow').addEventListener('click', function () { setFilterDayOnly(addDaysIso(todayIso(), 1)); });
   $('filter5').addEventListener('click', function () { setFilterRange(5); });
   $('filter7').addEventListener('click', function () { setFilterRange(7); });
   $('filter30').addEventListener('click', function () { setFilterRange(30); });
-  $('filterReset').addEventListener('click', function () {
+  function resetAllBookingFilters() {
     $('filterDay').value = '';
     $('filterFrom').value = '';
     $('filterTo').value = '';
+    if ($('filterSingleDay')) $('filterSingleDay').value = '';
     $('filterPlace').value = '';
     $('filterSearch').value = '';
+    render();
+  }
+  $('filterShowAll').addEventListener('click', resetAllBookingFilters);
+  $('filterReset').addEventListener('click', resetAllBookingFilters);
+  $('filterShowPast').addEventListener('click', function () {
+    showPastBookings = !showPastBookings;
+    if (!showPastBookings) clearOperatorSelectionForPastHidden();
     render();
   });
   $('btnRentBackupExport').addEventListener('click', exportRentBackup);
@@ -5996,6 +7107,38 @@
     map.invalidateSize();
   });
 
+  window.__rentAuditGetCalcRouteLayerCount = function () {
+    if (!routeLayer || !routeLayer.getLayers) return 0;
+    return routeLayer.getLayers().length;
+  };
+
+  window.__rentAuditMapLabelStripes = function () {
+    return markerEntries.map(function (entry) {
+      var b = entry.booking || {};
+      var tooltip = entry.marker && entry.marker.getTooltip ? entry.marker.getTooltip() : null;
+      var el = tooltip && tooltip.getElement ? tooltip.getElement() : null;
+      if (!el) {
+        return { bookingId: b.id, status: b.status || '', missing: true };
+      }
+      var cs = window.getComputedStyle(el);
+      var inner = el.querySelector('.map-label-inner');
+      return {
+        bookingId: b.id,
+        status: b.status || '',
+        stripeVar: cs.getPropertyValue('--booking-label-status-color').trim(),
+        borderLeftWidth: cs.borderLeftWidth,
+        borderLeftColor: cs.borderLeftColor,
+        borderRadius: cs.borderRadius,
+        className: el.className,
+        innerText: inner ? inner.textContent.trim() : el.textContent.trim(),
+        width: el.getBoundingClientRect().width,
+        height: el.getBoundingClientRect().height
+      };
+    });
+  };
+
+  window.__rentAuditMapLabelStripeColor = mapLabelStatusStripeColor;
+
   window.__rentAuditGetRouteLayerStats = function () {
     if (!bookingRouteLayer || !bookingRouteLayer.getLayers) {
       return { polylines: 0, markers: 0, layers: 0 };
@@ -6033,6 +7176,7 @@
     $('filterDay').value = '';
     $('filterFrom').value = '';
     $('filterTo').value = '';
+    if ($('filterSingleDay')) $('filterSingleDay').value = '';
   }
 
   function bootApplication() {
@@ -6066,10 +7210,122 @@
 
   initAdminLogin();
 
-  if ('serviceWorker' in navigator) {
+  window.__RENT_DEPOT_INTEGRATION_BRIDGE = {
+    getRouteTargetBooking: getRouteTargetBooking,
+    getBookings: function () { return bookings; },
+    getRouteSelectVisibleBookings: function () { return getFiltered(); },
+    getListingVisibleBookings: function () { return getFiltered(); },
+    getBookingById: function (id) {
+      return bookings.find(function (b) { return b.id === id; }) || null;
+    },
+    getVehicleFuelConfig: function () {
+      var prefs = readStoredFuelPrefs();
+      return {
+        source: 'localStorage.opnav_rent_lab_fuel_v1',
+        consumptionLitresPer100Km: prefs.consumptionLitresPer100Km,
+        fuelPricePerLitre: prefs.fuelPricePerLitre
+      };
+    },
+    applyTransferRouteToBookingDraft: function (bookingId, route) {
+      var idx = bookings.findIndex(function (b) { return b.id === bookingId; });
+      if (idx < 0 || !route) return false;
+      var b = bookings[idx];
+      b._customerRoutePreservedSnapshot = JSON.stringify(b.routeGeometry || null);
+      b.selectedTransferRoute = JSON.parse(JSON.stringify(route));
+      b.transferRoute = b.selectedTransferRoute;
+      b._kiallasLocalSaved = true;
+      b._kiallasLocalSavedAt = new Date().toISOString();
+      b._kiallasServerSaveStatus = 'blocked';
+      if ($('editId').value === bookingId) {
+        if (window.IntegrationRouteWorkflow) {
+          window.IntegrationRouteWorkflow.setSelectedTransferRoute(bookingId, b.selectedTransferRoute, null);
+          window.IntegrationRouteWorkflow.renderTransferBookingSummary(bookingId);
+          window.IntegrationRouteWorkflow.renderOperationalCostSummary(bookingId);
+          window.IntegrationRouteWorkflow.renderKiallasSaveStatusBadges(bookingId);
+        }
+      }
+      return true;
+    },
+    markKiallasLocallySaved: function (bookingId) {
+      var idx = bookings.findIndex(function (b) { return b.id === bookingId; });
+      if (idx < 0) return;
+      bookings[idx]._kiallasLocalSaved = true;
+      bookings[idx]._kiallasLocalSavedAt = new Date().toISOString();
+      if (!bookings[idx]._kiallasServerSaveStatus || bookings[idx]._kiallasServerSaveStatus === 'none') {
+        bookings[idx]._kiallasServerSaveStatus = 'blocked';
+      }
+      renderList(getFiltered());
+    },
+    notifyKiallasServerSaveBlocked: function (bookingId) {
+      if ($('editId').value === bookingId) {
+        setGeoStatus('A szervermentés nem történt meg. A helyileg rögzített útvonal továbbra is elérhető és exportálható.', 'warn');
+      }
+    },
+    getCalculatedRouteState: function () {
+      var b = getRouteTargetBooking();
+      if (!b || !b.id) return null;
+      var calc = calculatedRoutes.find(function (r) { return r.bookingId === b.id; });
+      if (calc) return calc;
+      if (b.adminCalculatedRoute) {
+        return normalizeRouteRecord(Object.assign({}, b.adminCalculatedRoute, { bookingId: b.id }), b);
+      }
+      return null;
+    },
+    getRouteFormState: function (bookingId) {
+      if (window.IntegrationRouteWorkflow && window.IntegrationRouteWorkflow.getRouteFormState) {
+        return window.IntegrationRouteWorkflow.getRouteFormState(bookingId);
+      }
+      return {};
+    },
+    setSelectedTransferRoute: function (bookingId, route, originKey) {
+      if (window.IntegrationRouteWorkflow && window.IntegrationRouteWorkflow.setSelectedTransferRoute) {
+        window.IntegrationRouteWorkflow.setSelectedTransferRoute(bookingId, route, originKey);
+      }
+    },
+    renderDualRouteDetails: function () {
+      if (window.IntegrationRouteWorkflow && window.IntegrationRouteWorkflow.renderDualRouteDetails) {
+        window.IntegrationRouteWorkflow.renderDualRouteDetails();
+      }
+    },
+    onRouteTargetChanged: function () {
+      updateRouteTargetLabel();
+      if (window.IntegrationRouteWorkflow && window.IntegrationRouteWorkflow.renderDualRouteDetails) {
+        window.IntegrationRouteWorkflow.renderDualRouteDetails();
+      }
+    },
+    refreshDepotRoutes: function () {
+      if (window.__RENT_DEPOT_ROUTE_INTEGRATION && window.__RENT_DEPOT_ROUTE_INTEGRATION.refreshDualRoutes) {
+        window.__RENT_DEPOT_ROUTE_INTEGRATION.refreshDualRoutes();
+      }
+    }
+  };
+  window.__RENT_PAST_BOOKING_FILTER = {
+    isBookingPastEvent: isBookingPastEvent,
+    getBookingEventEndWallClock: getBookingEventEndWallClock,
+    getBudapestWallClockParts: getBudapestWallClockParts,
+    getFiltered: getFiltered,
+    countHiddenPastBookings: countHiddenPastBookings,
+    getVisibleMarkerCount: function () { return markerEntries.length; },
+    get showPastBookings() { return showPastBookings; },
+    set showPastBookings(v) { showPastBookings = !!v; }
+  };
+  window.__rentAdminReady = true;
+  window.dispatchEvent(new Event('rent-admin-ready'));
+
+  if ('serviceWorker' in navigator && !(window.DEPOT_MATRIX_CONFIG && (window.DEPOT_MATRIX_CONFIG.runtimeMode === 'OFFLINE_INTEGRATION_AUDIT' || window.DEPOT_MATRIX_CONFIG.runtimeMode === 'LIVE_READ_ONLY_AUDIT'))) {
     navigator.serviceWorker.register('./sw.js').catch(function () { /* PWA előkészítés */ });
   }
 })();
   </script>
+  <script src="../assets/modules/rent/depot_matrix/geojson_download_utils.js"></script>
+  <script src="../assets/modules/rent/depot_matrix/route_type_adapter.js"></script>
+  <script src="../assets/modules/rent/depot_matrix/advisor_candidate_normalizer.js"></script>
+  <script src="../assets/modules/rent/depot_matrix/project_origin_adapter.js"></script>
+  <script src="../assets/modules/rent/depot_matrix/operational_train_adapter.js"></script>
+  <script src="../assets/modules/rent/depot_matrix/depot_matrix_adapter.js"></script>
+  <script src="../assets/modules/rent/depot_matrix/origin_advisor_state.js"></script>
+  <script src="../assets/modules/rent/depot_matrix/depot_advisor.js"></script>
+  <script src="../assets/modules/rent/depot_matrix/integration_route_workflow.js"></script>
+  <script src="../assets/modules/rent/depot_matrix/depot_matrix_routes.js"></script>
 </body>
 </html>
