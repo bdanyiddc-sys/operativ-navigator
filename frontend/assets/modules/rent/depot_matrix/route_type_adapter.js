@@ -143,6 +143,17 @@
   }
 
   function pickTransferGeometry(booking, formState, calculatedState) {
+    var wf = (typeof global !== 'undefined' && global.IntegrationRouteWorkflow)
+      || (typeof window !== 'undefined' && window.IntegrationRouteWorkflow);
+    if (wf && wf.resolveValidatedTransferSnapshot) {
+      var snap = wf.resolveValidatedTransferSnapshot(booking, formState, calculatedState);
+      if (!snap || !snap.geometry) return null;
+      return {
+        geometry: snap.geometry,
+        meta: snap,
+        source: snap._source || 'validatedTransferSnapshot'
+      };
+    }
     formState = formState || {};
     calculatedState = calculatedState || {};
     if (formState.selectedTransferRoute) {

@@ -19,16 +19,41 @@
     return window.__rentMap || null;
   }
 
-  function getBridgeBooking() {
-    var bridge = window.__RENT_DEPOT_INTEGRATION_BRIDGE;
-    if (bridge && bridge.getRouteTargetBooking) return bridge.getRouteTargetBooking();
+  function getBridge() {
+    return window.__RENT_DEPOT_INTEGRATION_BRIDGE || null;
+  }
+
+  function getVisibilityPolicy() {
+    var bridge = getBridge();
+    if (bridge && bridge.getMapRouteVisibilityPolicy) {
+      return bridge.getMapRouteVisibilityPolicy();
+    }
+    return { showTransfer: false, showCustomer: false, bookingId: null };
+  }
+
+  function resolveDisplayBooking() {
+    var policy = getVisibilityPolicy();
+    if (!policy.showTransfer && !policy.showCustomer) return null;
+    var bridge = getBridge();
+    if (!bridge) return null;
+    if (policy.bookingId && bridge.getBookingById) {
+      return bridge.getBookingById(policy.bookingId);
+    }
+    if (bridge.getRouteTargetBooking) return bridge.getRouteTargetBooking();
     var fx = window.__INTEGRATION_TEST_FIXTURES;
     return fx && fx.booking ? fx.booking : null;
   }
 
   function getCalculatedState() {
-    var bridge = window.__RENT_DEPOT_INTEGRATION_BRIDGE;
+    var bridge = getBridge();
     return bridge && bridge.getCalculatedRouteState ? bridge.getCalculatedRouteState() : null;
+  }
+
+  function countTransferPolylines() {
+    if (!transferRouteLayer || !transferRouteLayer.getLayers) return 0;
+    return transferRouteLayer.getLayers().filter(function (layer) {
+      return layer instanceof L.Polyline;
+    }).length;
   }
 
   function buildPopupHtml(popup) {
@@ -55,16 +80,34 @@
     return line;
   }
 
+  function clearAllRouteLayers() {
+    if (customerRouteLayer) customerRouteLayer.clearLayers();
+    if (transferRouteLayer) transferRouteLayer.clearLayers();
+    var exportCustomer = $('btnGisExportCustomerRoute');
+    var exportTransfer = $('btnGisExportTransferRoute');
+    if (exportCustomer) exportCustomer.disabled = true;
+    if (exportTransfer) exportTransfer.disabled = true;
+  }
+
   function refreshDualRoutes() {
     if (!RTA) return;
-    var booking = getBridgeBooking();
-    var bridge = window.__RENT_DEPOT_INTEGRATION_BRIDGE;
-    var formState = (bridge && bridge.getRouteFormState)
-      ? bridge.getRouteFormState(booking && booking.id)
+    var policy = getVisibilityPolicy();
+    if (!policy.showTransfer && !policy.showCustomer) {
+      clearAllRouteLayers();
+      return;
+    }
+    var booking = resolveDisplayBooking();
+    var bridge = getBridge();
+    var formState = (bridge && bridge.getRouteFormState && booking && booking.id)
+      ? bridge.getRouteFormState(booking.id)
       : {};
     var calc = getCalculatedState();
-    var customer = RTA.normalizeCustomerServiceRoute(booking, formState);
-    var transfer = RTA.normalizeTransferRoute(booking, formState, calc);
+    var customer = policy.showCustomer
+      ? RTA.normalizeCustomerServiceRoute(booking, formState)
+      : null;
+    var transfer = policy.showTransfer
+      ? RTA.normalizeTransferRoute(booking, formState, calc)
+      : null;
     if (customerRouteLayer) customerRouteLayer.clearLayers();
     if (transferRouteLayer) transferRouteLayer.clearLayers();
     if (customer) {
@@ -103,10 +146,10 @@
     var btnT = $('btnGisExportTransferRoute');
     if (btnC) {
       btnC.addEventListener('click', function () {
-        var booking = getBridgeBooking();
-        var bridge = window.__RENT_DEPOT_INTEGRATION_BRIDGE;
-        var formState = (bridge && bridge.getRouteFormState)
-          ? bridge.getRouteFormState(booking && booking.id)
+        var booking = resolveDisplayBooking();
+        var bridge = getBridge();
+        var formState = (bridge && bridge.getRouteFormState && booking && booking.id)
+          ? bridge.getRouteFormState(booking.id)
           : {};
         var customer = RTA.normalizeCustomerServiceRoute(booking, formState);
         downloadGeoJson(RTA.ROUTE_TYPE.CUSTOMER_SERVICE_ROUTE, customer, booking);
@@ -114,10 +157,10 @@
     }
     if (btnT) {
       btnT.addEventListener('click', function () {
-        var booking = getBridgeBooking();
-        var bridge = window.__RENT_DEPOT_INTEGRATION_BRIDGE;
-        var formState = (bridge && bridge.getRouteFormState)
-          ? bridge.getRouteFormState(booking && booking.id)
+        var booking = resolveDisplayBooking();
+        var bridge = getBridge();
+        var formState = (bridge && bridge.getRouteFormState && booking && booking.id)
+          ? bridge.getRouteFormState(booking.id)
           : {};
         var calc = getCalculatedState();
         var transfer = RTA.normalizeTransferRoute(booking, formState, calc);
@@ -155,6 +198,8 @@
       initLayers(map);
       window.__RENT_DEPOT_ROUTE_INTEGRATION = {
         refreshDualRoutes: refreshDualRoutes,
+        clearAllRouteLayers: clearAllRouteLayers,
+        countTransferPolylines: countTransferPolylines,
         getCustomerLayer: function () { return customerRouteLayer; },
         getTransferLayer: function () { return transferRouteLayer; },
         getRouteFormState: function (bookingId) {

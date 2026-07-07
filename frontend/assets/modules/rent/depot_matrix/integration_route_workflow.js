@@ -7,6 +7,13 @@
   var selectedOriginKeyByBookingId = {};
   var transferDraftPreviewByBookingId = {};
   var routeActionStateByOriginId = new Map();
+  var originInvalidatedByBookingId = {};
+  var transferPendingByBookingId = {};
+  var pendingOriginKeyByBookingId = {};
+  var transferRouteRequestSeqByBookingId = {};
+  var committedTransferSelectionByBookingId = {};
+  var TRANSFER_OPERATIONAL_SPEED_KMH = 30;
+  var GEOMETRY_ORIGIN_TOLERANCE_KM = 25;
 
   function $(id) { return document.getElementById(id); }
 
@@ -100,7 +107,9 @@
     var selected = getSelectedTransferRoute(id);
     var bridge = global.__RENT_DEPOT_INTEGRATION_BRIDGE;
     var state = {};
-    if (bridge && bridge.getBookingById && id) {
+    if (selected) {
+      state = { selectedTransferRoute: selected, transferRoute: selected };
+    } else if (bridge && bridge.getBookingById && id && !isOriginInvalidatedForBooking(id)) {
       var persisted = bridge.getBookingById(id);
       if (persisted && persisted.selectedTransferRoute) {
         state = {
@@ -108,9 +117,6 @@
           transferRoute: persisted.transferRoute || persisted.selectedTransferRoute
         };
       }
-    }
-    if (!state.selectedTransferRoute && selected) {
-      state = { selectedTransferRoute: selected, transferRoute: selected };
     }
     if (bridge && bridge.getVehicleFuelConfig) {
       var fuel = bridge.getVehicleFuelConfig();
@@ -182,14 +188,35 @@
   }
 
   function classifyTransferRouteError(err) {
+    var msg = err && err.message ? String(err.message) : String(err || '');
+    if (/STALE_TRANSFER_RESPONSE|STALE_ASYNC/i.test(msg)) {
+      return { status: 'stale-response', code: 'STALE_RESPONSE_IGNORED', message: TRANSFER_ROUTE_SAFE_UNAVAILABLE_MSG };
+    }
+    if (msg.indexOf('TRANSFER_SNAPSHOT_VALIDATION_REJECTED:') === 0) {
+      var rejCode = msg.slice('TRANSFER_SNAPSHOT_VALIDATION_REJECTED:'.length) || 'UNKNOWN';
+      return {
+        status: 'validation-rejected',
+        code: 'CLIENT_VALIDATION_REJECTION',
+        rejectionCode: rejCode,
+        message: TRANSFER_ROUTE_SAFE_UNAVAILABLE_MSG
+      };
+    }
     if (isNetworkFetchError(err)) {
-      return { status: 'network-error', message: TRANSFER_ROUTE_SAFE_UNAVAILABLE_MSG };
+      return { status: 'network-error', code: 'PROVIDER_NETWORK_ERROR', message: TRANSFER_ROUTE_SAFE_UNAVAILABLE_MSG };
     }
-    var msg = err && err.message ? String(err.message) : '';
-    if (/Biztonságos|SAFE_ROUTE|ALL_ROUTING|OSRM_/i.test(msg)) {
-      return { status: 'safe-route-unavailable', message: TRANSFER_ROUTE_SAFE_UNAVAILABLE_MSG };
+    if (/HTTP_\d{3}|provider.*not ok|VALHALLA_HTTP/i.test(msg)) {
+      return { status: 'provider-http', code: 'PROVIDER_HTTP_ERROR', message: TRANSFER_ROUTE_SAFE_UNAVAILABLE_MSG };
     }
-    return { status: 'safe-route-unavailable', message: TRANSFER_ROUTE_SAFE_UNAVAILABLE_MSG };
+    if (/Biztonságos|SAFE_ROUTE|has_highway|HIGHWAY/i.test(msg)) {
+      return { status: 'safe-route-unavailable', code: 'ROUTE_RESTRICTIONS_TOO_STRICT', message: TRANSFER_ROUTE_SAFE_UNAVAILABLE_MSG };
+    }
+    if (/ORIGIN_MISMATCH|ORIGIN_COORDINATES/i.test(msg)) {
+      return { status: 'origin-mismatch', code: 'ORIGIN_MISMATCH', message: TRANSFER_ROUTE_SAFE_UNAVAILABLE_MSG };
+    }
+    if (/geometry|GEOMETRY|EMPTY_ROUTE/i.test(msg)) {
+      return { status: 'empty-route', code: 'INVALID_GEOMETRY', message: TRANSFER_ROUTE_SAFE_UNAVAILABLE_MSG };
+    }
+    return { status: 'unknown', code: 'UNKNOWN', message: TRANSFER_ROUTE_SAFE_UNAVAILABLE_MSG };
   }
 
   function buildOriginRouteSnapshot(origin, originKey) {
@@ -291,7 +318,47 @@
     });
   }
 
+  function normalizeBridgeRouteResult(result) {
+    if (!result || !result.ok || !result.geometry) return null;
+    if (result.hasHighway) return null;
+    var distKm = result.distanceKm != null ? Number(result.distanceKm)
+      : (result.distanceMeters != null ? Math.round(Number(result.distanceMeters) / 100) / 10 : null);
+    var travelMin = result.travelMinutes != null ? Number(result.travelMinutes)
+      : (result.routingSeconds != null ? Math.round(Number(result.routingSeconds) / 60)
+        : (result.durationSeconds != null ? Math.round(Number(result.durationSeconds) / 60) : null));
+    if (distKm == null || !isFinite(distKm) || travelMin == null || !isFinite(travelMin)) return null;
+    return {
+      geometry: result.geometry,
+      distanceKm: distKm,
+      travelMinutes: travelMin,
+      routingProvider: result.provider || 'valhalla-route',
+      provider: result.provider || 'valhalla-route',
+      highwayMode: result.highwayMode || 'avoided'
+    };
+  }
+
+  function fetchTransferRouteViaBridge(fromLat, fromLng, toLat, toLng) {
+    var bridge = global.__RENT_DEPOT_INTEGRATION_BRIDGE;
+    if (!bridge || typeof bridge.requestValhallaRoute !== 'function') return null;
+    return bridge.requestValhallaRoute(fromLng, fromLat, toLng, toLat).then(function (result) {
+      var normalized = normalizeBridgeRouteResult(result);
+      if (!normalized) throw new Error(SAFE_ROUTE_ERROR_MSG);
+      return normalized;
+    });
+  }
+
   function fetchTransferRoute(fromLat, fromLng, toLat, toLng) {
+    var bridgeRoute = fetchTransferRouteViaBridge(fromLat, fromLng, toLat, toLng);
+    if (bridgeRoute) {
+      return bridgeRoute.catch(function (bridgeErr) {
+        if (!shouldAvoidHighways()) return Promise.reject(bridgeErr);
+        return fetchValhallaRouteWithGeometry(fromLat, fromLng, toLat, toLng).catch(function (firstErr) {
+          if (!CFG.labValhallaProxyUrl) return Promise.reject(firstErr);
+          var proxyRouteUrl = String(CFG.labValhallaProxyUrl).replace(/\/$/, '') + '/route';
+          return fetchValhallaRouteWithGeometry(fromLat, fromLng, toLat, toLng, { routeUrl: proxyRouteUrl });
+        });
+      });
+    }
     if (shouldAvoidHighways()) {
       return fetchValhallaRouteWithGeometry(fromLat, fromLng, toLat, toLng).catch(function (firstErr) {
         if (!CFG.labValhallaProxyUrl) return Promise.reject(firstErr);
@@ -313,7 +380,7 @@
     } else if (origin.latestDepartureAt) {
       latestDepartureAt = origin.latestDepartureAt;
     }
-    return {
+    var selected = {
       routeType: 'TRANSFER_ROUTE',
       bookingId: booking.id,
       originType: origin.originType || 'DEPOT',
@@ -343,6 +410,7 @@
       assignedAt: new Date().toISOString(),
       isMock: false
     };
+    return enrichTransferOperationalMetrics(selected);
   }
 
   function resolveBookingCoords(booking) {
@@ -374,15 +442,258 @@
     };
   }
 
+  function normalizeTransferLineString(geom) {
+    if (!geom || geom.type !== 'LineString' || !Array.isArray(geom.coordinates)) return null;
+    var coords = geom.coordinates.filter(function (c) {
+      return Array.isArray(c) && c.length >= 2 && isFinite(c[0]) && isFinite(c[1]);
+    });
+    if (coords.length < 2) return null;
+    return { type: 'LineString', coordinates: coords };
+  }
+
+  function haversineKm(lat1, lng1, lat2, lng2) {
+    var R = 6371;
+    var dLat = (lat2 - lat1) * Math.PI / 180;
+    var dLng = (lng2 - lng1) * Math.PI / 180;
+    var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
+  function geometryMatchesOriginPoint(geometry, fromLat, fromLng) {
+    if (fromLat == null || fromLng == null || !geometry || !geometry.coordinates || !geometry.coordinates.length) return false;
+    var first = geometry.coordinates[0];
+    return haversineKm(Number(fromLat), Number(fromLng), Number(first[1]), Number(first[0])) <= GEOMETRY_ORIGIN_TOLERANCE_KM;
+  }
+
+  function enrichTransferOperationalMetrics(route) {
+    if (!route || route.distanceKm == null || !isFinite(Number(route.distanceKm))) return route;
+    var km = Number(route.distanceKm);
+    var providerMin = route.travelMinutes != null && isFinite(Number(route.travelMinutes))
+      ? Math.round(Number(route.travelMinutes))
+      : (route.providerDurationMinutes != null ? Math.round(Number(route.providerDurationMinutes)) : null);
+    var opMin = Math.round((km / TRANSFER_OPERATIONAL_SPEED_KMH) * 60);
+    route.providerDurationMinutes = providerMin;
+    route.operationalAverageSpeedKmh = TRANSFER_OPERATIONAL_SPEED_KMH;
+    route.operationalDurationMinutes = opMin;
+    route.roundTripDistanceKm = Math.round(km * 2 * 10) / 10;
+    route.roundTripOperationalDurationMinutes = opMin * 2;
+    return route;
+  }
+
+  function explainTransferSnapshotRejection(route, booking, options) {
+    options = options || {};
+    if (!route || !booking || !booking.id) {
+      return { ok: false, code: 'MISSING_ROUTE_OR_BOOKING', field: 'route/booking' };
+    }
+    var geom = normalizeTransferLineString(route.geometry);
+    if (!geom) {
+      return { ok: false, code: 'INVALID_GEOMETRY', field: 'geometry', expected: 'LineString>=2', actual: route.geometry ? route.geometry.type : null };
+    }
+    if (route.bookingId && route.bookingId !== booking.id) {
+      return { ok: false, code: 'BOOKING_ID_MISMATCH', field: 'bookingId', expected: booking.id, actual: route.bookingId };
+    }
+    var km = route.distanceKm != null ? Number(route.distanceKm) : null;
+    if (km == null || !isFinite(km) || km <= 0) {
+      return { ok: false, code: 'DISTANCE_INVALID', field: 'distanceKm', expected: '>0', actual: route.distanceKm };
+    }
+    var travelMin = route.travelMinutes != null ? Number(route.travelMinutes) : Number(route.providerDurationMinutes);
+    if (!isFinite(travelMin) || travelMin <= 0) {
+      return { ok: false, code: 'DURATION_INVALID', field: 'travelMinutes', expected: '>0', actual: travelMin };
+    }
+    var fromLat = route.fromLat;
+    var fromLng = route.fromLng;
+    if (fromLat == null || fromLng == null) {
+      return { ok: false, code: 'START_POINT_MISSING', field: 'fromLat/fromLng', expected: 'coordinates', actual: null };
+    }
+    if (!geometryMatchesOriginPoint(geom, fromLat, fromLng)) {
+      var first = geom.coordinates[0];
+      var distKm = haversineKm(Number(fromLat), Number(fromLng), Number(first[1]), Number(first[0]));
+      return {
+        ok: false,
+        code: 'ORIGIN_GEOMETRY_MISMATCH',
+        field: 'geometry.coordinates[0]',
+        expected: '<=' + GEOMETRY_ORIGIN_TOLERANCE_KM + ' km from start',
+        actual: distKm.toFixed(3) + ' km'
+      };
+    }
+    var label = route.originLabel || route.fromName || route.originEndLocation;
+    if (!label) {
+      return { ok: false, code: 'ORIGIN_LABEL_MISSING', field: 'originLabel', expected: 'non-empty', actual: null };
+    }
+    var originInvalidated = options.originInvalidated != null
+      ? options.originInvalidated
+      : isOriginInvalidatedForBooking(booking.id);
+    if (originInvalidated && !options.allowServerReload && !options.allowFreshProviderRoute
+      && !options.committedSelection) {
+      return {
+        ok: false,
+        code: 'ORIGIN_INVALIDATED_PENDING',
+        field: 'originInvalidatedByBookingId',
+        expected: 'no invalidation or allowFreshProviderRoute',
+        actual: 'invalidated'
+      };
+    }
+    if (options.allowFreshProviderRoute && options.pendingOriginKey && options.originKey
+      && options.pendingOriginKey !== options.originKey) {
+      return {
+        ok: false,
+        code: 'ORIGIN_MISMATCH',
+        field: 'pendingOriginKey',
+        expected: options.pendingOriginKey,
+        actual: options.originKey
+      };
+    }
+    return { ok: true, code: 'VALID' };
+  }
+
+  function isValidTransferSnapshot(route, booking, options) {
+    return explainTransferSnapshotRejection(route, booking, options).ok;
+  }
+
+  function hasKiallasPreviewData(route) {
+    if (!route) return false;
+    return route.distanceKm != null && Number(route.distanceKm) > 0;
+  }
+
   function hasKiallasRouteData(route) {
     if (!route) return false;
-    if (route.distanceKm != null && Number(route.distanceKm) > 0) return true;
-    var g = route.geometry;
-    return !!(g && g.coordinates && g.coordinates.length >= 2);
+    return !!normalizeTransferLineString(route.geometry);
+  }
+
+  function isOriginInvalidatedForBooking(bookingId) {
+    return !!(bookingId && originInvalidatedByBookingId[bookingId]);
+  }
+
+  function resolveOriginDisplayLabel(origin, originKey) {
+    if (!origin) return originKey || '—';
+    return origin.originName || origin.depotName || origin.humanDisplayName
+      || origin.originLabel || origin.originEndLocation || originKey || '—';
+  }
+
+  function markOriginChangePending(bookingId, originKey, origin) {
+    if (!bookingId) return;
+    var label = resolveOriginDisplayLabel(origin, originKey);
+    originInvalidatedByBookingId[bookingId] = { originKey: originKey || null, at: new Date().toISOString() };
+    pendingOriginKeyByBookingId[bookingId] = originKey || null;
+    transferPendingByBookingId[bookingId] = 'Kiállási útvonal számítása: ' + label + '…';
+    setSelectedTransferRoute(bookingId, null);
+    delete selectedOriginKeyByBookingId[bookingId];
+    markSelectedAdvisorCard(null);
+    var bridge = global.__RENT_DEPOT_INTEGRATION_BRIDGE;
+    if (bridge && bridge.clearCalculatedRouteForBooking) bridge.clearCalculatedRouteForBooking(bookingId);
+    if (bridge && bridge.clearTransferMapLayers) bridge.clearTransferMapLayers();
+    else if (bridge && bridge.refreshDepotRoutes) bridge.refreshDepotRoutes();
+  }
+
+  function clearOriginInvalidation(bookingId) {
+    if (!bookingId) return;
+    delete originInvalidatedByBookingId[bookingId];
+    delete transferPendingByBookingId[bookingId];
+    delete pendingOriginKeyByBookingId[bookingId];
+  }
+
+  function buildTransferValidationOptions(booking, item) {
+    var opts = { allowServerReload: true };
+    if (!booking || !booking.id || !item || item.source !== 'memory.selectedTransferRoute') return opts;
+    var commit = committedTransferSelectionByBookingId[booking.id];
+    var originKey = selectedOriginKeyByBookingId[booking.id];
+    if (commit && commit.bookingId === booking.id && commit.originKey === originKey
+      && commit.requestSeq === transferRouteRequestSeqByBookingId[booking.id]) {
+      opts.committedSelection = true;
+    }
+    return opts;
+  }
+
+  function commitFreshTransferRouteSelection(bookingId, originKey, seq, selected, booking) {
+    if (!bookingId || !originKey || !selected || !booking) {
+      return { ok: false, code: 'MISSING_COMMIT_INPUT' };
+    }
+    if (transferRouteRequestSeqByBookingId[bookingId] !== seq) {
+      return { ok: false, code: 'STALE_REQUEST_SEQ' };
+    }
+    var pendingKey = pendingOriginKeyByBookingId[bookingId];
+    if (pendingKey && pendingKey !== originKey) {
+      return { ok: false, code: 'ORIGIN_MISMATCH' };
+    }
+    var validation = explainTransferSnapshotRejection(selected, booking, {
+      allowFreshProviderRoute: true,
+      pendingOriginKey: pendingKey,
+      originKey: originKey,
+      originInvalidated: true
+    });
+    if (!validation.ok) return validation;
+    setSelectedTransferRoute(bookingId, selected, originKey, { skipEligibilityGuard: true });
+    clearOriginInvalidation(bookingId);
+    committedTransferSelectionByBookingId[bookingId] = {
+      bookingId: bookingId,
+      originKey: originKey,
+      originId: selected.originId || null,
+      requestSeq: seq,
+      committedAt: new Date().toISOString()
+    };
+    return { ok: true, code: 'COMMITTED' };
+  }
+
+  function resolveValidatedTransferSnapshot(booking, formState, calculatedState) {
+    if (!booking || !booking.id) return null;
+    if (transferPendingByBookingId[booking.id]) return null;
+    var invalidated = isOriginInvalidatedForBooking(booking.id);
+    var candidates = [];
+    var mem = getSelectedTransferRoute(booking.id);
+    if (mem) candidates.push({ route: mem, source: 'memory.selectedTransferRoute' });
+    if (!invalidated) {
+      if (formState && formState.selectedTransferRoute) {
+        candidates.push({ route: formState.selectedTransferRoute, source: 'form.selectedTransferRoute' });
+      }
+      if (formState && formState.transferRoute) {
+        candidates.push({ route: formState.transferRoute, source: 'form.transferRoute' });
+      }
+      if (booking.transferRoute) candidates.push({ route: booking.transferRoute, source: 'booking.transferRoute' });
+      if (booking.selectedTransferRoute) {
+        candidates.push({ route: booking.selectedTransferRoute, source: 'booking.selectedTransferRoute' });
+      }
+    }
+    if (!invalidated) {
+      if (calculatedState && calculatedState.geometry && calculatedState.bookingId === booking.id) {
+        candidates.push({ route: calculatedState, source: 'calculatedState' });
+      }
+      if (booking.adminCalculatedRoute) {
+        candidates.push({ route: booking.adminCalculatedRoute, source: 'booking.adminCalculatedRoute' });
+      }
+    }
+    for (var i = 0; i < candidates.length; i++) {
+      var item = candidates[i];
+      if (!isValidTransferSnapshot(item.route, booking, buildTransferValidationOptions(booking, item))) continue;
+      var snap = enrichTransferOperationalMetrics(Object.assign({}, item.route, {
+        geometry: normalizeTransferLineString(item.route.geometry)
+      }));
+      snap._source = item.source;
+      return snap;
+    }
+    return null;
+  }
+
+  function getValidatedTransferSnapshotForSave(booking) {
+    if (!booking || !booking.id) return null;
+    var formState = getRouteFormState(booking.id);
+    var bridge = global.__RENT_DEPOT_INTEGRATION_BRIDGE;
+    var calc = bridge && bridge.getRawCalculatedRouteForBooking
+      ? bridge.getRawCalculatedRouteForBooking(booking.id) : null;
+    var snap = resolveValidatedTransferSnapshot(booking, formState, calc);
+    if (snap) return snap;
+    if (!isOriginInvalidatedForBooking(booking.id) && booking.adminCalculatedRoute &&
+        isValidTransferSnapshot(booking.adminCalculatedRoute, booking, { allowServerReload: true })) {
+      return enrichTransferOperationalMetrics(Object.assign({}, booking.adminCalculatedRoute, {
+        geometry: normalizeTransferLineString(booking.adminCalculatedRoute.geometry)
+      }));
+    }
+    return null;
   }
 
   function buildAdminCalculatedRouteForSave(booking, transferRoute) {
-    if (!booking || !transferRoute || !hasKiallasRouteData(transferRoute)) return null;
+    if (!booking || !transferRoute || !isValidTransferSnapshot(transferRoute, booking)) return null;
     var targetName = booking.placeName || booking.city || booking.address || null;
     var fromName = transferRoute.originEndLocation || transferRoute.originLabel || transferRoute.fromName || null;
     var record = {
@@ -391,6 +702,14 @@
       geometry: transferRoute.geometry,
       distanceKm: transferRoute.distanceKm,
       travelMinutes: transferRoute.travelMinutes,
+      providerDurationMinutes: transferRoute.providerDurationMinutes != null
+        ? transferRoute.providerDurationMinutes : transferRoute.travelMinutes,
+      operationalAverageSpeedKmh: TRANSFER_OPERATIONAL_SPEED_KMH,
+      operationalDurationMinutes: transferRoute.operationalDurationMinutes,
+      roundTripDistanceKm: transferRoute.roundTripDistanceKm,
+      roundTripOperationalDurationMinutes: transferRoute.roundTripOperationalDurationMinutes,
+      originId: transferRoute.originId || null,
+      originLabel: transferRoute.originLabel || fromName,
       fromName: fromName,
       fromLat: transferRoute.fromLat,
       fromLng: transferRoute.fromLng,
@@ -409,24 +728,17 @@
 
   function getKiallasRouteForBooking(booking) {
     if (!booking) return null;
-    var route = booking.transferRoute || booking.selectedTransferRoute;
-    if (hasKiallasRouteData(route)) return route;
+    var bridge = global.__RENT_DEPOT_INTEGRATION_BRIDGE;
     var formState = getRouteFormState(booking.id);
-    route = formState.transferRoute || formState.selectedTransferRoute;
-    if (hasKiallasRouteData(route)) return route;
-    route = getSelectedTransferRoute(booking.id);
-    if (hasKiallasRouteData(route)) return route;
-    if (booking._kiallasServerSaveStatus === 'saved' && booking.adminCalculatedRoute) {
-      route = booking.adminCalculatedRoute;
-      if (hasKiallasRouteData(route)) return route;
-    }
-    return null;
+    var calc = bridge && bridge.getRawCalculatedRouteForBooking
+      ? bridge.getRawCalculatedRouteForBooking(booking.id) : null;
+    return resolveValidatedTransferSnapshot(booking, formState, calc);
   }
 
   function hydrateKiallasServerStatusFromServerBooking(booking) {
     if (!booking || !booking.id) return booking;
     if (booking.transferRoute) return booking;
-    if (booking.adminCalculatedRoute && hasKiallasRouteData(booking.adminCalculatedRoute)) {
+    if (booking.adminCalculatedRoute && isValidTransferSnapshot(booking.adminCalculatedRoute, booking, { allowServerReload: true })) {
       booking._kiallasServerSaveStatus = 'saved';
       booking._kiallasAdminRouteFromServer = true;
     }
@@ -465,7 +777,7 @@
     };
     if (!booking || !booking.id) return empty;
     var route = getKiallasRouteForBooking(booking);
-    if (!hasKiallasRouteData(route)) return empty;
+    if (!route) return empty;
     empty.route = route;
     empty.hasCalculated = true;
     empty.localSaved = !!(booking._kiallasLocalSaved || booking.transferRoute);
@@ -564,13 +876,15 @@
 
   function buildSavedRouteDetailBodyHtml(booking, route) {
     if (!route) return '';
+    route = enrichTransferOperationalMetrics(Object.assign({}, route));
     var dist = route.distanceKm != null && isFinite(Number(route.distanceKm)) ? Number(route.distanceKm) : null;
-    var mins = route.travelMinutes != null && isFinite(Number(route.travelMinutes))
-      ? Math.round(Number(route.travelMinutes))
-      : (route.transferTravelMinutes != null && isFinite(Number(route.transferTravelMinutes))
-        ? Math.round(Number(route.transferTravelMinutes)) : null);
-    var roundTripKm = dist != null ? Math.round(dist * 2 * 10) / 10 : null;
-    var roundTripMins = mins != null ? mins * 2 : null;
+    var providerMin = route.providerDurationMinutes != null ? Math.round(Number(route.providerDurationMinutes))
+      : (route.travelMinutes != null ? Math.round(Number(route.travelMinutes)) : null);
+    var opMin = route.operationalDurationMinutes != null ? Math.round(Number(route.operationalDurationMinutes)) : null;
+    var roundTripKm = route.roundTripDistanceKm != null ? route.roundTripDistanceKm : (dist != null ? Math.round(dist * 2 * 10) / 10 : null);
+    var roundTripOpMin = route.roundTripOperationalDurationMinutes != null
+      ? route.roundTripOperationalDurationMinutes
+      : (opMin != null ? opMin * 2 : null);
     var oneWayFuel = dist != null && dist > 0 ? resolveDisplayFuelMetrics(dist, booking) : null;
     var roundTripFuel = oneWayFuel && oneWayFuel.estimatedFuelLitres != null
       ? {
@@ -583,11 +897,14 @@
     var html = '';
     html += '<div class="kiallas-card-line">' + formatKiallasOriginDestination(route, booking) + '</div>';
     html += '<div class="kiallas-card-line kiallas-card-meta">Kiállás – egy irány:</div>';
-    html += '<div class="kiallas-card-line">' + formatDistanceKmHu(dist) + ' · ' +
-      (mins != null ? mins + ' perc' : '—') + '</div>';
+    html += '<div class="kiallas-card-line">' + formatDistanceKmHu(dist) + '</div>';
+    html += '<div class="kiallas-card-line kiallas-card-meta">Menetidő (provider, egy irány):</div>';
+    html += '<div class="kiallas-card-line">' + (providerMin != null ? providerMin + ' perc' : '—') + '</div>';
+    html += '<div class="kiallas-card-line kiallas-card-meta">Operatív menetidő (egy irány):</div>';
+    html += '<div class="kiallas-card-line">' + (opMin != null ? opMin + ' perc' : '—') + '</div>';
     html += '<div class="kiallas-card-line kiallas-card-meta">Operatív oda-vissza:</div>';
     html += '<div class="kiallas-card-line">' + formatDistanceKmHu(roundTripKm) + ' · ' +
-      (roundTripMins != null ? roundTripMins + ' perc' : '—') + '</div>';
+      (roundTripOpMin != null ? roundTripOpMin + ' perc' : '—') + '</div>';
     if (oneWayFuel && oneWayFuel.estimatedFuelLitres != null) {
       html += '<div class="kiallas-card-line kiallas-card-meta">Üzemanyag – egy irány:</div>';
       html += '<div class="kiallas-card-line">' + buildSavedRouteFuelLineHtml(oneWayFuel) + '</div>';
@@ -1020,6 +1337,9 @@
     if (!route || !route.geometry) {
       return Promise.reject(new Error('Nincs kiválasztott kiállási útvonal. Előbb jelenítsen meg egyet az ajánlóból.'));
     }
+    if (!isValidTransferSnapshot(route, booking)) {
+      return Promise.reject(new Error('A kiállási útvonal nem konzisztens. Számítsd újra az indulási helyhez.'));
+    }
     var originKey = getSelectedOriginKey(booking.id);
     if (originKey) {
       try {
@@ -1100,16 +1420,31 @@
       return Promise.reject(guardErr);
     }
     var snapshot = buildOriginRouteSnapshot(origin, originKey);
+    var bookingId = booking.id;
+    var seq = (transferRouteRequestSeqByBookingId[bookingId] || 0) + 1;
+    transferRouteRequestSeqByBookingId[bookingId] = seq;
+    markOriginChangePending(bookingId, originKey, origin);
+    if (bridge.renderDualRouteDetails) bridge.renderDualRouteDetails();
+    renderTransferBookingSummary(bookingId);
     setRouteActionState(originKey, { status: 'loading', message: '' });
     var buffer = parseInt(($('advisorBuffer') && $('advisorBuffer').value) || CFG.preparationBufferMinutes || 30, 10);
     return fetchTransferRoute(snapshot.lat, snapshot.lng, booking.lat, booking.lng).then(function (routeData) {
+      if (transferRouteRequestSeqByBookingId[bookingId] !== seq) {
+        return Promise.reject(new Error('STALE_TRANSFER_RESPONSE'));
+      }
+      if (!routeData || !routeData.geometry) {
+        return Promise.reject(new Error(TRANSFER_ROUTE_SAFE_UNAVAILABLE_MSG));
+      }
       setRouteActionState(originKey, {
         status: 'success',
         message: '',
         geometry: routeData.geometry || null
       });
       var selected = buildSelectedTransferRouteObject(snapshot, booking, routeData, buffer);
-      setSelectedTransferRoute(booking.id, selected, originKey, { skipEligibilityGuard: true });
+      var commitResult = commitFreshTransferRouteSelection(bookingId, originKey, seq, selected, booking);
+      if (!commitResult.ok) {
+        return Promise.reject(new Error('TRANSFER_SNAPSHOT_VALIDATION_REJECTED:' + commitResult.code));
+      }
       if (bridge.refreshDepotRoutes) bridge.refreshDepotRoutes();
       if (bridge.renderDualRouteDetails) bridge.renderDualRouteDetails();
       markSelectedAdvisorCard(originKey);
@@ -1117,12 +1452,23 @@
       renderTransferBookingSummary(booking.id);
       return selected;
     }).catch(function (err) {
+      if (transferRouteRequestSeqByBookingId[bookingId] === seq) {
+        delete transferPendingByBookingId[bookingId];
+        delete pendingOriginKeyByBookingId[bookingId];
+        delete selectedOriginKeyByBookingId[bookingId];
+        delete committedTransferSelectionByBookingId[bookingId];
+        markSelectedAdvisorCard(null);
+      }
       var classified = classifyTransferRouteError(err);
       setRouteActionState(originKey, {
         status: classified.status,
         message: classified.message,
         geometry: null
       });
+      if (bridge.clearTransferMapLayers) bridge.clearTransferMapLayers();
+      else if (bridge.refreshDepotRoutes) bridge.refreshDepotRoutes();
+      if (bridge.renderDualRouteDetails) bridge.renderDualRouteDetails();
+      renderTransferBookingSummary(bookingId);
       if (typeof console !== 'undefined' && console.error) {
         console.error('[IntegrationRouteWorkflow] transfer route failed:', originKey, err);
       }
@@ -1156,34 +1502,27 @@
 
   function resolveOneWayKiallasDisplayMetrics(transfer, booking) {
     var route = booking ? getKiallasRouteForBooking(booking) : null;
-    var dist = null;
-    var mins = null;
-    if (route && route.distanceKm != null && isFinite(Number(route.distanceKm))) {
-      dist = Number(route.distanceKm);
-    } else if (transfer && transfer.metrics && transfer.metrics.distanceKm != null && isFinite(Number(transfer.metrics.distanceKm))) {
-      dist = Number(transfer.metrics.distanceKm);
-    } else if (transfer && transfer.distanceKm != null && isFinite(Number(transfer.distanceKm))) {
-      dist = Number(transfer.distanceKm);
+    if (!route) {
+      return { distanceKm: null, travelMinutes: null, operationalDurationMinutes: null, fuelMetrics: null };
     }
-    if (route && route.travelMinutes != null && isFinite(Number(route.travelMinutes))) {
-      mins = Math.round(Number(route.travelMinutes));
-    } else if (route && route.transferTravelMinutes != null && isFinite(Number(route.transferTravelMinutes))) {
-      mins = Math.round(Number(route.transferTravelMinutes));
-    } else if (transfer && transfer.metrics && transfer.metrics.estimatedDurationMinutes != null) {
-      mins = Math.round(Number(transfer.metrics.estimatedDurationMinutes));
-    } else if (transfer && transfer.travelMinutes != null && isFinite(Number(transfer.travelMinutes))) {
-      mins = Math.round(Number(transfer.travelMinutes));
-    }
+    var dist = route.distanceKm != null ? Number(route.distanceKm) : null;
+    var providerMin = route.providerDurationMinutes != null ? Math.round(Number(route.providerDurationMinutes))
+      : (route.travelMinutes != null ? Math.round(Number(route.travelMinutes)) : null);
+    var opMin = route.operationalDurationMinutes != null ? Math.round(Number(route.operationalDurationMinutes)) : null;
     var fuel = dist != null && dist > 0 ? getSharedKiallasFuelMetrics(dist, booking) : null;
-    return { distanceKm: dist, travelMinutes: mins, fuelMetrics: fuel };
+    return { distanceKm: dist, travelMinutes: providerMin, operationalDurationMinutes: opMin, fuelMetrics: fuel };
   }
 
   function buildOneWayKiallasSectionHtml(transfer, booking) {
     var m = resolveOneWayKiallasDisplayMetrics(transfer, booking);
+    if (m.distanceKm == null) return '';
     var html = '<div class="ops-section ops-section--kiallas-oneway">';
     html += '<div class="ops-section-label">Kiállás – egy irány</div>';
-    html += '<div>' + formatDistanceKmHu(m.distanceKm) + ' · ' +
-      (m.travelMinutes != null && isFinite(m.travelMinutes) ? m.travelMinutes + ' perc' : '—') + '</div>';
+    html += '<div>' + formatDistanceKmHu(m.distanceKm) + '</div>';
+    html += '<div class="ops-section-label">Menetidő (provider, egy irány)</div>';
+    html += '<div>' + (m.travelMinutes != null && isFinite(m.travelMinutes) ? m.travelMinutes + ' perc' : '—') + '</div>';
+    html += '<div class="ops-section-label">Operatív menetidő (egy irány)</div>';
+    html += '<div>' + (m.operationalDurationMinutes != null ? m.operationalDurationMinutes + ' perc' : '—') + '</div>';
     if (m.fuelMetrics && m.fuelMetrics.estimatedFuelLitres != null && m.fuelMetrics.estimatedFuelCost != null) {
       html += '<div>' + String(m.fuelMetrics.estimatedFuelLitres).replace('.', ',') + ' l</div>';
       html += '<div>' + formatFuelCostHu(m.fuelMetrics.estimatedFuelCost) + '</div>';
@@ -1195,15 +1534,17 @@
   }
 
   function buildRoundTripOperationalSectionHtml(transfer, booking) {
-    var m = resolveOneWayKiallasDisplayMetrics(transfer, booking);
-    if (m.distanceKm == null || !isFinite(m.distanceKm) || m.distanceKm <= 0) return '';
-    var rtDist = Math.round(m.distanceKm * 2 * 10) / 10;
-    var rtMins = m.travelMinutes != null && isFinite(m.travelMinutes) ? m.travelMinutes * 2 : null;
+    var route = booking ? getKiallasRouteForBooking(booking) : null;
+    if (!route || route.distanceKm == null || !isFinite(Number(route.distanceKm)) || Number(route.distanceKm) <= 0) return '';
+    var rtDist = route.roundTripDistanceKm != null ? route.roundTripDistanceKm : Math.round(Number(route.distanceKm) * 2 * 10) / 10;
+    var rtOpMin = route.roundTripOperationalDurationMinutes != null
+      ? route.roundTripOperationalDurationMinutes
+      : (route.operationalDurationMinutes != null ? route.operationalDurationMinutes * 2 : null);
     var rtFuel = getSharedKiallasFuelMetrics(rtDist, booking);
     var html = '<div class="ops-section ops-section--kiallas-roundtrip">';
     html += '<div class="ops-section-label">Operatív oda-vissza</div>';
     html += '<div>' + formatDistanceKmHu(rtDist) + ' · ' +
-      (rtMins != null ? rtMins + ' perc' : '—') + '</div>';
+      (rtOpMin != null ? rtOpMin + ' perc' : '—') + '</div>';
     if (rtFuel && rtFuel.estimatedFuelLitres != null && rtFuel.estimatedFuelCost != null) {
       html += '<div>' + String(rtFuel.estimatedFuelLitres).replace('.', ',') + ' l</div>';
       html += '<div>' + formatFuelCostHu(rtFuel.estimatedFuelCost) + '</div>';
@@ -1278,6 +1619,9 @@
         '<div>Felkészülési tartalék: ' + escapeHtml(prepBuffer.display) + '</div>' +
         '<div>Teljesíthetőség: ' + escapeHtml(popup.feasible === false ? 'Nem teljesíthető' : 'Teljesíthető') + '</div>' +
         '<div class="kiallas-card-line kiallas-card-meta">Adatminőség: ' + escapeHtml(dataQualityLabel) + '</div>';
+    } else if (transferPendingByBookingId[booking.id]) {
+      transferEl.hidden = false;
+      transferEl.innerHTML = '<div class="route-missing-hint">' + escapeHtml(transferPendingByBookingId[booking.id]) + '</div>';
     } else {
       transferEl.hidden = false;
       transferEl.innerHTML = '<h3 class="route-type-details__title">Kiállás</h3><div>Nincs kiválasztott kiállási útvonal.</div>';
@@ -1586,10 +1930,36 @@
   function clearTransferSelectionForBooking(bookingId) {
     if (!bookingId) return;
     setSelectedTransferRoute(bookingId, null);
+    delete pendingOriginKeyByBookingId[bookingId];
+    delete transferPendingByBookingId[bookingId];
+    delete originInvalidatedByBookingId[bookingId];
+    delete committedTransferSelectionByBookingId[bookingId];
     markSelectedAdvisorCard(null);
     clearRouteActionState();
     var el = $('transferDraftPreview');
     if (el) { el.hidden = true; el.textContent = ''; }
+  }
+
+  function clearTransferMapUiState(bookingId) {
+    if (bookingId) clearTransferSelectionForBooking(bookingId);
+    else {
+      markSelectedAdvisorCard(null);
+      clearRouteActionState();
+    }
+    var bridge = global.__RENT_DEPOT_INTEGRATION_BRIDGE;
+    if (bridge && bridge.clearTransferMapLayers) bridge.clearTransferMapLayers();
+    else if (bridge && bridge.refreshDepotRoutes) bridge.refreshDepotRoutes();
+  }
+
+  function getPendingTransferState(bookingId) {
+    if (!bookingId) return null;
+    return {
+      bookingId: bookingId,
+      pendingMessage: transferPendingByBookingId[bookingId] || null,
+      pendingOriginKey: pendingOriginKeyByBookingId[bookingId] || null,
+      selectedOriginKey: selectedOriginKeyByBookingId[bookingId] || null,
+      invalidated: isOriginInvalidatedForBooking(bookingId)
+    };
   }
 
   function bindSelectSync() {
@@ -1669,7 +2039,23 @@
     collectVisibleRouteGeoJsonFeatures: collectVisibleRouteGeoJsonFeatures,
     resolveRouteSourceLabel: resolveRouteSourceLabel,
     computeOwnerReportRouteMetrics: computeOwnerReportRouteMetrics,
-    buildAdminCalculatedRouteForSave: buildAdminCalculatedRouteForSave
+    buildAdminCalculatedRouteForSave: buildAdminCalculatedRouteForSave,
+    isValidTransferSnapshot: isValidTransferSnapshot,
+    explainTransferSnapshotRejection: explainTransferSnapshotRejection,
+    classifyTransferRouteError: classifyTransferRouteError,
+    resolveValidatedTransferSnapshot: resolveValidatedTransferSnapshot,
+    getValidatedTransferSnapshotForSave: getValidatedTransferSnapshotForSave,
+    enrichTransferOperationalMetrics: enrichTransferOperationalMetrics,
+    isOriginInvalidatedForBooking: isOriginInvalidatedForBooking,
+    markOriginChangePending: markOriginChangePending,
+    clearOriginInvalidation: clearOriginInvalidation,
+    commitFreshTransferRouteSelection: commitFreshTransferRouteSelection,
+    clearTransferMapUiState: clearTransferMapUiState,
+    getPendingTransferState: getPendingTransferState,
+    resolveOriginDisplayLabel: resolveOriginDisplayLabel,
+    findOriginByKey: findOriginByKey,
+    hasKiallasPreviewData: hasKiallasPreviewData,
+    TRANSFER_OPERATIONAL_SPEED_KMH: TRANSFER_OPERATIONAL_SPEED_KMH
   };
 
   installRouteLayerHooks();
