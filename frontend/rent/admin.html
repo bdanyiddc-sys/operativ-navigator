@@ -2042,6 +2042,8 @@
   var STORAGE_KEY = 'opnav_foglalasi_terkep_v3';
   var STORAGE_KEY_LEGACY = 'opnav_foglalasi_terkep_v1';
   var MODULE_VERSION = '5.0.0';
+  var CUSTOMER_OPERATIONAL_SPEED_KMH = 30;
+  var customerRoutePatchInFlight = null;
   var ADMIN_BUILD_STAMP = 'rent-admin-report-csv-v4';
   var RENT_AUTO_REFRESH_KEY = 'rent_admin_auto_refresh';
   var rentAutoRefreshEnabled = true;
@@ -2709,12 +2711,18 @@
     var b = bookings.find(function (x) { return x.id === id; });
     if (!b) return;
     var prevId = $('editId').value;
+    if (prevId && prevId !== id) {
+      clearTransferMapDisplay(prevId);
+    }
     if (prevId && prevId !== id) clearRouteResultPanel();
     fillForm(b);
     setFormTab('basic');
     setMainModule('detail');
     if (window.IntegrationRouteWorkflow && window.IntegrationRouteWorkflow.syncBookingSelects) {
       window.IntegrationRouteWorkflow.syncBookingSelects(id);
+    }
+    if (window.__RENT_DEPOT_INTEGRATION_BRIDGE && window.__RENT_DEPOT_INTEGRATION_BRIDGE.refreshDepotRoutes) {
+      window.__RENT_DEPOT_INTEGRATION_BRIDGE.refreshDepotRoutes();
     }
     var pts = getBookingRoutePoints(b);
     if (pts.length >= 2) {
@@ -2943,15 +2951,18 @@
   function backToBookingFromRoute() {
     setMainModule('detail');
     renderGisTabSummary();
+    if (window.__RENT_DEPOT_INTEGRATION_BRIDGE && window.__RENT_DEPOT_INTEGRATION_BRIDGE.refreshDepotRoutes) {
+      window.__RENT_DEPOT_INTEGRATION_BRIDGE.refreshDepotRoutes();
+    }
   }
 
   function attachCalcRouteToBookingAndBack() {
-    if (!attachCalcRouteToBooking(true)) return;
-    setMainModule('detail');
-    setFormTab('basic');
-    renderBasicRouteSavedBadge(getCurrentBookingBase());
-    setGeoStatus('Megrendelői útvonal visszaírva a drafthoz. Mentés szükséges a tároláshoz.', 'warn');
-    renderGisTabSummary();
+    saveCustomerRouteAtomically({ silentModuleSwitch: true }).then(function () {
+      setMainModule('detail');
+      setFormTab('basic');
+      renderBasicRouteSavedBadge(getCurrentBookingBase());
+      renderGisTabSummary();
+    }).catch(function () { /* hibaüzenet a saveCustomerRouteAtomically-ban */ });
   }
 
   function bookingHasSavedRoute(b) {
@@ -3092,7 +3103,13 @@
   window.setFormTab = setFormTab;
 
   function setMainModule(moduleId) {
-    activeMainModule = moduleId || 'bookings';
+    var prevModule = activeMainModule;
+    moduleId = moduleId || 'bookings';
+    if (prevModule !== moduleId && (prevModule === 'detail' || prevModule === 'routes') &&
+        moduleId !== 'detail' && moduleId !== 'routes') {
+      clearTransferMapDisplay();
+    }
+    activeMainModule = moduleId;
     document.querySelectorAll('.main-nav-btn[data-main-module]').forEach(function (btn) {
       btn.classList.toggle('is-active', btn.getAttribute('data-main-module') === activeMainModule);
     });
@@ -3111,9 +3128,214 @@
     }
     if (activeMainModule === 'detail') renderGisTabSummary();
     if (activeMainModule === 'analytics') renderOwnerReportPreview();
+    if (window.__RENT_DEPOT_INTEGRATION_BRIDGE && window.__RENT_DEPOT_INTEGRATION_BRIDGE.refreshDepotRoutes) {
+      window.__RENT_DEPOT_INTEGRATION_BRIDGE.refreshDepotRoutes();
+    }
     setTimeout(function () { map.invalidateSize(); }, 80);
   }
   window.setMainModule = setMainModule;
+
+  function resolveCustomerGisBookingSnapshot() {
+    var id = $('editId').value;
+    var stored = id ? bookings.find(function (x) { return x.id === id; }) : null;
+    var snapshot = stored ? Object.assign({}, stored) : (id ? null : Object.assign({}, getCurrentBookingBase() || {}));
+    if (!snapshot) snapshot = {};
+    var formGeom = parseRouteGeometryInput(($('routeGeometry') && $('routeGeometry').value || '').trim());
+    if (formGeom) snapshot.routeGeometry = formGeom;
+    return { id: id, stored: stored, booking: snapshot };
+  }
+
+  function resolveCustomerLineStringForGis(booking) {
+    if (!booking) return null;
+    return lineStringFromBookingRouteForExport(booking);
+  }
+
+  function validateCustomerLineStringForSave(geometry) {
+    var normalized = normalizeLineStringGeometry(geometry);
+    if (!normalized || !normalized.coordinates || normalized.coordinates.length < 2) {
+      return { ok: false, error: 'Érvénytelen LineString: legalább 2 koordináta szükséges.' };
+    }
+    for (var i = 0; i < normalized.coordinates.length; i += 1) {
+      var c = normalized.coordinates[i];
+      if (!Array.isArray(c) || c.length < 2 || !isFinite(c[0]) || !isFinite(c[1])) {
+        return { ok: false, error: 'Érvénytelen koordináta a LineStringben.' };
+      }
+    }
+    var RTA = window.RouteTypeAdapter;
+    var geometryLengthKm = RTA && RTA.lineLengthKmFromGeometry
+      ? RTA.lineLengthKmFromGeometry(normalized)
+      : null;
+    if (geometryLengthKm == null || !isFinite(geometryLengthKm) || geometryLengthKm <= 0) {
+      return { ok: false, error: 'A megrendelői útvonal hossza nem számítható.' };
+    }
+    var operationalDurationMinutes = Math.round((geometryLengthKm / CUSTOMER_OPERATIONAL_SPEED_KMH) * 60);
+    if (operationalDurationMinutes <= 0 || !isFinite(operationalDurationMinutes)) {
+      return { ok: false, error: 'Az üzemi menetidő nem számítható.' };
+    }
+    return {
+      ok: true,
+      geometry: normalized,
+      geometryLengthKm: geometryLengthKm,
+      operationalDurationMinutes: operationalDurationMinutes
+    };
+  }
+
+  function buildCustomerRouteMetrics(normalizedGeometry, geometrySource) {
+    var validated = validateCustomerLineStringForSave(normalizedGeometry);
+    if (!validated.ok) return null;
+    return {
+      geometryLengthKm: validated.geometryLengthKm,
+      operationalAverageSpeedKmh: CUSTOMER_OPERATIONAL_SPEED_KMH,
+      operationalDurationMinutes: validated.operationalDurationMinutes,
+      pointCount: validated.geometry.coordinates.length,
+      calculatedAt: new Date().toISOString(),
+      geometrySource: geometrySource || 'routeGeometry'
+    };
+  }
+
+  function buildCustomerRoutePatchPayload(resolved) {
+    if (!resolved || !resolved.geometry) return null;
+    var validated = validateCustomerLineStringForSave(resolved.geometry);
+    if (!validated.ok) return null;
+    var metrics = buildCustomerRouteMetrics(validated.geometry, resolved.geometrySource);
+    if (!metrics) return null;
+    return {
+      routeGeometry: validated.geometry,
+      customerRouteMetrics: metrics,
+      geometryType: 'ROUTE'
+    };
+  }
+
+  function resolveCustomerRouteForAtomicSave() {
+    var bookingId = $('editId').value;
+    if (!bookingId) return null;
+    var stored = bookings.find(function (b) { return b.id === bookingId; });
+    if (!stored) return null;
+    var formGeom = parseRouteGeometryInput(($('routeGeometry') && $('routeGeometry').value || '').trim());
+    if (formGeom) {
+      var fromDraft = normalizeLineStringGeometry(formGeom);
+      if (fromDraft) {
+        return { bookingId: bookingId, geometry: fromDraft, geometrySource: 'customerDraft' };
+      }
+    }
+    if (stored.routePoints && Array.isArray(stored.routePoints) && stored.routePoints.length >= 2) {
+      var fromPoints = resolveCustomerLineStringForGis({ routePoints: stored.routePoints });
+      if (fromPoints) {
+        return { bookingId: bookingId, geometry: fromPoints, geometrySource: 'routePoints' };
+      }
+    }
+    if (stored.routeGeometry) {
+      var fromGeom = normalizeLineStringGeometry(stored.routeGeometry);
+      if (fromGeom) {
+        return { bookingId: bookingId, geometry: fromGeom, geometrySource: 'routeGeometry' };
+      }
+    }
+    if (stored.routeDraft) {
+      var fromRouteDraft = normalizeLineStringGeometry(stored.routeDraft);
+      if (fromRouteDraft) {
+        return { bookingId: bookingId, geometry: fromRouteDraft, geometrySource: 'routeDraft' };
+      }
+    }
+    return null;
+  }
+
+  function computeCustomerGisMetrics(customerGeometry) {
+    var validated = customerGeometry ? validateCustomerLineStringForSave(customerGeometry) : { ok: false };
+    if (!validated.ok) {
+      return { geometryLengthKm: null, operationalDurationMinutes: null };
+    }
+    return {
+      geometryLengthKm: validated.geometryLengthKm,
+      operationalDurationMinutes: validated.operationalDurationMinutes
+    };
+  }
+
+  function resolveCustomerGisDisplayMetrics(customerBooking, customerGeometry) {
+    var storedMetrics = customerBooking && customerBooking.customerRouteMetrics;
+    if (storedMetrics && storedMetrics.geometryLengthKm != null
+      && isFinite(Number(storedMetrics.geometryLengthKm)) && Number(storedMetrics.geometryLengthKm) > 0) {
+      var km = Number(storedMetrics.geometryLengthKm);
+      var opMin = storedMetrics.operationalDurationMinutes != null
+        && isFinite(Number(storedMetrics.operationalDurationMinutes))
+        && Number(storedMetrics.operationalDurationMinutes) > 0
+        ? Math.round(Number(storedMetrics.operationalDurationMinutes))
+        : Math.round((km / CUSTOMER_OPERATIONAL_SPEED_KMH) * 60);
+      return { geometryLengthKm: km, operationalDurationMinutes: opMin, fromServer: true };
+    }
+    return Object.assign({}, computeCustomerGisMetrics(customerGeometry), { fromServer: false });
+  }
+
+  function setCustomerAttachButtonsBusy(busy) {
+    ['btnAttachCalcRoute', 'btnWriteBackRoute'].forEach(function (btnId) {
+      var btn = $(btnId);
+      if (btn) btn.disabled = !!busy;
+    });
+  }
+
+  function hydrateBookingAfterCustomerRouteSave(saved, expectedBookingId) {
+    if (!saved || saved.id !== expectedBookingId) return false;
+    var norm = normalizeBooking(saved);
+    applyKiallasBadgeStateAfterServerBooking(norm);
+    var idx = bookings.findIndex(function (b) { return b.id === norm.id; });
+    if (idx >= 0) bookings[idx] = norm;
+    else bookings.push(norm);
+    if ($('editId').value === norm.id) {
+      $('geometryType').value = norm.geometryType === 'ROUTE' || norm.routeGeometry ? 'ROUTE' : DEFAULT_GEOMETRY_TYPE;
+      $('routeGeometry').value = norm.routeGeometry ? JSON.stringify(norm.routeGeometry) : '';
+      updateGeometryTypeUi();
+    }
+    restoreCalculatedRoutesFromBookings();
+    return true;
+  }
+
+  function saveCustomerRouteAtomically(options) {
+    options = options || {};
+    var bookingId = $('editId').value;
+    if (!bookingId || !isBackendRentId(bookingId)) {
+      alert('A megrendelői útvonal mentéséhez előbb mentsd a foglalást a szerveren.');
+      return Promise.reject(new Error('BOOKING_ID_REQUIRED'));
+    }
+    if (customerRoutePatchInFlight === bookingId) {
+      return Promise.reject(new Error('PATCH_IN_FLIGHT'));
+    }
+    var resolved = resolveCustomerRouteForAtomicSave();
+    if (!resolved || resolved.bookingId !== bookingId) {
+      alert('Nincs hozzárendelhető megrendelői útvonal.');
+      return Promise.reject(new Error('NO_CUSTOMER_ROUTE'));
+    }
+    var patchPayload = buildCustomerRoutePatchPayload(resolved);
+    if (!patchPayload) {
+      alert('A megrendelői útvonal geometria érvénytelen vagy üres.');
+      return Promise.reject(new Error('INVALID_GEOMETRY'));
+    }
+    customerRoutePatchInFlight = bookingId;
+    setCustomerAttachButtonsBusy(true);
+    return patchRentInquiryApi(bookingId, patchPayload).then(function (saved) {
+      if (!hydrateBookingAfterCustomerRouteSave(saved, bookingId)) {
+        throw new Error('HYDRATION_BOOKING_MISMATCH');
+      }
+      renderGisTabSummary();
+      setGeoStatus('Megrendelői útvonal mentve ✓', 'ok');
+      if (!options.silentModuleSwitch) {
+        setMainModule('detail');
+        setFormTab('gis');
+      }
+      return saved;
+    }).catch(function (err) {
+      if (err && err.message === 'PATCH_IN_FLIGHT') {
+        return Promise.reject(err);
+      }
+      if (err && err.message !== 'NO_CUSTOMER_ROUTE' && err.message !== 'INVALID_GEOMETRY'
+        && err.message !== 'BOOKING_ID_REQUIRED') {
+        alert('Megrendelői útvonal mentése sikertelen: ' + (err.message || 'ismeretlen hiba'));
+      }
+      setGeoStatus('Megrendelői útvonal mentése nem sikerült.', 'err');
+      return Promise.reject(err);
+    }).finally(function () {
+      if (customerRoutePatchInFlight === bookingId) customerRoutePatchInFlight = null;
+      setCustomerAttachButtonsBusy(false);
+    });
+  }
 
   function renderGisTabSummary() {
     var coordEl = $('gisCoordDisplay');
@@ -3133,9 +3355,11 @@
         ? ('Lat: ' + Number(lat).toFixed(5) + ' · Lng: ' + Number(lng).toFixed(5))
         : 'Nincs beállított koordináta.';
     }
-    var id = $('editId').value;
-    var stored = id ? bookings.find(function (x) { return x.id === id; }) : null;
-    var pts = stored ? getBookingRoutePoints(stored) : [];
+    var gisSnap = resolveCustomerGisBookingSnapshot();
+    var id = gisSnap.id;
+    var stored = gisSnap.stored;
+    var customerBooking = gisSnap.booking;
+    var pts = customerBooking ? getBookingRoutePoints(customerBooking) : [];
     if (typeEl) {
       typeEl.textContent = stored ? bookingRouteTypeLabel(stored, pts) : '—';
     }
@@ -3150,58 +3374,61 @@
       endEl.textContent = stored && stored.end_address
         ? formatEndpointAddress(stored.end_address) : '—';
     }
-    var routeLookupId = id || ROUTE_DRAFT_ID;
-    var r = getRouteForBooking(routeLookupId);
-    var hasGeom = !!(r && r.geometry);
+    var customerGeometry = resolveCustomerLineStringForGis(customerBooking);
+    var hasCustomerGeom = !!customerGeometry;
+    var customerMetrics = resolveCustomerGisDisplayMetrics(customerBooking, customerGeometry);
     var linked = $('geometryType').value === 'ROUTE' && $('routeGeometry').value.trim();
-    if (distEl) distEl.textContent = (r && r.distanceKm != null) ? (r.distanceKm + ' km') : '—';
-    if (timeEl) timeEl.textContent = (r && r.travelMinutes != null) ? formatTravelMinutes(r.travelMinutes) : '—';
-    if (depEl) {
-      depEl.textContent = (r && r.suggestedDeparture)
-        ? String(r.suggestedDeparture).replace('T', ' ')
+    var serverSavedMetrics = !!(stored && stored.customerRouteMetrics
+      && stored.customerRouteMetrics.geometryLengthKm != null
+      && isFinite(Number(stored.customerRouteMetrics.geometryLengthKm))
+      && Number(stored.customerRouteMetrics.geometryLengthKm) > 0);
+    var depRow = depEl && depEl.closest ? depEl.closest('.gis-kv') : null;
+    if (depRow) depRow.hidden = true;
+    if (depEl) depEl.textContent = '—';
+    if (distEl) {
+      distEl.textContent = customerMetrics.geometryLengthKm != null
+        ? (String(customerMetrics.geometryLengthKm).replace('.', ',') + ' km')
+        : '—';
+    }
+    if (timeEl) {
+      timeEl.textContent = customerMetrics.operationalDurationMinutes != null
+        ? formatTravelMinutes(customerMetrics.operationalDurationMinutes)
         : '—';
     }
     if (statEl) {
-      if (!id && !getRouteForBooking(ROUTE_DRAFT_ID)) statEl.textContent = 'Új árajánlatkérés';
-      else if (!id && r && hasGeom) statEl.textContent = linked ? 'Visszaírva' : 'Számítva, nincs visszaírva';
-      else if (!r || !hasGeom) statEl.textContent = 'Nincs számított útvonal';
+      if (!id && !hasCustomerGeom) statEl.textContent = 'Új árajánlatkérés';
+      else if (!hasCustomerGeom) statEl.textContent = 'Nincs megrendelői útvonal';
+      else if (serverSavedMetrics) statEl.textContent = 'Megrendelői útvonal mentve ✓';
       else if (linked) statEl.textContent = 'Visszaírva';
-      else statEl.textContent = 'Számítva, nincs visszaírva';
+      else statEl.textContent = 'Megrendelői útvonal megadva';
     }
     if (summaryEl) {
-      if (!r || !hasGeom) {
+      if (!hasCustomerGeom) {
         summaryEl.hidden = true;
         summaryEl.innerHTML = '';
+      } else if (serverSavedMetrics) {
+        summaryEl.hidden = false;
+        summaryEl.textContent = 'Megrendelői útvonal mentve ✓';
       } else if (!linked) {
         summaryEl.hidden = false;
-        summaryEl.textContent = 'Útvonal kiszámítva. A visszaírás csak gombnyomásra történik.';
+        summaryEl.textContent = 'Megrendelői útvonal megadva. Mentéshez használd a „Megrendelői útvonal hozzárendelése” gombot.';
       } else {
         summaryEl.hidden = false;
-        summaryEl.textContent = 'Útvonal adatok visszaírva. Mentés szükséges a tároláshoz.';
+        summaryEl.textContent = 'Megrendelői útvonal visszaírva az űrlapra. Mentéshez használd a „Megrendelői útvonal hozzárendelése” gombot.';
       }
     }
     var gisExportBtn = $('btnGisExportGeoJson');
     if (gisExportBtn) {
-      gisExportBtn.disabled = !(stored && lineStringFromBookingRouteForExport(stored));
+      gisExportBtn.disabled = !(customerBooking && resolveCustomerLineStringForGis(customerBooking));
     }
   }
 
   function attachCalcRouteToBooking(silentModuleSwitch) {
-    var targetId = getRouteTargetBookingId();
-    var r = getRouteForBooking(targetId);
-    if (!r || !r.geometry) {
-      alert('Nincs számított útvonal. Előbb számíts útvonalat.');
+    return saveCustomerRouteAtomically({ silentModuleSwitch: !!silentModuleSwitch }).then(function () {
+      return true;
+    }).catch(function () {
       return false;
-    }
-    $('geometryType').value = 'ROUTE';
-    updateGeometryTypeUi();
-    $('routeGeometry').value = JSON.stringify(r.geometry);
-    renderGisTabSummary();
-    if (!silentModuleSwitch) {
-      setMainModule('detail');
-      setFormTab('gis');
-    }
-    return true;
+    });
   }
 
   function renderRouteTargetPanel() {
@@ -4455,16 +4682,22 @@
 
   function resolveAdminCalculatedRouteForSave(entry) {
     if (!entry || !entry.id) return null;
-    var calc = calculatedRoutes.find(function (r) { return r.bookingId === entry.id; });
-    if (calc) return normalizeRouteRecord(calc, entry);
-    if (entry.adminCalculatedRoute && entry.adminCalculatedRoute.geometry) {
-      return normalizeRouteRecord(entry.adminCalculatedRoute, entry);
+    var wf = window.IntegrationRouteWorkflow;
+    if (wf && wf.getValidatedTransferSnapshotForSave) {
+      var snap = wf.getValidatedTransferSnapshotForSave(entry);
+      if (snap) {
+        if (wf.buildAdminCalculatedRouteForSave) {
+          var built = wf.buildAdminCalculatedRouteForSave(entry, snap);
+          if (built) return normalizeRouteRecord(built, entry);
+        }
+        return normalizeRouteRecord(snap, entry);
+      }
     }
-    var existing = bookings.find(function (b) { return b.id === entry.id; });
-    var transfer = (existing && (existing.transferRoute || existing.selectedTransferRoute))
-      || entry.transferRoute || entry.selectedTransferRoute;
-    if (transfer && window.IntegrationRouteWorkflow && window.IntegrationRouteWorkflow.buildAdminCalculatedRouteForSave) {
-      return window.IntegrationRouteWorkflow.buildAdminCalculatedRouteForSave(entry, transfer);
+    if (entry.adminCalculatedRoute && entry.adminCalculatedRoute.geometry) {
+      if (wf && wf.isValidTransferSnapshot &&
+          wf.isValidTransferSnapshot(entry.adminCalculatedRoute, entry, { allowServerReload: true })) {
+        return normalizeRouteRecord(entry.adminCalculatedRoute, entry);
+      }
     }
     return null;
   }
@@ -4592,6 +4825,9 @@
     if (!merged.routePoints && existing.routePoints) merged.routePoints = existing.routePoints;
     if (!merged.routeGeometry && existing.routeGeometry) merged.routeGeometry = existing.routeGeometry;
     if (!merged.routeDraft && existing.routeDraft) merged.routeDraft = existing.routeDraft;
+    if (!merged.customerRouteMetrics && existing.customerRouteMetrics) {
+      merged.customerRouteMetrics = existing.customerRouteMetrics;
+    }
     if (!merged.transferRoute && existing.transferRoute) merged.transferRoute = existing.transferRoute;
     if (!merged.selectedTransferRoute && existing.selectedTransferRoute) {
       merged.selectedTransferRoute = existing.selectedTransferRoute;
@@ -5008,6 +5244,10 @@
     renderBookingDetailHeader();
     populateRouteBookingSelect();
     clearRouteResultPanel();
+    if (window.IntegrationRouteWorkflow && window.IntegrationRouteWorkflow.clearTransferMapUiState) {
+      window.IntegrationRouteWorkflow.clearTransferMapUiState(null);
+    }
+    clearTransferMapDisplay();
   }
 
   function popupMetaRow(label, value) {
@@ -5338,6 +5578,7 @@
       var adminPts = getAdminRoutePoints(b);
       var routeTargetId = $('routeBookingId') && $('routeBookingId').value || '';
       var skipTargetOnBookingLayer = isIntegrationLabRouteMode() && routeTargetId && b.id === routeTargetId;
+      var drawRoutePolylinesOnMap = !window.__RENT_DEPOT_ROUTE_INTEGRATION;
       var markerLat = null;
       var markerLng = null;
       if (customerPts.length >= 1) {
@@ -5349,7 +5590,7 @@
       }
       if (markerLat == null || markerLng == null) return;
 
-      if (customerPts.length >= 2 && !skipTargetOnBookingLayer) {
+      if (drawRoutePolylinesOnMap && customerPts.length >= 2 && !skipTargetOnBookingLayer) {
         drawBookingRoutePoints(customerPts, bookingRouteLayer, {
           color: '#a855f7',
           dashArray: '6 4',
@@ -5357,7 +5598,7 @@
           showPointMarkers: rentShowRoutePointMarkers
         }, buildCustomerRouteLayerMeta(b));
       }
-      if (adminPts.length >= 2 && !skipTargetOnBookingLayer) {
+      if (drawRoutePolylinesOnMap && adminPts.length >= 2 && !skipTargetOnBookingLayer) {
         drawBookingRoutePoints(adminPts, bookingRouteLayer, {
           color: '#38bdf8',
           dashArray: null,
@@ -5517,8 +5758,50 @@
   }
 
   function isIntegrationLabRouteMode() {
-    return !!(window.DEPOT_MATRIX_CONFIG && window.DEPOT_MATRIX_CONFIG.integrationLab);
+    return !!(window.DEPOT_MATRIX_CONFIG && window.DEPOT_MATRIX_CONFIG.integrationLab)
+      || !!window.__RENT_DEPOT_ROUTE_INTEGRATION;
   }
+
+  function getMapRouteVisibilityPolicy() {
+    if (!window.__RENT_DEPOT_ROUTE_INTEGRATION) {
+      return { showTransfer: false, showCustomer: false, bookingId: null };
+    }
+    if (activeMainModule === 'bookings' || activeMainModule === 'calendar' || activeMainModule === 'analytics') {
+      return { showTransfer: false, showCustomer: false, bookingId: null };
+    }
+    if (mapViewMode === 'load') {
+      return { showTransfer: false, showCustomer: false, bookingId: null };
+    }
+    if (activeMainModule === 'detail') {
+      var detailId = $('editId').value || null;
+      return detailId
+        ? { showTransfer: true, showCustomer: true, bookingId: detailId }
+        : { showTransfer: false, showCustomer: false, bookingId: null };
+    }
+    if (activeMainModule === 'routes') {
+      var routeId = resolveRouteTargetBookingId();
+      return routeId
+        ? { showTransfer: true, showCustomer: true, bookingId: routeId }
+        : { showTransfer: false, showCustomer: false, bookingId: null };
+    }
+    return { showTransfer: false, showCustomer: false, bookingId: null };
+  }
+
+  function clearTransferMapDisplay(bookingId) {
+    bookingRouteLayer.clearLayers();
+    clearRouteLayer();
+    if (window.__RENT_DEPOT_ROUTE_INTEGRATION && window.__RENT_DEPOT_ROUTE_INTEGRATION.clearAllRouteLayers) {
+      window.__RENT_DEPOT_ROUTE_INTEGRATION.clearAllRouteLayers();
+    }
+    if (bookingId && window.IntegrationRouteWorkflow && window.IntegrationRouteWorkflow.getPendingTransferState) {
+      var pending = window.IntegrationRouteWorkflow.getPendingTransferState(bookingId);
+      if (pending && (pending.pendingMessage || pending.invalidated)) {
+        window.IntegrationRouteWorkflow.clearTransferMapUiState(bookingId);
+      }
+    }
+  }
+  window.getMapRouteVisibilityPolicy = getMapRouteVisibilityPolicy;
+  window.clearTransferMapDisplay = clearTransferMapDisplay;
 
   function buildAdminRouteLayerMeta(booking) {
     if (!booking || !window.IntegrationRouteWorkflow) return null;
@@ -5757,6 +6040,9 @@
         highwayMode: summary.has_highway ? 'fallback-highway' : 'avoided',
         geometry: geometry,
         distanceMeters: (summary.length || 0) * 1000,
+        distanceKm: Math.round((summary.length || 0) * 10) / 10,
+        routingSeconds: summary.time || 0,
+        travelMinutes: Math.round((summary.time || 0) / 60),
         hasHighway: !!summary.has_highway,
         url: url
       };
@@ -5848,6 +6134,8 @@
             startTime: booking.timeStart,
             endTime: booking.timeEnd,
             fromName: fromName,
+            originLabel: fromName,
+            originId: depotId,
             fromLat: fromLat,
             fromLng: fromLng,
             toLat: toLat,
@@ -5855,13 +6143,31 @@
             distanceKm: Math.round(distanceKm * 10) / 10,
             speedKmh: speedKmh,
             travelMinutes: Math.round(travelMinutes),
-            suggestedDeparture: booking.date + 'T' + suggestedDeparture,
-            targetArrival: booking.date + 'T' + targetArrival,
+            providerDurationMinutes: Math.round(travelMinutes),
             geometry: routeGeometry,
             routingProvider: result.provider,
             avoidHighways: ROUTING_CONFIG.avoidHighways,
-            calculatedAt: new Date().toISOString()
+            calculatedAt: new Date().toISOString(),
+            routeType: 'TRANSFER_ROUTE',
+            suggestedDeparture: booking.date + 'T' + suggestedDeparture,
+            targetArrival: booking.date + 'T' + targetArrival
           }, booking);
+          if (window.IntegrationRouteWorkflow) {
+            if (window.IntegrationRouteWorkflow.clearOriginInvalidation) {
+              window.IntegrationRouteWorkflow.clearOriginInvalidation(bookingId);
+            }
+            if (window.IntegrationRouteWorkflow.enrichTransferOperationalMetrics) {
+              record = window.IntegrationRouteWorkflow.enrichTransferOperationalMetrics(record);
+            }
+            if (window.IntegrationRouteWorkflow.isValidTransferSnapshot &&
+                !window.IntegrationRouteWorkflow.isValidTransferSnapshot(record, booking)) {
+              showRouteResult('<span style="color:#f87171">A számított útvonal nem konzisztens az indulási ponttal.</span>');
+              return;
+            }
+            if (window.IntegrationRouteWorkflow.setSelectedTransferRoute) {
+              window.IntegrationRouteWorkflow.setSelectedTransferRoute(bookingId, record, depotId, { skipEligibilityGuard: true });
+            }
+          }
 
           calculatedRoutes = calculatedRoutes.filter(function (r) { return r.bookingId !== bookingId; });
           calculatedRoutes.push(record);
@@ -5872,7 +6178,10 @@
               window.IntegrationRouteWorkflow.applyKiallasAdminRoutePatchOutcome(bookings[patchIdx], 'saving');
               window.IntegrationRouteWorkflow.renderKiallasSaveStatusBadges(bookingId);
             }
-            patchRentInquiryApi(bookingId, { adminCalculatedRoute: record })
+            var patchRecord = (window.IntegrationRouteWorkflow && window.IntegrationRouteWorkflow.buildAdminCalculatedRouteForSave)
+              ? window.IntegrationRouteWorkflow.buildAdminCalculatedRouteForSave(booking, record)
+              : record;
+            patchRentInquiryApi(bookingId, { adminCalculatedRoute: patchRecord || record })
               .then(function (saved) {
                 var idx = bookings.findIndex(function (x) { return x.id === bookingId; });
                 if (idx >= 0) {
@@ -6094,13 +6403,6 @@
       var draftRoute = calculatedRoutes.find(function (r) { return r.bookingId === ROUTE_DRAFT_ID; });
       if (draftRoute) {
         draftRoute.bookingId = entry.id;
-        if (entry.geometryType === 'ROUTE' && !entry.routeGeometry) {
-          entry.routeGeometry = draftRoute.geometry;
-        }
-      }
-      if (entry.geometryType === 'ROUTE' && !entry.routeGeometry) {
-        var calc = calculatedRoutes.find(function (r) { return r.bookingId === entry.id; });
-        if (calc && calc.geometry) entry.routeGeometry = calc.geometry;
       }
       saveBookingToServer(entry).then(function (saved) {
         completeBookingSaveSuccess(saved);
@@ -7200,6 +7502,25 @@
     };
   };
 
+  window.__rentCustomerPatchTestHooks = {
+    CUSTOMER_OPERATIONAL_SPEED_KMH: CUSTOMER_OPERATIONAL_SPEED_KMH,
+    validateCustomerLineStringForSave: validateCustomerLineStringForSave,
+    buildCustomerRouteMetrics: buildCustomerRouteMetrics,
+    buildCustomerRoutePatchPayload: buildCustomerRoutePatchPayload,
+    resolveCustomerRouteForAtomicSave: resolveCustomerRouteForAtomicSave,
+    forbiddenPatchKeys: ['adminCalculatedRoute', 'transferRoute', 'selectedTransferRoute',
+      'suggestedDeparture', 'requiredDepartureTime', 'calculatedRoutes'],
+    findForbiddenPatchKeys: function (payload) {
+      var keys = this.forbiddenPatchKeys;
+      return keys.filter(function (k) {
+        return payload && Object.prototype.hasOwnProperty.call(payload, k);
+      });
+    },
+    deepEqualJson: function (a, b) {
+      return JSON.stringify(a) === JSON.stringify(b);
+    }
+  };
+
   window.addEventListener('storage', function () {
     /* legacy localStorage sync kikapcsolva – backend az aktív adatforrás */
   });
@@ -7299,18 +7620,40 @@
     getCalculatedRouteState: function () {
       var b = getRouteTargetBooking();
       if (!b || !b.id) return null;
-      var calc = calculatedRoutes.find(function (r) { return r.bookingId === b.id; });
+      var wf = window.IntegrationRouteWorkflow;
+      if (wf && wf.resolveValidatedTransferSnapshot) {
+        var formState = wf.getRouteFormState ? wf.getRouteFormState(b.id) : {};
+        var raw = window.__RENT_DEPOT_INTEGRATION_BRIDGE.getRawCalculatedRouteForBooking(b.id);
+        return wf.resolveValidatedTransferSnapshot(b, formState, raw);
+      }
+      return null;
+    },
+    getRawCalculatedRouteForBooking: function (bookingId) {
+      if (!bookingId) return null;
+      var calc = calculatedRoutes.find(function (r) { return r.bookingId === bookingId; });
       if (calc) return calc;
-      if (b.adminCalculatedRoute) {
+      var wf = window.IntegrationRouteWorkflow;
+      if (wf && wf.isOriginInvalidatedForBooking && wf.isOriginInvalidatedForBooking(bookingId)) {
+        return null;
+      }
+      var b = bookings.find(function (x) { return x.id === bookingId; });
+      if (b && b.adminCalculatedRoute && b.adminCalculatedRoute.geometry) {
         return normalizeRouteRecord(Object.assign({}, b.adminCalculatedRoute, { bookingId: b.id }), b);
       }
       return null;
+    },
+    clearCalculatedRouteForBooking: function (bookingId) {
+      if (!bookingId) return;
+      calculatedRoutes = calculatedRoutes.filter(function (r) { return r.bookingId !== bookingId; });
     },
     getRouteFormState: function (bookingId) {
       if (window.IntegrationRouteWorkflow && window.IntegrationRouteWorkflow.getRouteFormState) {
         return window.IntegrationRouteWorkflow.getRouteFormState(bookingId);
       }
       return {};
+    },
+    requestValhallaRoute: function (fromLng, fromLat, toLng, toLat) {
+      return requestValhallaRoute(fromLng, fromLat, toLng, toLat);
     },
     setSelectedTransferRoute: function (bookingId, route, originKey) {
       if (window.IntegrationRouteWorkflow && window.IntegrationRouteWorkflow.setSelectedTransferRoute) {
@@ -7332,6 +7675,19 @@
       if (window.__RENT_DEPOT_ROUTE_INTEGRATION && window.__RENT_DEPOT_ROUTE_INTEGRATION.refreshDualRoutes) {
         window.__RENT_DEPOT_ROUTE_INTEGRATION.refreshDualRoutes();
       }
+    },
+    clearTransferMapLayers: function () {
+      if (window.__RENT_DEPOT_ROUTE_INTEGRATION && window.__RENT_DEPOT_ROUTE_INTEGRATION.clearAllRouteLayers) {
+        window.__RENT_DEPOT_ROUTE_INTEGRATION.clearAllRouteLayers();
+      }
+    },
+    getMapRouteVisibilityPolicy: getMapRouteVisibilityPolicy,
+    getActiveMainModule: function () { return activeMainModule; },
+    getMapViewMode: function () { return mapViewMode; },
+    countTransferPolylines: function () {
+      return window.__RENT_DEPOT_ROUTE_INTEGRATION && window.__RENT_DEPOT_ROUTE_INTEGRATION.countTransferPolylines
+        ? window.__RENT_DEPOT_ROUTE_INTEGRATION.countTransferPolylines()
+        : 0;
     }
   };
   window.__RENT_PAST_BOOKING_FILTER = {
